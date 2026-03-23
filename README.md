@@ -6,6 +6,8 @@ A headless, zero-dependency React library for building fully customizable dashbo
 <!-- [![npm](https://img.shields.io/npm/v/editable-dashboard)](https://www.npmjs.com/package/editable-dashboard) -->
 <!-- [![bundle size](https://img.shields.io/bundlephobia/minzip/editable-dashboard)](https://bundlephobia.com/package/editable-dashboard) -->
 
+Demo: https://nbotond20.github.io/editable-dashboard/
+
 ---
 
 ## Features
