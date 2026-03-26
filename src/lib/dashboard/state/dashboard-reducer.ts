@@ -45,6 +45,20 @@ export function dashboardReducer(
         ),
       };
 
+    case "SWAP_WIDGETS": {
+      const sourceWidget = state.widgets.find(w => w.id === action.sourceId);
+      const targetWidget = state.widgets.find(w => w.id === action.targetId);
+      if (!sourceWidget || !targetWidget) return state;
+      return {
+        ...state,
+        widgets: state.widgets.map(w => {
+          if (w.id === action.sourceId) return { ...w, order: targetWidget.order, columnStart: undefined };
+          if (w.id === action.targetId) return { ...w, order: sourceWidget.order, columnStart: undefined };
+          return w;
+        }),
+      };
+    }
+
     case "REORDER_WIDGETS": {
       const sorted = [...state.widgets].sort((a, b) => a.order - b.order);
       const visible = sorted.filter((w) => w.visible);

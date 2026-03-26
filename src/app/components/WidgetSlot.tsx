@@ -75,9 +75,17 @@ export function WidgetSlot({ widget, children }: WidgetSlotProps) {
   const motionX = useMotionValue(0);
   const motionY = useMotionValue(0);
   const rafId = useRef(0);
+  const positionRef = useRef(position);
+  useEffect(() => { positionRef.current = position; });
 
+  // Drag position follow loop.
+  // getDragPosition reads the engine directly (not React state), so it
+  // always returns the latest pointer position without waiting for a
+  // re-render. We also check getDragPosition() inside the loop instead
+  // of gating on isDragging — this way the loop starts immediately on
+  // the first pointerdown→activate, not after React re-renders.
   useEffect(() => {
-    if (!isDragging || !position) {
+    if (!isDragging) {
       cancelAnimationFrame(rafId.current);
       animate(motionX, 0, LAYOUT_SPRING);
       animate(motionY, 0, LAYOUT_SPRING);
@@ -86,15 +94,16 @@ export function WidgetSlot({ widget, children }: WidgetSlotProps) {
 
     const tick = () => {
       const dp = getDragPosition();
-      if (dp && position) {
-        motionX.set(dp.x - position.x);
-        motionY.set(dp.y - position.y);
+      const pos = positionRef.current;
+      if (dp && pos) {
+        motionX.set(dp.x - pos.x);
+        motionY.set(dp.y - pos.y);
       }
       rafId.current = requestAnimationFrame(tick);
     };
     rafId.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafId.current);
-  }, [isDragging, position, getDragPosition, motionX, motionY]);
+  }, [isDragging, getDragPosition, motionX, motionY]);
 
   if (!position) return null;
 
@@ -103,6 +112,14 @@ export function WidgetSlot({ widget, children }: WidgetSlotProps) {
       layout
       layoutId={widget.id}
       ref={measureRef(widget.id)}
+      data-widget-id={widget.id}
+      data-widget-order={widget.order}
+      data-colspan={widget.colSpan}
+      data-x={position.x}
+      data-y={position.y}
+      data-width={position.width}
+      data-height={position.height}
+      data-dragging={isDragging}
       style={{
         position: "absolute",
         left: position.x,

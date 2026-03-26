@@ -14,3 +14,14 @@ export const AUTO_SCROLL_EDGE_SIZE = 60;
 
 /** Maximum scroll speed in pixels per animation frame. */
 export const AUTO_SCROLL_MAX_SPEED = 15;
+
+// ─── Engine dwell timing ─────────────────────────────────────
+
+/** Milliseconds hovering over a widget before a swap intent activates. */
+export const SWAP_DWELL_MS = 300;
+
+/** Milliseconds hovering over a widget before switching to auto-resize intent. */
+export const RESIZE_DWELL_MS = 800;
+
+/** Milliseconds for the drop animation phase before returning to idle. */
+export const DROP_ANIMATION_DURATION = 250;

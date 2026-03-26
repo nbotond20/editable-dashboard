@@ -29,17 +29,14 @@ export {
   AUTO_SCROLL_MAX_SPEED,
 } from "./constants.ts";
 
-export { DashboardProvider } from "./components/DashboardProvider.tsx";
+export { DashboardProviderV2 as DashboardProvider } from "./react/DashboardProvider.tsx";
 
 export { useDashboard } from "./state/use-dashboard.ts";
 export type { UseActionsOptions } from "./state/use-dashboard.ts";
 
 export { computeLayout } from "./layout/compute-layout.ts";
 export { getResponsiveColumns } from "./layout/responsive-columns.ts";
-export { computeDropTarget } from "./drag/drop-indicator.ts";
 export { useAutoScroll } from "./drag/use-auto-scroll.ts";
-
-export { useKeyboardDrag } from "./drag/use-keyboard-drag.ts";
 export { useDragAnnouncements } from "./drag/use-drag-announcements.ts";
 
 export {
@@ -56,3 +53,16 @@ export {
   canUndo,
   canRedo,
 } from "./state/undo-history.ts";
+
+// Headless engine (framework-agnostic)
+export { DragEngine } from "./engine/drag-engine.ts";
+export type {
+  DragEvent as EngineDragEvent,
+  DragPhase,
+  DropZone,
+  OperationIntent,
+  CommittedOperation,
+  DragEngineConfig,
+  DragEngineSnapshot,
+  Point,
+} from "./engine/types.ts";

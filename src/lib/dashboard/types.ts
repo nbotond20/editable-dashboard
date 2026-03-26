@@ -71,6 +71,7 @@ export type DashboardAction =
   | { type: "SET_MAX_COLUMNS"; maxColumns: number }
   | { type: "BATCH_UPDATE"; widgets: WidgetState[] }
   | { type: "UPDATE_WIDGET_CONFIG"; id: string; config: Record<string, unknown> }
+  | { type: "SWAP_WIDGETS"; sourceId: string; targetId: string }
   | { type: "LOCK_WIDGET"; id: string }
   | { type: "UNLOCK_WIDGET"; id: string }
   | { type: "UNDO" }
@@ -166,6 +167,7 @@ export interface DashboardContextValue {
   actions: DashboardActions;
   canUndo: boolean;
   canRedo: boolean;
+  phase: "idle" | "pending" | "dragging" | "keyboard-dragging" | "dropping";
   dragState: DragState;
   getDragPosition: () => { x: number; y: number } | null;
   containerRef: React.RefObject<HTMLDivElement | null>;
