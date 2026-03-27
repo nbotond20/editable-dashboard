@@ -288,20 +288,20 @@ async function dispatchPointerEvent(
 ) {
   await page.evaluate(
     ({ type, x, y, target, sourceLabel, pointerId }) => {
-      let el: Element | null;
+      let el: Element | Document = document;
       if (target === "handle" && sourceLabel) {
         // Find the drag handle via data attrs + label
         const slots = document.querySelectorAll("[data-widget-id]");
+        let found: Element | null = null;
         for (const slot of slots) {
           const label = slot.querySelector(".dash-label-emphasis");
           if (label?.textContent === sourceLabel) {
-            el = slot.querySelector(".dash-widget__drag-handle");
+            found = slot.querySelector(".dash-widget__drag-handle");
             break;
           }
         }
-        if (!el) throw new Error(`Drag handle for "${sourceLabel}" not found`);
-      } else {
-        el = document;
+        if (!found) throw new Error(`Drag handle for "${sourceLabel}" not found`);
+        el = found;
       }
 
       const event = new PointerEvent(type, {
@@ -313,7 +313,7 @@ async function dispatchPointerEvent(
         cancelable: true,
         isPrimary: true,
       });
-      el!.dispatchEvent(event);
+      el.dispatchEvent(event);
     },
     { type, x, y, target, sourceLabel, pointerId: TOUCH_POINTER_ID },
   );
