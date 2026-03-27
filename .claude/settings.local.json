@@ -5,7 +5,19 @@
       "Bash(git checkout:*)",
       "Bash(npx playwright:*)",
       "Bash(npx eslint:*)",
-      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")"
+      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")",
+      "Bash(ls -la /c/Users/nuszp/Desktop/projects/editable-dashboard/e2e/*.spec.ts)",
+      "Bash(pnpm exec:*)",
+      "Bash(find e2e:*)",
+      "Bash(git log:*)",
+      "Bash(git diff:*)",
+      "Bash(find /c/Users/nuszp/Desktop/projects/editable-dashboard/src -name *.test.ts -o -name *.test.tsx)",
+      "Bash(ls -la c:/Users/nuszp/Desktop/projects/editable-dashboard/e2e/*.spec.ts)",
+      "Bash(wc -l c:/Users/nuszp/Desktop/projects/editable-dashboard/e2e/helpers/*.ts c:/Users/nuszp/Desktop/projects/editable-dashboard/e2e/fixtures/*.ts c:/Users/nuszp/Desktop/projects/editable-dashboard/playwright.config.ts)"
     ]
-  }
+  },
+  "enabledMcpjsonServers": [
+    "playwright"
+  ],
+  "enableAllProjectMcpServers": true
 }

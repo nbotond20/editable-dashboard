@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test";
-import { widgetDragHandle, widgetByLabel, allWidgetLabels } from "./locators";
+import { widgetDragHandle, widgetByLabel, widgetById, widgetDragHandleById } from "./locators";
 
 export async function dragWidgetToWidget(
   page: Page,
@@ -10,6 +10,7 @@ export async function dragWidgetToWidget(
   const handle = widgetDragHandle(page, sourceLabel);
   const target = widgetByLabel(page, targetLabel);
 
+  await handle.scrollIntoViewIfNeeded();
   const handleBox = await handle.boundingBox();
   const targetBox = await target.boundingBox();
   if (!handleBox || !targetBox) throw new Error("Could not get bounding boxes");
@@ -30,6 +31,7 @@ export async function dragWidgetToPosition(
   options?: { steps?: number; dwellMs?: number }
 ) {
   const handle = widgetDragHandle(page, sourceLabel);
+  await handle.scrollIntoViewIfNeeded();
   const handleBox = await handle.boundingBox();
   if (!handleBox) throw new Error("Could not get bounding box");
 
@@ -77,6 +79,7 @@ export async function startDragWithoutDrop(
   deltaY: number,
 ) {
   const handle = widgetDragHandle(page, sourceLabel);
+  await handle.scrollIntoViewIfNeeded();
   const handleBox = await handle.boundingBox();
   if (!handleBox) throw new Error("Could not get bounding box");
 
@@ -100,7 +103,9 @@ export async function startDragWithoutDrop(
 }
 
 export async function getWidgetCenter(page: Page, label: string): Promise<{ x: number; y: number }> {
-  const box = await widgetByLabel(page, label).boundingBox();
+  const widget = widgetByLabel(page, label);
+  await widget.scrollIntoViewIfNeeded();
+  const box = await widget.boundingBox();
   if (!box) throw new Error(`Widget "${label}" not found`);
   return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
 }
@@ -394,4 +399,192 @@ export async function touchDragCancel(
   await page.waitForTimeout(50);
   await touchEnd(page, start.x, start.y + moveDistance);
   await page.waitForTimeout(100);
+}
+
+// ── ID-based drag helpers ─────────────────────────────────────────
+
+/**
+ * Drag one widget onto another by their IDs (swap operation).
+ * Default dwell is 350ms — above swap threshold (150ms), below resize (500ms).
+ */
+export async function dragByIdToId(
+  page: Page,
+  sourceId: string,
+  targetId: string,
+  options?: { steps?: number; dwellMs?: number },
+) {
+  const handle = widgetDragHandleById(page, sourceId);
+  const target = widgetById(page, targetId);
+
+  await handle.scrollIntoViewIfNeeded();
+  const handleBox = await handle.boundingBox();
+  const targetBox = await target.boundingBox();
+  if (!handleBox || !targetBox) throw new Error("Could not get bounding boxes");
+
+  const startX = handleBox.x + handleBox.width / 2;
+  const startY = handleBox.y + handleBox.height / 2;
+  const endX = targetBox.x + targetBox.width / 2;
+  const endY = targetBox.y + targetBox.height / 2;
+
+  await performDrag(page, startX, startY, endX, endY, {
+    steps: options?.steps ?? 20,
+    dwellMs: options?.dwellMs ?? 350,
+  });
+}
+
+/**
+ * Drag a widget to the left or right side of another (auto-resize operation).
+ * Default dwell is 600ms — above resize threshold (500ms).
+ *
+ * "left"  → cursor lands at 25% of target width (left quarter).
+ * "right" → cursor lands at 75% of target width (right quarter).
+ */
+export async function dragByIdToSide(
+  page: Page,
+  sourceId: string,
+  targetId: string,
+  side: "left" | "right",
+  options?: { steps?: number; dwellMs?: number },
+) {
+  const handle = widgetDragHandleById(page, sourceId);
+  const target = widgetById(page, targetId);
+
+  await handle.scrollIntoViewIfNeeded();
+  const handleBox = await handle.boundingBox();
+  const targetBox = await target.boundingBox();
+  if (!handleBox || !targetBox) throw new Error("Could not get bounding boxes");
+
+  const startX = handleBox.x + handleBox.width / 2;
+  const startY = handleBox.y + handleBox.height / 2;
+  const endX =
+    side === "left"
+      ? targetBox.x + targetBox.width * 0.25
+      : targetBox.x + targetBox.width * 0.75;
+  const endY = targetBox.y + targetBox.height / 2;
+
+  await performDrag(page, startX, startY, endX, endY, {
+    steps: options?.steps ?? 20,
+    dwellMs: options?.dwellMs ?? 600,
+  });
+}
+
+/**
+ * Drag a widget into the empty area below all widgets at a given column.
+ */
+export async function dragByIdToEmptyCell(
+  page: Page,
+  sourceId: string,
+  targetCol: number,
+  options?: { steps?: number; dwellMs?: number },
+) {
+  const handle = widgetDragHandleById(page, sourceId);
+  await handle.scrollIntoViewIfNeeded();
+  const handleBox = await handle.boundingBox();
+  if (!handleBox) throw new Error("Could not get bounding box");
+
+  const grid = page.locator('[data-testid="dashboard-grid"]');
+  const gridBox = await grid.boundingBox();
+  if (!gridBox) throw new Error("Could not get grid bounding box");
+
+  const maxColumns = Number(
+    await grid.evaluate((el) => (el as HTMLElement).dataset.maxColumns),
+  );
+  const gap = Number(
+    await grid.evaluate((el) => (el as HTMLElement).dataset.gap),
+  );
+  const colWidth = (gridBox.width - gap * (maxColumns - 1)) / maxColumns;
+
+  // Find the lowest widget bottom to position below it
+  const widgets = page.locator("[data-widget-id]");
+  const count = await widgets.count();
+  let lowestBottom = gridBox.y;
+  for (let i = 0; i < count; i++) {
+    const box = await widgets.nth(i).boundingBox();
+    if (box) {
+      lowestBottom = Math.max(lowestBottom, box.y + box.height);
+    }
+  }
+
+  const startX = handleBox.x + handleBox.width / 2;
+  const startY = handleBox.y + handleBox.height / 2;
+  const endX = gridBox.x + targetCol * (colWidth + gap) + colWidth / 2;
+  const endY = lowestBottom + gap + 20;
+
+  await performDrag(page, startX, startY, endX, endY, {
+    steps: options?.steps ?? 20,
+    dwellMs: options?.dwellMs ?? 350,
+  });
+}
+
+/**
+ * Drag a widget to an adjacent empty cell (left or right of itself).
+ * Used for self-repositioning (test cases 13-14).
+ */
+export async function dragByIdToAdjacentEmpty(
+  page: Page,
+  sourceId: string,
+  direction: "left" | "right",
+  options?: { steps?: number; dwellMs?: number },
+) {
+  const widget = widgetById(page, sourceId);
+  const handle = widgetDragHandleById(page, sourceId);
+
+  await handle.scrollIntoViewIfNeeded();
+  const handleBox = await handle.boundingBox();
+  const widgetBox = await widget.boundingBox();
+  if (!handleBox || !widgetBox) throw new Error("Could not get bounding boxes");
+
+  const grid = page.locator('[data-testid="dashboard-grid"]');
+  const gap = Number(
+    await grid.evaluate((el) => (el as HTMLElement).dataset.gap),
+  );
+  const maxColumns = Number(
+    await grid.evaluate((el) => (el as HTMLElement).dataset.maxColumns),
+  );
+  const gridBox = await grid.boundingBox();
+  if (!gridBox) throw new Error("Could not get grid bounding box");
+
+  const colWidth = (gridBox.width - gap * (maxColumns - 1)) / maxColumns;
+
+  const startX = handleBox.x + handleBox.width / 2;
+  const startY = handleBox.y + handleBox.height / 2;
+
+  let endX: number;
+  if (direction === "left") {
+    // Target one column-width to the left of current position
+    endX = widgetBox.x - colWidth / 2;
+  } else {
+    // Target one column-width to the right
+    endX = widgetBox.x + widgetBox.width + colWidth / 2;
+  }
+  const endY = widgetBox.y + widgetBox.height / 2;
+
+  await performDrag(page, startX, startY, endX, endY, {
+    steps: options?.steps ?? 20,
+    dwellMs: options?.dwellMs ?? 350,
+  });
+}
+
+/**
+ * Drag a widget to arbitrary pixel coordinates.
+ */
+export async function dragByIdToCoords(
+  page: Page,
+  sourceId: string,
+  targetX: number,
+  targetY: number,
+  options?: { steps?: number; dwellMs?: number },
+) {
+  const handle = widgetDragHandleById(page, sourceId);
+  await handle.scrollIntoViewIfNeeded();
+  const handleBox = await handle.boundingBox();
+  if (!handleBox) throw new Error("Could not get bounding box");
+
+  const startX = handleBox.x + handleBox.width / 2;
+  const startY = handleBox.y + handleBox.height / 2;
+
+  await performDrag(page, startX, startY, targetX, targetY, {
+    steps: options?.steps ?? 20,
+    dwellMs: options?.dwellMs ?? 350,
+  });
 }

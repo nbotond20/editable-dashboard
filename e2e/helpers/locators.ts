@@ -89,3 +89,11 @@ export function dropGhostByTestId(page: Page): Locator {
 export function allWidgetSlots(page: Page): Locator {
   return page.locator("[data-widget-id]");
 }
+
+export function widgetById(page: Page, id: string): Locator {
+  return page.locator(`[data-widget-id="${id}"]`);
+}
+
+export function widgetDragHandleById(page: Page, id: string): Locator {
+  return widgetById(page, id).locator(".dash-widget__drag-handle");
+}

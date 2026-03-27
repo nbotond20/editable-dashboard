@@ -229,3 +229,495 @@ B ->| <A (dragging B to the left of A)
 
 Result:
 B A A
+
+### 16
+
+Start:
+A B
+
+A -> B
+
+Result:
+B A
+
+### 17
+
+Start:
+A B
+C D
+
+A -> C
+
+Result:
+C B
+A D
+
+### 18
+
+Start:
+A B
+C D
+
+B -> D
+
+Result:
+A D
+C B
+
+### 19
+
+Start:
+A B
+C D
+
+B -> C
+
+Result:
+A C
+B D
+
+### 20
+
+Start:
+A A
+B C
+
+A -> B
+
+Result:
+B
+A A
+C
+
+### 21
+
+Start:
+A A
+B C
+
+A -> C
+
+Result:
+C B
+A A
+
+### 22
+
+Start:
+A A
+B C
+
+B -> C
+
+Result:
+A A
+C B
+
+### 23
+
+Start:
+A A
+B C
+
+C ->| <A
+
+Result:
+C A
+B
+
+### 24
+
+Start:
+A A
+B C
+
+C ->| A>
+
+Result:
+A C
+B
+
+### 25
+
+Start:
+A A
+B B
+
+A -> B
+
+Result:
+B B
+A A
+
+### 26
+
+Start:
+A A
+B B
+
+B ->| A>
+
+Result:
+A B
+
+### 27
+
+Start:
+A A
+B B
+
+B ->| <A
+
+Result:
+B A
+
+### 28
+
+Start:
+A B C
+
+A -> B
+
+Result:
+B A C
+
+### 29
+
+Start:
+A B C
+
+A -> C
+
+Result:
+C B A
+
+### 30
+
+Start:
+A B C
+
+B -> C
+
+Result:
+A C B
+
+### 31
+
+Start:
+A B C
+D
+
+A -> D
+
+Result:
+D B C
+A
+
+### 32
+
+Start:
+A B C
+D
+
+C -> D
+
+Result:
+A B D
+C
+
+### 33
+
+Start:
+A B C
+D E
+
+A -> D
+
+Result:
+D B C
+A E
+
+### 34
+
+Start:
+A B C
+D E
+
+E -> B
+
+Result:
+A E C
+D B
+
+### 35
+
+Start:
+A B C
+D E F
+
+A -> F
+
+Result:
+F B C
+D E A
+
+### 36
+
+Start:
+A B C
+D E F
+
+A -> D
+
+Result:
+D B C
+A E F
+
+### 37
+
+Start:
+A B C
+x D
+
+A -> x1
+
+Result:
+B C
+A D
+
+### 38
+
+Start:
+A A B
+
+A -> B
+
+Result:
+B A A
+
+### 39
+
+Start:
+A A B
+C
+
+A -> C
+
+Result:
+C B
+A A
+
+### 40
+
+Start:
+A A B
+C
+
+B -> C
+
+Result:
+A A C
+B
+
+### 41
+
+Start:
+A B B
+
+A -> B
+
+Result:
+B B A
+
+### 42
+
+Start:
+A A A
+B
+
+A -> B
+
+Result:
+B
+A A A
+
+### 43
+
+Start:
+A A A
+B
+
+B ->| A>
+
+Result:
+A A B
+
+### 44
+
+Start:
+A A A
+B C
+
+A -> B
+
+Result:
+B
+A A A
+C
+
+### 45
+
+Start:
+A A A
+B C
+
+B -> C
+
+Result:
+A A A
+C B
+
+### 46
+
+Start:
+A A A
+B C
+
+B ->| <A
+
+Result:
+B A A
+C
+
+### 47
+
+Start:
+A A A
+B C
+
+C ->| A>
+
+Result:
+A A C
+B
+
+### 48
+
+Start:
+A A
+B B
+
+A -> B
+
+Result:
+B B
+A A
+
+### 49
+
+Start:
+A A
+B B
+
+B ->| A>
+
+Result:
+A B B
+
+### 50
+
+Start:
+A A B
+C C
+
+A -> B
+
+Result:
+B A A
+C C
+
+### 51
+
+Start:
+A A B
+C C
+
+C -> A
+
+Result:
+C C B
+A A
+
+### 52
+
+Start:
+A A A
+B B C
+
+A -> B
+
+Result:
+B B
+A A A
+C
+
+### 53
+
+Start:
+A A A
+B B C
+
+B -> C
+
+Result:
+A A A
+C B B
+
+### 54
+
+Start:
+A A A
+B B C
+
+C ->| A>
+
+Result:
+A A C
+B B
+
+### 55
+
+Start:
+A A A
+B B
+
+B ->| <A
+
+Result:
+B B A
+
+### 56
+
+Start:
+A B C
+D E F
+
+A -> F
+B -> E
+
+Result:
+F E C
+D B A
+
+### 57
+
+Start:
+A B
+C D
+
+A -> D
+C -> B
+
+Result:
+D C
+B A

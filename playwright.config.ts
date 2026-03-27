@@ -13,8 +13,7 @@ export default defineConfig({
     actionTimeout: 10_000,
   },
   projects: [
-    { name: "chromium", use: { ...devices["Desktop Chrome"] } },
-    { name: "mobile-chrome", use: { ...devices["Pixel 5"] } },
+    { name: "chromium", use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 1200 } } },
   ],
   webServer: {
     command: "pnpm dev --port 4174",
