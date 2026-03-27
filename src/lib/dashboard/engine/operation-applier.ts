@@ -3,11 +3,6 @@ import type { DashboardState } from "../types.ts";
 import { getVisibleSorted } from "./types.ts";
 import { dashboardReducer } from "../state/dashboard-reducer.ts";
 
-/**
- * Pure function that transforms a DashboardState according to a CommittedOperation.
- * Delegates to the dashboardReducer for individual state mutations, composing
- * multi-step operations where needed.
- */
 export function applyOperation(
   state: DashboardState,
   operation: CommittedOperation
@@ -28,21 +23,18 @@ export function applyOperation(
       });
 
     case "auto-resize": {
-      // Step 1: Resize source widget
       let result = dashboardReducer(state, {
         type: "RESIZE_WIDGET",
         id: operation.sourceId,
         colSpan: operation.sourceSpan,
       });
 
-      // Step 2: Resize target widget
       result = dashboardReducer(result, {
         type: "RESIZE_WIDGET",
         id: operation.targetId,
         colSpan: operation.targetSpan,
       });
 
-      // Step 3: Reorder source to be adjacent to target
       const visibleSorted = getVisibleSorted(result.widgets);
       const sourceVisibleIdx = visibleSorted.findIndex(
         (w) => w.id === operation.sourceId
@@ -65,14 +57,12 @@ export function applyOperation(
       );
       if (sourceVisibleIdx === -1) return state;
 
-      // Step 1: Reorder to target position
       let result = dashboardReducer(state, {
         type: "REORDER_WIDGETS",
         fromIndex: sourceVisibleIdx,
         toIndex: operation.targetIndex,
       });
 
-      // Step 2: Set columnStart on the widget
       result = {
         ...result,
         widgets: result.widgets.map((w) =>

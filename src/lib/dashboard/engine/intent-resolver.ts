@@ -38,69 +38,67 @@ export function resolveIntent(
         return { type: "swap", targetId: zone.targetId };
       }
 
-      // dwellMs >= resizeDwellMs: attempt auto-resize
       const targetWidget = widgets.find((w) => w.id === zone.targetId);
       if (!targetWidget) {
         return { type: "swap", targetId: zone.targetId };
       }
 
       if (config.maxColumns === 1) {
-        // Can't fit two widgets in a single column; fall back to swap.
         return { type: "swap", targetId: zone.targetId };
       }
 
       let sourceSpan: number;
       let targetSpan: number;
-      let needsResize = false;
 
       if (
         sourceWidget.colSpan + targetWidget.colSpan <=
         config.maxColumns
       ) {
-        // Both already fit side-by-side — no resize needed.
-        sourceSpan = sourceWidget.colSpan;
-        targetSpan = targetWidget.colSpan;
+        const otherRowSpans = computeTargetRowNeighborSpans(
+          widgets, sourceWidget.id, zone.targetId, config.maxColumns,
+        );
+        if (sourceWidget.colSpan + targetWidget.colSpan + otherRowSpans > config.maxColumns) {
+          const targetConstraints = config.getWidgetConstraints(zone.targetId);
+          sourceSpan = sourceWidget.colSpan;
+          targetSpan = Math.max(
+            targetConstraints.minSpan,
+            Math.min(targetWidget.colSpan, config.maxColumns - sourceWidget.colSpan - otherRowSpans),
+          );
+        } else {
+          sourceSpan = sourceWidget.colSpan;
+          targetSpan = targetWidget.colSpan;
+        }
       } else {
-        // Need to shrink — compute halfSpan and clamp to each widget's constraints.
-        needsResize = true;
-        const halfSpan = Math.ceil(config.maxColumns / 2);
-
         const sourceConstraints = config.getWidgetConstraints(sourceWidget.id);
+        const targetConstraints = config.getWidgetConstraints(zone.targetId);
+
         sourceSpan = Math.max(
           sourceConstraints.minSpan,
-          Math.min(sourceConstraints.maxSpan, halfSpan),
+          Math.min(sourceConstraints.maxSpan, sourceWidget.colSpan, config.maxColumns - 1),
         );
-
-        const targetConstraints = config.getWidgetConstraints(zone.targetId);
         targetSpan = Math.max(
           targetConstraints.minSpan,
-          Math.min(targetConstraints.maxSpan, halfSpan),
+          Math.min(targetConstraints.maxSpan, config.maxColumns - sourceSpan),
         );
+
+        if (sourceSpan + targetSpan > config.maxColumns) {
+          sourceSpan = Math.max(
+            sourceConstraints.minSpan,
+            Math.min(sourceConstraints.maxSpan, config.maxColumns - targetSpan),
+          );
+        }
       }
 
-      // Guard: auto-resize only makes sense when at least one widget
-      // actually changes size. If both already fit as-is, fall back to
-      // swap — otherwise we'd just silently reorder surrounding widgets.
-      if (!needsResize) {
-        return { type: "swap", targetId: zone.targetId };
-      }
-
-      // Guard: if after clamping to constraints they still don't fit
-      // side-by-side, resizing is impossible — fall back to swap.
       if (sourceSpan + targetSpan > config.maxColumns) {
         return { type: "swap", targetId: zone.targetId };
       }
 
-      // Direction-aware placement: use the pointer side to decide
-      // whether the source goes before or after the target in order.
       const sourceIdx = widgets.findIndex((w) => w.id === sourceWidget.id);
       const targetIdx = widgets.indexOf(targetWidget);
 
-      // Compute target's index after source is removed from the array
       const adjustedTargetIdx =
         sourceIdx < targetIdx ? targetIdx - 1 : targetIdx;
 
-      // "left" → source before target, "right" → source after target
       const targetIndex =
         zone.side === "left"
           ? adjustedTargetIdx
@@ -141,16 +139,63 @@ export function computeDwellProgress(
 
     case "widget": {
       if (dwellMs < swapDwellMs) {
-        // Progress toward swap threshold.
         return swapDwellMs === 0 ? 1 : dwellMs / swapDwellMs;
       }
       if (dwellMs < resizeDwellMs) {
-        // Progress toward resize threshold (from swap to resize).
         const range = resizeDwellMs - swapDwellMs;
         return range === 0 ? 1 : (dwellMs - swapDwellMs) / range;
       }
-      // Past resize threshold.
       return 1;
     }
   }
+}
+
+function computeTargetRowNeighborSpans(
+  widgets: WidgetState[],
+  sourceId: string,
+  targetId: string,
+  maxColumns: number,
+): number {
+  const visible = widgets.filter(w => w.visible).sort((a, b) => a.order - b.order);
+
+  const rowUsed = new Array(maxColumns).fill(0);
+  const widgetRow = new Map<string, number>();
+
+  for (const w of visible) {
+    if (w.id === sourceId) continue;
+    const span = Math.max(1, Math.min(w.colSpan, maxColumns));
+    let bestRow = Infinity;
+    for (let startCol = 0; startCol <= maxColumns - span; startCol++) {
+      let maxRow = 0;
+      for (let c = startCol; c < startCol + span; c++) {
+        maxRow = Math.max(maxRow, rowUsed[c]);
+      }
+      if (maxRow < bestRow) bestRow = maxRow;
+    }
+    widgetRow.set(w.id, bestRow);
+    for (let startCol = 0; startCol <= maxColumns - span; startCol++) {
+      let maxRow = 0;
+      for (let c = startCol; c < startCol + span; c++) {
+        maxRow = Math.max(maxRow, rowUsed[c]);
+      }
+      if (maxRow === bestRow) {
+        for (let c = startCol; c < startCol + span; c++) {
+          rowUsed[c] = bestRow + 1;
+        }
+        break;
+      }
+    }
+  }
+
+  const targetRow = widgetRow.get(targetId);
+  if (targetRow == null) return 0;
+
+  let neighborSpans = 0;
+  for (const w of visible) {
+    if (w.id === sourceId || w.id === targetId) continue;
+    if (widgetRow.get(w.id) === targetRow) {
+      neighborSpans += Math.max(1, Math.min(w.colSpan, maxColumns));
+    }
+  }
+  return neighborSpans;
 }

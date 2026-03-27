@@ -1,7 +1,5 @@
 import type { ComputedLayout, WidgetState } from "../types.ts";
 
-// ─── Geometry ────────────────────────────────────────────────
-
 export interface Point {
   readonly x: number;
   readonly y: number;
@@ -13,8 +11,6 @@ export interface Rect {
   readonly width: number;
   readonly height: number;
 }
-
-// ─── Events ──────────────────────────────────────────────────
 
 export type PointerType = "mouse" | "touch" | "pen";
 
@@ -39,8 +35,6 @@ export type DragEvent =
   | { type: "RESIZE_TOGGLE"; id: string; timestamp: number }
   | { type: "SET_HEIGHTS"; heights: ReadonlyMap<string, number> }
   | { type: "SET_CONTAINER"; width: number };
-
-// ─── FSM Phases ──────────────────────────────────────────────
 
 export type DragPhase =
   | { type: "idle" }
@@ -73,8 +67,6 @@ export type DragPhase =
       startTime: number;
     };
 
-// ─── Drop Zones ──────────────────────────────────────────────
-
 export type DropZone =
   | {
       type: "gap";
@@ -85,8 +77,6 @@ export type DropZone =
   | { type: "widget"; targetId: string; side: "left" | "right" }
   | { type: "empty"; column: number }
   | { type: "outside" };
-
-// ─── Operation Intents (what WOULD happen on drop) ───────────
 
 export type OperationIntent =
   | { type: "none" }
@@ -100,8 +90,6 @@ export type OperationIntent =
       targetIndex: number;
     }
   | { type: "column-pin"; column: number };
-
-// ─── Committed Operations (what DOES happen) ─────────────────
 
 export type CommittedOperation =
   | { type: "reorder"; fromIndex: number; toIndex: number }
@@ -118,33 +106,20 @@ export type CommittedOperation =
   | { type: "resize-toggle"; id: string; newSpan: number }
   | { type: "cancelled" };
 
-// ─── Configuration ───────────────────────────────────────────
-
 export interface DragEngineConfig {
-  // Activation
   activationThreshold: number;
   touchActivationDelay: number;
   touchMoveTolerance: number;
-
-  // Dwell timing
   swapDwellMs: number;
   resizeDwellMs: number;
-
-  // Layout behavior
   autoFillMode: "immediate" | "on-drop" | "none";
   maxColumns: number;
   gap: number;
-
-  // Drop animation
   dropAnimationDuration: number;
-
-  // Constraints
   isLocked: (id: string) => boolean;
   canDrop: (sourceId: string, targetIndex: number) => boolean;
   getWidgetConstraints: (id: string) => { minSpan: number; maxSpan: number };
 }
-
-// ─── Engine Snapshot ─────────────────────────────────────────
 
 export interface DragEngineSnapshot {
   phase: DragPhase;
@@ -160,19 +135,16 @@ export interface DragEngineSnapshot {
   canRedo: boolean;
 }
 
-// ─── Layout Options ──────────────────────────────────────────
-
 export interface LayoutOptions {
   phantom?: {
     id: string;
     colSpan: number;
     height: number;
     order: number;
+    columnStart?: number;
   };
   excludeIds?: ReadonlySet<string>;
 }
-
-// ─── Helpers ─────────────────────────────────────────────────
 
 export function getVisibleSorted(widgets: readonly WidgetState[]): WidgetState[] {
   return widgets
@@ -200,8 +172,6 @@ export function zonesEqual(a: DropZone | null, b: DropZone | null): boolean {
         a.afterId === (b as typeof a).afterId
       );
     case "widget":
-      // Intentionally ignores `side` — changing which half of the widget
-      // the pointer is on should NOT reset the dwell timer.
       return a.targetId === (b as typeof a).targetId;
     case "empty":
       return a.column === (b as typeof a).column;

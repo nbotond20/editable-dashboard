@@ -1,5 +1,6 @@
-import type { Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 import { widgetDragHandle, widgetByLabel, widgetById, widgetDragHandleById } from "./locators";
+import { capturePreviewGrid, getGridRepresentation } from "./layout-utils";
 
 export async function dragWidgetToWidget(
   page: Page,
@@ -66,10 +67,24 @@ async function performDrag(
   // Dwell to allow zone resolution and intent computation
   await page.waitForTimeout(dwellMs);
 
+  // Capture the preview grid before releasing — this is what the user sees
+  const previewGrid = await capturePreviewGrid(page);
+
   await page.mouse.up();
 
   // Wait for drop animation to complete
   await page.waitForTimeout(350);
+
+  // Verify the final layout matches the preview the user saw during drag
+  if (previewGrid) {
+    const finalGrid = await getGridRepresentation(page);
+    expect(
+      finalGrid,
+      `Preview during drag does not match layout after drop.\n` +
+      `Preview: ${JSON.stringify(previewGrid)}\n` +
+      `Final:   ${JSON.stringify(finalGrid)}`,
+    ).toEqual(previewGrid);
+  }
 }
 
 export async function startDragWithoutDrop(
@@ -464,7 +479,7 @@ export async function dragByIdToSide(
 
   await performDrag(page, startX, startY, endX, endY, {
     steps: options?.steps ?? 20,
-    dwellMs: options?.dwellMs ?? 600,
+    dwellMs: options?.dwellMs ?? 800,
   });
 }
 
@@ -557,6 +572,48 @@ export async function dragByIdToAdjacentEmpty(
     // Target one column-width to the right
     endX = widgetBox.x + widgetBox.width + colWidth / 2;
   }
+  const endY = widgetBox.y + widgetBox.height / 2;
+
+  await performDrag(page, startX, startY, endX, endY, {
+    steps: options?.steps ?? 20,
+    dwellMs: options?.dwellMs ?? 350,
+  });
+}
+
+/**
+ * Drag a widget to a specific column at its current row.
+ * Used for repositioning within the same row (e.g. moving to a non-adjacent
+ * empty cell).
+ */
+export async function dragByIdToColumn(
+  page: Page,
+  sourceId: string,
+  targetCol: number,
+  options?: { steps?: number; dwellMs?: number },
+) {
+  const widget = widgetById(page, sourceId);
+  const handle = widgetDragHandleById(page, sourceId);
+
+  await handle.scrollIntoViewIfNeeded();
+  const handleBox = await handle.boundingBox();
+  const widgetBox = await widget.boundingBox();
+  if (!handleBox || !widgetBox) throw new Error("Could not get bounding boxes");
+
+  const grid = page.locator('[data-testid="dashboard-grid"]');
+  const gridBox = await grid.boundingBox();
+  if (!gridBox) throw new Error("Could not get grid bounding box");
+
+  const maxColumns = Number(
+    await grid.evaluate((el) => (el as HTMLElement).dataset.maxColumns),
+  );
+  const gap = Number(
+    await grid.evaluate((el) => (el as HTMLElement).dataset.gap),
+  );
+  const colWidth = (gridBox.width - gap * (maxColumns - 1)) / maxColumns;
+
+  const startX = handleBox.x + handleBox.width / 2;
+  const startY = handleBox.y + handleBox.height / 2;
+  const endX = gridBox.x + targetCol * (colWidth + gap) + colWidth / 2;
   const endY = widgetBox.y + widgetBox.height / 2;
 
   await performDrag(page, startX, startY, endX, endY, {

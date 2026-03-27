@@ -18,6 +18,7 @@ import {
   solveDragLayout,
   solvePreviewLayout,
   stabilizeUninvolvedWidgets,
+  pinToGreedyColumns,
 } from "./layout-solver.ts";
 import type { LayoutSolverConfig } from "./layout-solver.ts";
 import { dashboardReducer } from "../state/dashboard-reducer.ts";
@@ -77,23 +78,18 @@ export class DragEngine {
   private phase: DragPhase = { type: "idle" };
   private heights: ReadonlyMap<string, number> = new Map();
   private containerWidth = 0;
-  // containerRect removed — unused by the engine (adapter tracks it locally)
 
-  // Zone tracking
   private currentZone: DropZone | null = null;
   private zoneEnteredAt = 0;
   private currentIntent: OperationIntent | null = null;
 
-  // Zone debounce (2-frame buffer like the old system)
   private pendingZone: DropZone | null = null;
   private pendingZoneFrames = 0;
 
-  // Layout caches
   private baseLayout: ComputedLayout = { positions: new Map(), totalHeight: 0 };
   private dragLayout: ComputedLayout | null = null;
   private previewLayout: ComputedLayout | null = null;
 
-  // Layout input cache (to avoid recomputing when inputs are identical)
   private lastLayoutInputs: {
     widgets: readonly import("../types.ts").WidgetState[];
     heights: ReadonlyMap<string, number>;
@@ -103,12 +99,12 @@ export class DragEngine {
     autoFillMode: string;
   } | null = null;
 
-  // Announcement
   private announcement: string | null = null;
 
-  // Subscribers
   private listeners = new Set<() => void>();
   private cachedSnapshot: DragEngineSnapshot | null = null;
+
+  private lastTimestamp = 0;
 
   constructor(
     initialState: DashboardState,
@@ -120,12 +116,9 @@ export class DragEngine {
     this.recomputeBaseLayout();
   }
 
-  // ─── Public API (arrow properties for stable `this`) ───────
-
   send = (event: DragEvent): void => {
     this.announcement = null;
 
-    // Save previous snapshot reference for change detection
     const prevSnapshot = this.cachedSnapshot;
     this.cachedSnapshot = null;
 
@@ -176,17 +169,8 @@ export class DragEngine {
         break;
     }
 
-    // Only notify subscribers if the snapshot actually changed.
-    // This prevents useSyncExternalStore from forcing unnecessary
-    // re-renders (which can cause infinite loops when effects send
-    // events back to the engine).
     const newSnapshot = this.getSnapshot();
     if (prevSnapshot && this.snapshotsEqual(prevSnapshot, newSnapshot)) {
-      // Nothing that React cares about changed. Preserve the old
-      // reference so useSyncExternalStore sees no change and skips
-      // re-rendering. Only do this when truly identical — if a
-      // non-rendered field like dwellProgress changed, keep the fresh
-      // snapshot so direct callers of getSnapshot() see current values.
       if (prevSnapshot.dwellProgress === newSnapshot.dwellProgress) {
         this.cachedSnapshot = prevSnapshot;
       }
@@ -216,9 +200,6 @@ export class DragEngine {
 
     this.cachedSnapshot = {
       phase,
-      // Always expose baseLayout (includes ALL widgets). dragLayout is
-      // an internal detail for zone/intent computation — it uses phantoms
-      // or excludes the source widget, which would make it disappear.
       layout: this.baseLayout,
       previewLayout: this.previewLayout,
       intent: this.currentIntent,
@@ -276,9 +257,6 @@ export class DragEngine {
     this.notify();
   }
 
-  /** Read the current drag position directly from the phase, bypassing the
-   *  snapshot cache. This is called 60fps by the WidgetSlot RAF loop and
-   *  MUST always return the latest pointer position. */
   getDragPosition = (): Point | null => {
     if (this.phase.type !== "dragging") return null;
     return {
@@ -295,20 +273,11 @@ export class DragEngine {
     this.config = { ...this.config, ...partial };
     this.cachedSnapshot = null;
     this.recomputeLayouts();
-    // No notify() — config changes come from React props which already
-    // trigger re-renders. useSyncExternalStore calls getSnapshot() each
-    // render and picks up the new layout automatically.
   }
 
   destroy(): void {
     this.listeners.clear();
   }
-
-  // ─── Timestamp tracking ──────────────────────────────────────
-
-  private lastTimestamp = 0;
-
-  // ─── FSM Event Handlers ──────────────────────────────────────
 
   private handlePointerDown(
     event: Extract<DragEvent, { type: "POINTER_DOWN" }>,
@@ -335,7 +304,10 @@ export class DragEngine {
     if (this.phase.type === "pending") {
       this.handlePendingMove(event);
     } else if (this.phase.type === "dragging") {
-      this.handleDraggingMove(event);
+      this.phase = {
+        ...this.phase,
+        pointerPos: event.position,
+      };
     }
   }
 
@@ -348,7 +320,6 @@ export class DragEngine {
     const dist = distance(event.position, phase.startPos);
 
     if (phase.pointerType === "touch") {
-      // Touch: check if user moved too far (scrolling intent)
       const cumulative = phase.cumulativeDistance + dist;
       if (cumulative > this.config.touchMoveTolerance) {
         this.phase = { type: "idle" };
@@ -357,25 +328,10 @@ export class DragEngine {
       }
       this.phase = { ...phase, cumulativeDistance: cumulative };
     } else {
-      // Mouse/pen: activate on distance threshold
       if (dist >= this.config.activationThreshold) {
         this.activateDrag(phase.sourceId, event.position, phase.startPos);
       }
     }
-  }
-
-  private handleDraggingMove(
-    event: Extract<DragEvent, { type: "POINTER_MOVE" }>,
-  ): void {
-    if (this.phase.type !== "dragging") return;
-
-    // Only store the pointer position. Zone/intent computation happens
-    // in handleTick (once per RAF frame), not on every pointer event.
-    // This keeps POINTER_MOVE near-instant on the main thread.
-    this.phase = {
-      ...this.phase,
-      pointerPos: event.position,
-    };
   }
 
   private handlePointerUp(
@@ -401,24 +357,88 @@ export class DragEngine {
       return;
     }
 
-    // Commit the operation
     const committed = this.commitIntent(sourceId, intent);
     let newState = applyOperation(this.history.present, committed);
 
-    // Pin uninvolved widgets to their current columns so they don't reflow
-    const involvedIds = this.getInvolvedIds(sourceId, committed);
     const cfg = this.layoutConfig();
-    newState = {
-      ...newState,
-      widgets: stabilizeUninvolvedWidgets(
-        newState.widgets,
-        this.baseLayout,
-        involvedIds,
-        this.containerWidth,
-        cfg.maxColumns,
-        cfg.gap,
-      ),
-    };
+    if (committed.type === "swap") {
+      const preSwapWidgets = this.history.present.widgets;
+      const preSrc = preSwapWidgets.find(w => w.id === committed.sourceId);
+      const preTgt = preSwapWidgets.find(w => w.id === committed.targetId);
+      const srcCol = preSrc?.columnStart;
+      const tgtCol = preTgt?.columnStart;
+
+      if (srcCol != null || tgtCol != null) {
+        newState = {
+          ...newState,
+          widgets: newState.widgets.map(w => {
+            if (w.id === committed.sourceId && tgtCol != null) {
+              return { ...w, columnStart: tgtCol };
+            }
+            if (w.id === committed.targetId && srcCol != null) {
+              return { ...w, columnStart: srcCol };
+            }
+            return w;
+          }),
+        };
+      }
+
+      const pinned = new Set<string>();
+      for (const w of newState.widgets) {
+        if (w.visible && w.columnStart != null) pinned.add(w.id);
+      }
+
+      newState = {
+        ...newState,
+        widgets: pinToGreedyColumns(newState.widgets, cfg.maxColumns, pinned.size > 0 ? pinned : undefined),
+      };
+    } else if (committed.type === "auto-resize") {
+      const preWidgets = this.history.present.widgets;
+      const preSrc = preWidgets.find(w => w.id === committed.sourceId);
+      const srcCol = preSrc?.columnStart;
+
+      if (srcCol != null) {
+        const preVisible = getVisibleSorted(preWidgets);
+        const srcOrigIdx = preVisible.findIndex(w => w.id === committed.sourceId);
+        const postVisible = getVisibleSorted(newState.widgets);
+        const tgtCurIdx = postVisible.findIndex(w => w.id === committed.targetId);
+
+        if (srcOrigIdx >= 0 && tgtCurIdx >= 0 && tgtCurIdx !== srcOrigIdx) {
+          newState = applyOperation(newState, {
+            type: "reorder",
+            fromIndex: tgtCurIdx,
+            toIndex: srcOrigIdx,
+          });
+        }
+
+        newState = {
+          ...newState,
+          widgets: newState.widgets.map(w =>
+            w.id === committed.targetId ? { ...w, columnStart: srcCol } : w
+          ),
+        };
+
+        const pinned = new Set<string>();
+        for (const w of newState.widgets) {
+          if (w.visible && w.columnStart != null) pinned.add(w.id);
+        }
+
+        newState = {
+          ...newState,
+          widgets: pinToGreedyColumns(newState.widgets, cfg.maxColumns, pinned.size > 0 ? pinned : undefined),
+        };
+      } else {
+        newState = {
+          ...newState,
+          widgets: pinToGreedyColumns(newState.widgets, cfg.maxColumns),
+        };
+      }
+    } else if (committed.type !== "column-pin") {
+      newState = {
+        ...newState,
+        widgets: pinToGreedyColumns(newState.widgets, cfg.maxColumns),
+      };
+    }
 
     if (newState !== this.history.present) {
       this.history = pushState(this.history, newState, MAX_UNDO_DEPTH);
@@ -441,9 +461,7 @@ export class DragEngine {
 
   private handlePointerCancel(): void {
     if (this.phase.type === "pending" || this.phase.type === "dragging") {
-      this.phase = { type: "idle" };
-      this.clearDragState();
-      this.announcement = "Drag cancelled";
+      this.cancelDrag(false);
     }
   }
 
@@ -492,7 +510,6 @@ export class DragEngine {
       this.announcement = `Moved to position ${phase.currentIndex + 2} of ${visible.length}`;
     }
 
-    // Compute preview for the new position
     this.updateKeyboardPreview();
   }
 
@@ -529,56 +546,41 @@ export class DragEngine {
     const phase = this.phase;
     const visible = getVisibleSorted(this.history.present.widgets);
 
-    // Build and apply the committed operation
-    let committed: CommittedOperation;
+    const hasReorder = phase.currentIndex !== phase.originalIndex;
+    const hasResize = phase.currentColSpan !== phase.originalColSpan;
 
-    const cfg = this.layoutConfig();
-    const involvedIds = new Set([phase.sourceId]);
+    if (hasReorder || hasResize) {
+      const cfg = this.layoutConfig();
+      const involvedIds = new Set([phase.sourceId]);
+      let state = this.history.present;
 
-    if (
-      phase.currentIndex !== phase.originalIndex &&
-      phase.currentColSpan !== phase.originalColSpan
-    ) {
-      // Both reorder and resize: use batch approach
-      const resized: CommittedOperation = {
-        type: "resize-toggle",
-        id: phase.sourceId,
-        newSpan: phase.currentColSpan,
-      };
-      let state = applyOperation(this.history.present, resized);
-      const reorder: CommittedOperation = {
-        type: "reorder",
-        fromIndex: phase.originalIndex,
-        toIndex: phase.currentIndex,
-      };
-      state = applyOperation(state, reorder);
-      state = { ...state, widgets: stabilizeUninvolvedWidgets(state.widgets, this.baseLayout, involvedIds, this.containerWidth, cfg.maxColumns, cfg.gap) };
-      this.history = pushState(this.history, state, MAX_UNDO_DEPTH);
-      committed = reorder; // For announcement
-    } else if (phase.currentIndex !== phase.originalIndex) {
-      committed = {
-        type: "reorder",
-        fromIndex: phase.originalIndex,
-        toIndex: phase.currentIndex,
-      };
-      let newState = applyOperation(this.history.present, committed);
-      newState = { ...newState, widgets: stabilizeUninvolvedWidgets(newState.widgets, this.baseLayout, involvedIds, this.containerWidth, cfg.maxColumns, cfg.gap) };
-      if (newState !== this.history.present) {
-        this.history = pushState(this.history, newState, MAX_UNDO_DEPTH);
+      if (hasResize) {
+        state = applyOperation(state, {
+          type: "resize-toggle",
+          id: phase.sourceId,
+          newSpan: phase.currentColSpan,
+        });
       }
-    } else if (phase.currentColSpan !== phase.originalColSpan) {
-      committed = {
-        type: "resize-toggle",
-        id: phase.sourceId,
-        newSpan: phase.currentColSpan,
-      };
-      let newState = applyOperation(this.history.present, committed);
-      newState = { ...newState, widgets: stabilizeUninvolvedWidgets(newState.widgets, this.baseLayout, involvedIds, this.containerWidth, cfg.maxColumns, cfg.gap) };
-      if (newState !== this.history.present) {
-        this.history = pushState(this.history, newState, MAX_UNDO_DEPTH);
+
+      if (hasReorder) {
+        state = applyOperation(state, {
+          type: "reorder",
+          fromIndex: phase.originalIndex,
+          toIndex: phase.currentIndex,
+        });
       }
-    } else {
-      committed = { type: "cancelled" };
+
+      state = {
+        ...state,
+        widgets: stabilizeUninvolvedWidgets(
+          state.widgets, this.baseLayout, involvedIds,
+          this.containerWidth, cfg.maxColumns, cfg.gap
+        ),
+      };
+
+      if (state !== this.history.present) {
+        this.history = pushState(this.history, state, MAX_UNDO_DEPTH);
+      }
     }
 
     this.phase = { type: "idle" };
@@ -590,11 +592,7 @@ export class DragEngine {
 
   private handleKeyCancel(): void {
     if (this.phase.type !== "keyboard-dragging") return;
-
-    this.phase = { type: "idle" };
-    this.clearDragState();
-    this.recomputeLayouts();
-    this.announcement = "Drag cancelled";
+    this.cancelDrag(true);
   }
 
   private handleCancel(): void {
@@ -605,9 +603,7 @@ export class DragEngine {
       return;
     }
 
-    this.phase = { type: "idle" };
-    this.clearDragState();
-    this.announcement = "Drag cancelled";
+    this.cancelDrag(false);
   }
 
   private handleTick(event: Extract<DragEvent, { type: "TICK" }>): void {
@@ -657,7 +653,6 @@ export class DragEngine {
     const maxCols = this.config.maxColumns;
     const maxSpan = Math.min(constraints.maxSpan, maxCols);
 
-    // Cycle: current → maxSpan → minSpan → current... (or just toggle if only 2 options)
     let newSpan: number;
     if (widget.colSpan < maxSpan) {
       newSpan = maxSpan;
@@ -682,14 +677,18 @@ export class DragEngine {
     }
   }
 
-  // ─── Internal Helpers ────────────────────────────────────────
+  private cancelDrag(recompute: boolean): void {
+    this.phase = { type: "idle" };
+    this.clearDragState();
+    if (recompute) this.recomputeLayouts();
+    this.announcement = "Drag cancelled";
+  }
 
   private activateDrag(
     sourceId: string,
     pointerPos: Point,
     startPos: Point,
   ): void {
-    // Compute grab offset from the widget's position in the base layout
     const widgetLayout = this.baseLayout.positions.get(sourceId);
     const grabOffset: Point = widgetLayout
       ? {
@@ -705,7 +704,6 @@ export class DragEngine {
       grabOffset,
     };
 
-    // Compute drag layout (with phantom or exclusion)
     this.dragLayout = solveDragLayout(
       this.history.present.widgets,
       this.heights,
@@ -734,24 +732,18 @@ export class DragEngine {
       this.phase.sourceId,
     );
 
-    // 2-frame debounce: only commit a zone change after it's stable for
-    // 2 consecutive frames. This prevents flicker when the pointer
-    // briefly crosses zone boundaries (matches the old system's pattern).
     if (!zonesEqual(computedZone, this.currentZone)) {
       if (zonesEqual(computedZone, this.pendingZone)) {
         this.pendingZoneFrames++;
         if (this.pendingZoneFrames >= 2) {
-          // Stable for 2 frames — commit
           this.currentZone = computedZone;
           this.zoneEnteredAt = timestamp;
           this.pendingZone = null;
           this.pendingZoneFrames = 0;
         }
       } else {
-        // New pending zone
         this.pendingZone = computedZone;
         this.pendingZoneFrames = 1;
-        // Immediate commit for first zone (null → zone) or clearing (zone → outside)
         if (
           this.currentZone === null ||
           computedZone.type === "outside"
@@ -763,12 +755,17 @@ export class DragEngine {
         }
       }
     } else {
-      // Zone is stable — clear any pending
       this.pendingZone = null;
       this.pendingZoneFrames = 0;
+      if (
+        computedZone.type === "widget" &&
+        this.currentZone?.type === "widget" &&
+        computedZone.side !== this.currentZone.side
+      ) {
+        this.currentZone = computedZone;
+      }
     }
 
-    // Only resolve intent if we have a committed zone
     if (!this.currentZone) return;
 
     const dwellMs = timestamp - this.zoneEnteredAt;
@@ -785,7 +782,6 @@ export class DragEngine {
       getWidgetConstraints: this.config.getWidgetConstraints,
     });
 
-    // Only recompute preview layout if intent changed
     if (!this.intentsEqual(newIntent, this.currentIntent)) {
       this.currentIntent = newIntent;
       this.previewLayout =
@@ -809,7 +805,6 @@ export class DragEngine {
     const phase = this.phase;
     const state = this.history.present;
 
-    // Build a tentative widget state with the resize and reorder applied
     let tentativeWidgets = state.widgets.map((w) =>
       w.id === phase.sourceId ? { ...w, colSpan: phase.currentColSpan } : w,
     );
@@ -827,7 +822,6 @@ export class DragEngine {
         order: i,
         columnStart: undefined,
       }));
-      // Add back hidden widgets
       const hidden = state.widgets.filter((w) => !w.visible);
       tentativeWidgets = [...tentativeWidgets, ...hidden];
     }
@@ -875,30 +869,15 @@ export class DragEngine {
           targetIndex: intent.targetIndex,
         };
 
-      case "column-pin":
+      case "column-pin": {
+        const targetIndex = visible.length - 1;
         return {
           type: "column-pin",
           sourceId,
           column: intent.column,
-          targetIndex: sourceIdx,
+          targetIndex,
         };
-    }
-  }
-
-  private getInvolvedIds(sourceId: string, op: CommittedOperation): ReadonlySet<string> {
-    switch (op.type) {
-      case "reorder":
-        return new Set([sourceId]);
-      case "swap":
-        return new Set([op.sourceId, op.targetId]);
-      case "auto-resize":
-        return new Set([op.sourceId, op.targetId]);
-      case "column-pin":
-        return new Set([op.sourceId]);
-      case "resize-toggle":
-        return new Set([op.id]);
-      case "cancelled":
-        return new Set();
+      }
     }
   }
 
@@ -917,7 +896,6 @@ export class DragEngine {
     const cfg = this.layoutConfig();
     const inputs = this.lastLayoutInputs;
 
-    // Skip recomputation if all inputs are referentially identical
     if (
       inputs &&
       inputs.widgets === widgets &&
@@ -950,9 +928,7 @@ export class DragEngine {
   private recomputeLayouts(): void {
     this.recomputeBaseLayout();
 
-    if (
-      this.phase.type === "dragging"
-    ) {
+    if (this.phase.type === "dragging") {
       this.dragLayout = solveDragLayout(
         this.history.present.widgets,
         this.heights,
@@ -966,9 +942,6 @@ export class DragEngine {
   }
 
   private layoutConfig(): LayoutSolverConfig {
-    // Use maxColumns/gap from the DashboardState (set by SET_MAX_COLUMNS
-    // action), not from the engine config. The config holds defaults for
-    // construction; runtime values live in state.
     const state = this.history.present;
     return {
       autoFillMode: this.config.autoFillMode,
@@ -1005,16 +978,6 @@ export class DragEngine {
   }
 
   private snapshotsEqual(a: DragEngineSnapshot, b: DragEngineSnapshot): boolean {
-    // dragPosition is excluded — it changes every POINTER_MOVE (60fps)
-    // and is read directly by the RAF loop, not through React re-renders.
-    //
-    // phase is compared by type + sourceId only — pointerPos/grabOffset
-    // change every move and are only consumed via dragPosition.
-    //
-    // dwellProgress is excluded — it changes every TICK frame while
-    // hovering over a widget zone (continuous 0→1). Including it would
-    // cause 60fps React re-renders. If UI needs it, read it via a
-    // separate subscription.
     return (
       this.phasesEqual(a.phase, b.phase) &&
       a.layout === b.layout &&
@@ -1036,7 +999,6 @@ export class DragEngine {
       case "pending":
         return a.sourceId === (b as typeof a).sourceId;
       case "dragging":
-        // pointerPos/grabOffset excluded — high-frequency, read via dragPosition
         return a.sourceId === (b as typeof a).sourceId;
       case "keyboard-dragging":
         return (

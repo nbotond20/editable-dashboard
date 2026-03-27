@@ -149,8 +149,9 @@ describe("Integration: complete drag sequences", () => {
       const stateAfter = engine.getState();
       const a = stateAfter.widgets.find((w) => w.id === "a");
       const b = stateAfter.widgets.find((w) => w.id === "b");
-      expect(a!.colSpan).toBe(2);
-      expect(b!.colSpan).toBe(2);
+      // Source (a) keeps its span clamped to maxColumns-1=3, target (b) gets the rest=1
+      expect(a!.colSpan).toBe(3);
+      expect(b!.colSpan).toBe(1);
     });
   });
 

@@ -23,12 +23,10 @@ export function computeLayout(
     .filter((w) => w.visible)
     .sort((a, b) => a.order - b.order);
 
-  // Apply excludeIds: filter out excluded widgets
   if (options?.excludeIds) {
     visible = visible.filter((w) => !options.excludeIds!.has(w.id));
   }
 
-  // Apply phantom: insert synthetic widget at correct order position
   if (options?.phantom) {
     const phantomWidget: WidgetState = {
       id: options.phantom.id,
@@ -36,8 +34,8 @@ export function computeLayout(
       colSpan: options.phantom.colSpan,
       visible: true,
       order: options.phantom.order,
+      ...(options.phantom.columnStart != null ? { columnStart: options.phantom.columnStart } : {}),
     };
-    // Insert at the correct sorted position
     const insertIdx = visible.findIndex((w) => w.order > phantomWidget.order);
     if (insertIdx === -1) {
       visible.push(phantomWidget);

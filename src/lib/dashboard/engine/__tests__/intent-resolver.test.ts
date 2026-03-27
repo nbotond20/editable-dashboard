@@ -127,8 +127,9 @@ describe("resolveIntent - widget zone", () => {
     ).toEqual({ type: "swap", targetId: "target" });
   });
 
-  it("falls back to swap when dwell exceeds resize threshold but no resize needed", () => {
-    // Both colSpan=1, maxColumns=2 → 1+1 ≤ 2 → already fit, no resize needed
+  it("produces auto-resize (with reorder) when dwell exceeds resize threshold and both fit", () => {
+    // Both colSpan=1, maxColumns=2 → 1+1 ≤ 2 → fit side-by-side, no actual resize
+    // but auto-resize intent is used so the reorder places them adjacent
     const result = resolveIntent(
       widgetZone,
       1000,
@@ -136,7 +137,13 @@ describe("resolveIntent - widget zone", () => {
       widgets,
       defaultConfig(),
     );
-    expect(result).toEqual({ type: "swap", targetId: "target" });
+    expect(result).toEqual({
+      type: "auto-resize",
+      targetId: "target",
+      sourceSpan: 1,
+      targetSpan: 1,
+      targetIndex: 0,
+    });
   });
 
   it("falls back to swap when maxColumns is 1", () => {
@@ -179,17 +186,23 @@ describe("resolveIntent - widget zone", () => {
 // ─── Auto-resize span computation ────────────────────────────
 
 describe("resolveIntent - auto-resize span computation", () => {
-  it("falls back to swap when both already fit within maxColumns (no resize needed)", () => {
+  it("produces auto-resize when both already fit within maxColumns (no resize needed)", () => {
     const zone: DropZone = { type: "widget", targetId: "target", side: "left" };
     const source = makeWidget("src", { colSpan: 1 });
     const widgets = makeWidgets(["src", { colSpan: 1 }], ["target", { colSpan: 1 }]);
     const config = defaultConfig({ maxColumns: 3 });
 
     const result = resolveIntent(zone, 1000, source, widgets, config);
-    expect(result).toEqual({ type: "swap", targetId: "target" });
+    expect(result).toEqual({
+      type: "auto-resize",
+      targetId: "target",
+      sourceSpan: 1,
+      targetSpan: 1,
+      targetIndex: 0,
+    });
   });
 
-  it("falls back to swap when colSpans exactly equal maxColumns (no resize needed)", () => {
+  it("produces auto-resize when colSpans exactly equal maxColumns (no resize needed)", () => {
     const zone: DropZone = { type: "widget", targetId: "target", side: "left" };
     const source = makeWidget("src", { colSpan: 2 });
     const widgets = makeWidgets(
@@ -199,7 +212,13 @@ describe("resolveIntent - auto-resize span computation", () => {
     const config = defaultConfig({ maxColumns: 4 });
 
     const result = resolveIntent(zone, 1000, source, widgets, config);
-    expect(result).toEqual({ type: "swap", targetId: "target" });
+    expect(result).toEqual({
+      type: "auto-resize",
+      targetId: "target",
+      sourceSpan: 2,
+      targetSpan: 2,
+      targetIndex: 0,
+    });
   });
 
   it("returns auto-resize when both do not fit and resize is possible", () => {
@@ -233,8 +252,14 @@ describe("resolveIntent - auto-resize span computation", () => {
     const config = defaultConfig({ maxColumns: 3 });
 
     const result = resolveIntent(zone, 1000, source, widgets, config);
-    // halfSpan = ceil(3/2) = 2, both clamped to max=2 → 2+2=4 > 3 → can't fit
-    expect(result).toEqual({ type: "swap", targetId: "target" });
+    // source keeps colSpan=3 clamped to maxColumns-1=2, target gets 3-2=1 → 2+1=3 ≤ 3 → fits
+    expect(result).toEqual({
+      type: "auto-resize",
+      targetId: "target",
+      sourceSpan: 2,
+      targetSpan: 1,
+      targetIndex: 0,
+    });
   });
 
   it("falls back to swap when minSpan constraint prevents fitting", () => {
@@ -253,9 +278,14 @@ describe("resolveIntent - auto-resize span computation", () => {
     });
 
     const result = resolveIntent(zone, 1000, source, widgets, config);
-    // halfSpan = ceil(4/2) = 2, source clamped to min=3, target → 2
-    // 3+2=5 > 4 → can't fit → falls back to swap
-    expect(result).toEqual({ type: "swap", targetId: "target" });
+    // source keeps colSpan=3 (constrained by minSpan=3), target gets 4-3=1 → 3+1=4 ≤ 4 → fits
+    expect(result).toEqual({
+      type: "auto-resize",
+      targetId: "target",
+      sourceSpan: 3,
+      targetSpan: 1,
+      targetIndex: 0,
+    });
   });
 
   it("respects maxSpan constraint during auto-resize", () => {
@@ -274,13 +304,13 @@ describe("resolveIntent - auto-resize span computation", () => {
     });
 
     const result = resolveIntent(zone, 1000, source, widgets, config);
-    // halfSpan = ceil(6/2) = 3, source clamped to max=6 → 3, target clamped to max=2 → 2
-    // 3+2=5 ≤ 6 → fits
+    // source keeps colSpan=4 clamped to maxColumns-1=5, target clamped to max=2 → min(2, 6-4)=2
+    // 4+2=6 ≤ 6 → fits
     // side="left", sourceIdx=0, targetIdx=1 → adjusted=0 → targetIndex=0
     expect(result).toEqual({
       type: "auto-resize",
       targetId: "target",
-      sourceSpan: 3,
+      sourceSpan: 4,
       targetSpan: 2,
       targetIndex: 0,
     });

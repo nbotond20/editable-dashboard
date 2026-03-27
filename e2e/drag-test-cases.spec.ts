@@ -5,6 +5,7 @@ import {
   dragByIdToId,
   dragByIdToSide,
   dragByIdToAdjacentEmpty,
+  dragByIdToColumn,
   dragByIdToCoords,
 } from "./helpers/drag";
 import { widgetById } from "./helpers/locators";
@@ -460,4 +461,68 @@ test("case 57: A -> D then C -> B", async ({ page }) => {
   await dragByIdToId(page, "a", "d");
   await dragByIdToId(page, "c", "b");
   await assertLayout(page, [["d", "c"], ["b", "a"]]);
+});
+
+// ── 3-col: A B C / D x x — empty space drags (tests 58–60) ──────
+
+test.describe("3-col: A B C / D x x — empty space", () => {
+  test("case 58: D -> x1 (drag right into adjacent empty)", async ({ page }) => {
+    await setupDashboard(page, ["A B C", "D x x"]);
+    await dragByIdToAdjacentEmpty(page, "d", "right");
+    await assertLayout(page, [["a", "b", "c"], [null, "d"]]);
+  });
+
+  test("case 59: D -> x2 (drag right into far empty)", async ({ page }) => {
+    await setupDashboard(page, ["A B C", "D x x"]);
+    await dragByIdToColumn(page, "d", 2);
+    await assertLayout(page, [["a", "b", "c"], [null, null, "d"]]);
+  });
+});
+
+// ── 3-col: A A B / C D — auto-resize (test 60) ──────────────────
+
+test("case 60: D ->| <A (auto-resize left)", async ({ page }) => {
+  await setupDashboard(page, ["A A B", "C D"]);
+  await dragByIdToSide(page, "d", "a", "left");
+  await assertLayout(page, [["d", "a", "b"], ["c"]]);
+});
+
+// ── 3-col: A A B / C D x — drag to empty (test 61) ──────────────
+
+test("case 61: D -> x (drag right into empty)", async ({ page }) => {
+  await setupDashboard(page, ["A A B", "C D x"]);
+  await dragByIdToAdjacentEmpty(page, "d", "right");
+  await assertLayout(page, [["a", "a", "b"], ["c", null, "d"]]);
+});
+
+// ── 3-col: A B C / x x D — swap (test 62) ───────────────────────
+
+test("case 62: D -> B (swap with pinned widget)", async ({ page }) => {
+  await setupDashboard(page, ["A B C", "x x D"]);
+  await dragByIdToId(page, "d", "b");
+  await assertLayout(page, [["a", "d", "c"], [null, null, "b"]]);
+});
+
+// ── 3-col: A B C / x x D — auto-resize (test 63) ────────────────
+
+test("case 63: D ->| B (auto-resize with pinned widget)", async ({ page }) => {
+  await setupDashboard(page, ["A B C", "x x D"]);
+  await dragByIdToSide(page, "d", "b", "left");
+  await assertLayout(page, [["a", "d", "c"], [null, null, "b"]]); 
+});
+
+// ── 3-col: A B C / x x D — same-row swaps (tests 64–65) ─────────
+
+test.describe("3-col: A B C / x x D — same-row swaps", () => {
+  test("case 64: C -> B", async ({ page }) => {
+    await setupDashboard(page, ["A B C", "x x D"]);
+    await dragByIdToId(page, "c", "b");
+    await assertLayout(page, [["a", "c", "b"], [null, null, "d"]]);
+  });
+
+  test("case 65: A -> B", async ({ page }) => {
+    await setupDashboard(page, ["A B C", "x x D"]);
+    await dragByIdToId(page, "a", "b");
+    await assertLayout(page, [["b", "a", "c"], [null, null, "d"]]);
+  });
 });

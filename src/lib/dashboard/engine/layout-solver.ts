@@ -3,11 +3,61 @@ import type { OperationIntent } from "./types.ts";
 import { computeLayout } from "../layout/compute-layout.ts";
 import { DEFAULT_WIDGET_HEIGHT } from "../constants.ts";
 
-/**
- * Pin all visible widgets (except those in `involvedIds`) to their current
- * computed column so that uninvolved widgets don't reflow when the layout
- * is recomputed after a drag operation.
- */
+export function pinToGreedyColumns(
+  widgets: WidgetState[],
+  maxColumns: number,
+  excludeIds?: ReadonlySet<string>,
+): WidgetState[] {
+  const visible = widgets
+    .filter(w => w.visible)
+    .sort((a, b) => a.order - b.order);
+
+  const colMap = new Map<string, number>();
+  const rowUsed = new Array(maxColumns).fill(0);
+
+  for (const w of visible) {
+    const span = Math.max(1, Math.min(w.colSpan, maxColumns));
+
+    if (excludeIds?.has(w.id) && w.columnStart != null) {
+      const col = Math.max(0, Math.min(w.columnStart, maxColumns - span));
+      for (let c = col; c < col + span; c++) {
+        rowUsed[c] = rowUsed[c] + 1;
+      }
+      continue;
+    }
+
+    let bestCol = -1;
+    let bestRow = Infinity;
+
+    for (let startCol = 0; startCol <= maxColumns - span; startCol++) {
+      let maxRow = 0;
+      for (let c = startCol; c < startCol + span; c++) {
+        maxRow = Math.max(maxRow, rowUsed[c]);
+      }
+      if (maxRow < bestRow) {
+        bestRow = maxRow;
+        bestCol = startCol;
+      }
+    }
+
+    if (bestCol >= 0) {
+      colMap.set(w.id, bestCol);
+      for (let c = bestCol; c < bestCol + span; c++) {
+        rowUsed[c] = bestRow + 1;
+      }
+    }
+  }
+
+  return widgets.map(w => {
+    if (excludeIds?.has(w.id)) return w;
+    const col = colMap.get(w.id);
+    if (col != null) {
+      return { ...w, columnStart: col };
+    }
+    return w;
+  });
+}
+
 export function stabilizeUninvolvedWidgets(
   widgets: WidgetState[],
   baseLayout: ComputedLayout,
@@ -64,7 +114,6 @@ export function solveDragLayout(
 
   switch (config.autoFillMode) {
     case "immediate":
-      // Remove source from flow, others repack
       return computeLayout(
         widgets,
         heights as Map<string, number>,
@@ -75,7 +124,7 @@ export function solveDragLayout(
       );
 
     case "on-drop":
-      // Phantom holds position
+    case "none": {
       if (!sourceWidget) {
         return solveBaseLayout(widgets, heights, containerWidth, config);
       }
@@ -92,31 +141,11 @@ export function solveDragLayout(
             colSpan: sourceWidget.colSpan,
             height: heights.get(sourceId) ?? DEFAULT_WIDGET_HEIGHT,
             order: sourceWidget.order,
+            columnStart: sourceWidget.columnStart,
           },
         }
       );
-
-    case "none":
-      // Same as on-drop (phantom holds position)
-      if (!sourceWidget) {
-        return solveBaseLayout(widgets, heights, containerWidth, config);
-      }
-      return computeLayout(
-        widgets,
-        heights as Map<string, number>,
-        containerWidth,
-        config.maxColumns,
-        config.gap,
-        {
-          excludeIds: new Set([sourceId]),
-          phantom: {
-            id: `__phantom_${sourceId}`,
-            colSpan: sourceWidget.colSpan,
-            height: heights.get(sourceId) ?? DEFAULT_WIDGET_HEIGHT,
-            order: sourceWidget.order,
-          },
-        }
-      );
+    }
   }
 }
 
@@ -129,11 +158,8 @@ export function solvePreviewLayout(
   sourceId: string,
   baseLayout?: ComputedLayout
 ): ComputedLayout {
-  // Apply the intent tentatively to widget state, then compute layout
-  // This shows what the grid would look like after the drop
   const visible = widgets.filter(w => w.visible).sort((a, b) => a.order - b.order);
 
-  // Helper: stabilize non-involved widgets so they don't reflow
   const stabilize = (ws: WidgetState[], involved: ReadonlySet<string>) =>
     baseLayout
       ? stabilizeUninvolvedWidgets(ws, baseLayout, involved, containerWidth, config.maxColumns, config.gap)
@@ -144,19 +170,16 @@ export function solvePreviewLayout(
       return solveDragLayout(widgets, heights, containerWidth, config, sourceId);
 
     case "reorder": {
-      // Simulate reorder
       const sourceIdx = visible.findIndex(w => w.id === sourceId);
       if (sourceIdx === -1) return solveDragLayout(widgets, heights, containerWidth, config, sourceId);
       const reordered = [...visible];
       const [moved] = reordered.splice(sourceIdx, 1);
       reordered.splice(intent.targetIndex, 0, moved);
-      // Only clear columnStart for the moved widget; preserve for others
       const previewWidgets = reordered.map((w, i) => ({
         ...w,
         order: i,
         ...(w.id === sourceId ? { columnStart: undefined } : {}),
       }));
-      // Include hidden widgets
       const hidden = widgets.filter(w => !w.visible);
       return computeLayout(
         [...stabilize(previewWidgets, new Set([sourceId])), ...hidden],
@@ -168,17 +191,28 @@ export function solvePreviewLayout(
     }
 
     case "swap": {
-      // Exchange order of source and target
       const sourceWidget = visible.find(w => w.id === sourceId);
       const targetWidget = visible.find(w => w.id === intent.targetId);
       if (!sourceWidget || !targetWidget) return solveDragLayout(widgets, heights, containerWidth, config, sourceId);
+
+      const srcCol = sourceWidget.columnStart;
+      const tgtCol = targetWidget.columnStart;
+
       const swapped = widgets.map(w => {
-        if (w.id === sourceId) return { ...w, order: targetWidget.order, columnStart: undefined };
-        if (w.id === intent.targetId) return { ...w, order: sourceWidget.order, columnStart: undefined };
+        if (w.id === sourceId) {
+          return { ...w, order: targetWidget.order, columnStart: tgtCol };
+        }
+        if (w.id === intent.targetId) {
+          return { ...w, order: sourceWidget.order, columnStart: srcCol };
+        }
         return w;
       });
+      const pinned = new Set<string>();
+      for (const w of swapped) {
+        if (w.visible && w.columnStart != null) pinned.add(w.id);
+      }
       return computeLayout(
-        stabilize(swapped, new Set([sourceId, intent.targetId])),
+        pinToGreedyColumns(swapped, config.maxColumns, pinned.size > 0 ? pinned : undefined),
         heights as Map<string, number>,
         containerWidth,
         config.maxColumns,
@@ -187,28 +221,56 @@ export function solvePreviewLayout(
     }
 
     case "auto-resize": {
-      // Resize both and place adjacent
+      const sourceWidget = widgets.find(w => w.id === sourceId);
+      const srcCol = sourceWidget?.columnStart;
+
       const resized = widgets.map(w => {
         if (w.id === sourceId) return { ...w, colSpan: intent.sourceSpan };
         if (w.id === intent.targetId) return { ...w, colSpan: intent.targetSpan };
         return w;
       });
-      // Also reorder source next to target
       const resizedVisible = resized.filter(w => w.visible).sort((a, b) => a.order - b.order);
       const sourceIdx = resizedVisible.findIndex(w => w.id === sourceId);
       if (sourceIdx === -1) return solveDragLayout(widgets, heights, containerWidth, config, sourceId);
       const reordered = [...resizedVisible];
       const [moved] = reordered.splice(sourceIdx, 1);
       reordered.splice(intent.targetIndex, 0, moved);
-      // Only clear columnStart for the resized widgets; preserve for others
+
+      if (srcCol != null) {
+        const tgtIdx = reordered.findIndex(w => w.id === intent.targetId);
+        if (tgtIdx >= 0 && sourceIdx < reordered.length && tgtIdx !== sourceIdx) {
+          const temp = reordered[tgtIdx];
+          reordered[tgtIdx] = reordered[sourceIdx];
+          reordered[sourceIdx] = temp;
+        }
+      }
+
       const previewWidgets = reordered.map((w, i) => ({
         ...w,
         order: i,
-        ...((w.id === sourceId || w.id === intent.targetId) ? { columnStart: undefined } : {}),
+        ...(w.id === sourceId ? { columnStart: undefined } : {}),
+        ...(w.id === intent.targetId
+          ? { columnStart: srcCol != null ? srcCol : undefined }
+          : {}),
       }));
       const hidden = widgets.filter(w => !w.visible);
+
+      if (srcCol != null) {
+        const pinned = new Set<string>();
+        for (const pw of previewWidgets) {
+          if (pw.visible && pw.columnStart != null) pinned.add(pw.id);
+        }
+        return computeLayout(
+          [...pinToGreedyColumns(previewWidgets, config.maxColumns, pinned.size > 0 ? pinned : undefined), ...hidden],
+          heights as Map<string, number>,
+          containerWidth,
+          config.maxColumns,
+          config.gap
+        );
+      }
+
       return computeLayout(
-        [...stabilize(previewWidgets, new Set([sourceId, intent.targetId])), ...hidden],
+        [...pinToGreedyColumns(previewWidgets, config.maxColumns), ...hidden],
         heights as Map<string, number>,
         containerWidth,
         config.maxColumns,
@@ -217,11 +279,14 @@ export function solvePreviewLayout(
     }
 
     case "column-pin": {
-      const pinned = widgets.map(w =>
-        w.id === sourceId ? { ...w, columnStart: intent.column } : w
-      );
+      const visibleSorted = visible.filter(w => w.id !== sourceId);
+      const source = visible.find(w => w.id === sourceId);
+      if (!source) return solveDragLayout(widgets, heights, containerWidth, config, sourceId);
+      const reordered = [...visibleSorted, { ...source, columnStart: intent.column }];
+      const previewWidgets = reordered.map((w, i) => ({ ...w, order: i }));
+      const hidden = widgets.filter(w => !w.visible);
       return computeLayout(
-        stabilize(pinned, new Set([sourceId])),
+        [...previewWidgets, ...hidden],
         heights as Map<string, number>,
         containerWidth,
         config.maxColumns,

@@ -203,3 +203,124 @@ export async function getWidgetColSpans(
   }
   return result;
 }
+
+/**
+ * Capture the preview grid during an active drag.
+ *
+ * During drag, non-dragged widgets have their data-x/y set from the
+ * previewLayout (target positions). The dragged widget's target position
+ * is shown by the ghost element. This function combines both to produce
+ * the grid the user sees as the "preview" — which should match the final
+ * layout after the drop.
+ *
+ * Returns null if no preview is available (no ghost element visible).
+ */
+export async function capturePreviewGrid(
+  page: Page,
+): Promise<(string | null)[][] | null> {
+  const ghostEl = page.locator('[data-testid="drop-ghost"]');
+  if ((await ghostEl.count()) === 0) return null;
+
+  const gridState = await page.$eval('[data-testid="dashboard-grid"]', (el) => {
+    const d = (el as HTMLElement).dataset;
+    return {
+      gap: Number(d.gap),
+      maxColumns: Number(d.maxColumns),
+    };
+  });
+  const { gap, maxColumns } = gridState;
+
+  const containerWidth = await page.$eval(
+    '[data-testid="dashboard-grid"]',
+    (el) => (el as HTMLElement).offsetWidth,
+  );
+  const colWidth = (containerWidth - gap * (maxColumns - 1)) / maxColumns;
+  const step = colWidth + gap;
+
+  // Read non-dragged widgets — use data-width to derive colSpan since
+  // the preview layout may resize widgets without updating data-colspan.
+  const nonDragged = await page.$$eval("[data-widget-id]", (elements) =>
+    elements
+      .filter((el) => (el as HTMLElement).dataset.dragging !== "true")
+      .map((el) => {
+        const d = (el as HTMLElement).dataset;
+        return {
+          id: d.widgetId!,
+          width: Number(d.width),
+          x: Number(d.x),
+          y: Number(d.y),
+        };
+      }),
+  );
+
+  // Read ghost position + width (represents the dragged widget's target)
+  const ghostData = await ghostEl.evaluate((el) => ({
+    x: Number((el as HTMLElement).dataset.ghostX),
+    y: Number((el as HTMLElement).dataset.ghostY),
+    width: Number((el as HTMLElement).dataset.ghostWidth),
+  }));
+
+  // Read dragged widget ID
+  const draggedInfo = await page.$$eval("[data-widget-id]", (elements) => {
+    const el = elements.find((e) => (e as HTMLElement).dataset.dragging === "true");
+    if (!el) return null;
+    return { id: (el as HTMLElement).dataset.widgetId! };
+  });
+
+  // Derive colSpan from pixel width: span = round((width + gap) / (colWidth + gap))
+  const deriveSpan = (width: number) =>
+    Math.max(1, Math.round((width + gap) / step));
+
+  // Combine: non-dragged at their preview positions + dragged at ghost position
+  type Entry = { id: string; colSpan: number; x: number; y: number };
+  const all: Entry[] = nonDragged.map((w) => ({
+    ...w,
+    colSpan: deriveSpan(w.width),
+  }));
+  if (draggedInfo) {
+    all.push({
+      id: draggedInfo.id,
+      colSpan: deriveSpan(ghostData.width),
+      x: ghostData.x,
+      y: ghostData.y,
+    });
+  }
+
+  // Sort by y then x (same as getWidgetLayoutInfo)
+  all.sort((a, b) => {
+    if (Math.abs(a.y - b.y) > 5) return a.y - b.y;
+    return a.x - b.x;
+  });
+
+  // Compute logical rows/cols and build grid (same algorithm as getGridRepresentation)
+  const nextRowForCol = new Array(maxColumns).fill(0);
+  const positioned = all.map((w) => {
+    const col = Math.round(w.x / step);
+    const span = Math.max(1, Math.min(w.colSpan, maxColumns));
+    let row = 0;
+    for (let c = col; c < col + span && c < maxColumns; c++) {
+      row = Math.max(row, nextRowForCol[c]);
+    }
+    for (let c = col; c < col + span && c < maxColumns; c++) {
+      nextRowForCol[c] = row + 1;
+    }
+    return { id: w.id, col, row, colSpan: span };
+  });
+
+  if (positioned.length === 0) return null;
+
+  const maxRow = Math.max(...positioned.map((w) => w.row));
+  const grid: (string | null)[][] = [];
+  for (let r = 0; r <= maxRow; r++) {
+    grid.push(new Array(maxColumns).fill(null));
+  }
+  for (const w of positioned) {
+    for (let c = 0; c < w.colSpan; c++) {
+      if (w.col + c < maxColumns) {
+        grid[w.row][w.col + c] = w.id;
+      }
+    }
+  }
+
+  return grid;
+}
