@@ -62,7 +62,9 @@ export function resolveZone(
         pointer.y >= iy &&
         pointer.y < iy + ih
       ) {
-        return { type: "widget", targetId: r.id };
+        const centerX = r.x + r.width / 2;
+        const side = pointer.x < centerX ? "left" : "right";
+        return { type: "widget", targetId: r.id, side };
       }
     }
   }
@@ -102,8 +104,46 @@ export function resolveZone(
         };
       }
     }
+  }
 
-    // Check gap after last widget
+  // ── Step 4b: open column space within the grid ────────────────
+  // When columns have different heights (e.g. A B C / _D_), the area
+  // below a shorter column's content is a valid drop target. We detect
+  // this by computing per-column content bottoms from layout positions
+  // (which include phantoms) and checking if the pointer is in the open
+  // space of a column that has less content than the tallest column.
+  if (pointer.x >= 0 && pointer.x < containerWidth && pointer.y >= 0) {
+    const colBottoms = new Array(maxColumns).fill(0);
+    for (const [, pos] of layout.positions) {
+      const startCol = Math.round(pos.x / (colWidth + gap));
+      const span = Math.max(
+        1,
+        Math.round((pos.width + gap) / (colWidth + gap))
+      );
+      for (
+        let c = startCol;
+        c < Math.min(startCol + span, maxColumns);
+        c++
+      ) {
+        colBottoms[c] = Math.max(colBottoms[c], pos.y + pos.height);
+      }
+    }
+
+    const col = Math.min(
+      Math.max(0, Math.floor(pointer.x / (colWidth + gap))),
+      maxColumns - 1
+    );
+
+    // Only trigger when the column actually has content above (colBottoms > 0).
+    // If the column is completely empty, let the gap-after or empty zone checks
+    // handle it — this avoids stealing horizontal gap zones from same-row widgets.
+    if (colBottoms[col] > 0 && pointer.y >= colBottoms[col] && pointer.y < layout.totalHeight) {
+      return { type: "empty", column: col };
+    }
+  }
+
+  // ── Step 4c: gap after last widget ────────────────────────────
+  if (resolved.length > 0) {
     const last = resolved[resolved.length - 1];
     if (isInGapAfter(pointer, last, inset, layout.totalHeight, containerWidth)) {
       return {
@@ -205,13 +245,17 @@ function isInGapBetween(
     const aInsetBottom = aBottom - inset;
     const bInsetTop = b.y + inset;
 
-    // Vertical gap band between inset-bottom of a and inset-top of b
+    // Vertical gap band between inset-bottom of a and inset-top of b.
+    // Restricted to the horizontal extent of either widget so that
+    // unrelated columns (e.g. column 1 between B at col 2 and C at col 0)
+    // are not falsely claimed as a gap — those are open column spaces.
     if (bInsetTop > aInsetBottom) {
+      const inWidgetARange = pointer.x >= a.x && pointer.x < a.x + a.width;
+      const inWidgetBRange = pointer.x >= b.x && pointer.x < b.x + b.width;
       if (
+        (inWidgetARange || inWidgetBRange) &&
         pointer.y >= aInsetBottom &&
-        pointer.y < bInsetTop &&
-        pointer.x >= 0 &&
-        pointer.x < containerWidth
+        pointer.y < bInsetTop
       ) {
         return true;
       }

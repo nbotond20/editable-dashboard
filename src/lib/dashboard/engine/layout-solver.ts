@@ -3,6 +3,35 @@ import type { OperationIntent } from "./types.ts";
 import { computeLayout } from "../layout/compute-layout.ts";
 import { DEFAULT_WIDGET_HEIGHT } from "../constants.ts";
 
+/**
+ * Pin all visible widgets (except those in `involvedIds`) to their current
+ * computed column so that uninvolved widgets don't reflow when the layout
+ * is recomputed after a drag operation.
+ */
+export function stabilizeUninvolvedWidgets(
+  widgets: WidgetState[],
+  baseLayout: ComputedLayout,
+  involvedIds: ReadonlySet<string>,
+  containerWidth: number,
+  maxColumns: number,
+  gap: number,
+): WidgetState[] {
+  if (maxColumns <= 1) return widgets;
+  const colWidth = (containerWidth - gap * (maxColumns - 1)) / maxColumns;
+  const step = colWidth + gap;
+
+  let changed = false;
+  const result = widgets.map(w => {
+    if (!w.visible || involvedIds.has(w.id) || w.columnStart != null) return w;
+    const pos = baseLayout.positions.get(w.id);
+    if (!pos) return w;
+    changed = true;
+    return { ...w, columnStart: Math.round(pos.x / step) };
+  });
+
+  return changed ? result : widgets;
+}
+
 export interface LayoutSolverConfig {
   autoFillMode: "immediate" | "on-drop" | "none";
   maxColumns: number;
@@ -97,11 +126,18 @@ export function solvePreviewLayout(
   containerWidth: number,
   config: LayoutSolverConfig,
   intent: OperationIntent,
-  sourceId: string
+  sourceId: string,
+  baseLayout?: ComputedLayout
 ): ComputedLayout {
   // Apply the intent tentatively to widget state, then compute layout
   // This shows what the grid would look like after the drop
   const visible = widgets.filter(w => w.visible).sort((a, b) => a.order - b.order);
+
+  // Helper: stabilize non-involved widgets so they don't reflow
+  const stabilize = (ws: WidgetState[], involved: ReadonlySet<string>) =>
+    baseLayout
+      ? stabilizeUninvolvedWidgets(ws, baseLayout, involved, containerWidth, config.maxColumns, config.gap)
+      : ws;
 
   switch (intent.type) {
     case "none":
@@ -114,11 +150,16 @@ export function solvePreviewLayout(
       const reordered = [...visible];
       const [moved] = reordered.splice(sourceIdx, 1);
       reordered.splice(intent.targetIndex, 0, moved);
-      const previewWidgets = reordered.map((w, i) => ({ ...w, order: i, columnStart: undefined }));
+      // Only clear columnStart for the moved widget; preserve for others
+      const previewWidgets = reordered.map((w, i) => ({
+        ...w,
+        order: i,
+        ...(w.id === sourceId ? { columnStart: undefined } : {}),
+      }));
       // Include hidden widgets
       const hidden = widgets.filter(w => !w.visible);
       return computeLayout(
-        [...previewWidgets, ...hidden],
+        [...stabilize(previewWidgets, new Set([sourceId])), ...hidden],
         heights as Map<string, number>,
         containerWidth,
         config.maxColumns,
@@ -136,7 +177,13 @@ export function solvePreviewLayout(
         if (w.id === intent.targetId) return { ...w, order: sourceWidget.order, columnStart: undefined };
         return w;
       });
-      return computeLayout(swapped, heights as Map<string, number>, containerWidth, config.maxColumns, config.gap);
+      return computeLayout(
+        stabilize(swapped, new Set([sourceId, intent.targetId])),
+        heights as Map<string, number>,
+        containerWidth,
+        config.maxColumns,
+        config.gap
+      );
     }
 
     case "auto-resize": {
@@ -153,10 +200,15 @@ export function solvePreviewLayout(
       const reordered = [...resizedVisible];
       const [moved] = reordered.splice(sourceIdx, 1);
       reordered.splice(intent.targetIndex, 0, moved);
-      const previewWidgets = reordered.map((w, i) => ({ ...w, order: i, columnStart: undefined }));
+      // Only clear columnStart for the resized widgets; preserve for others
+      const previewWidgets = reordered.map((w, i) => ({
+        ...w,
+        order: i,
+        ...((w.id === sourceId || w.id === intent.targetId) ? { columnStart: undefined } : {}),
+      }));
       const hidden = widgets.filter(w => !w.visible);
       return computeLayout(
-        [...previewWidgets, ...hidden],
+        [...stabilize(previewWidgets, new Set([sourceId, intent.targetId])), ...hidden],
         heights as Map<string, number>,
         containerWidth,
         config.maxColumns,
@@ -168,7 +220,13 @@ export function solvePreviewLayout(
       const pinned = widgets.map(w =>
         w.id === sourceId ? { ...w, columnStart: intent.column } : w
       );
-      return computeLayout(pinned, heights as Map<string, number>, containerWidth, config.maxColumns, config.gap);
+      return computeLayout(
+        stabilize(pinned, new Set([sourceId])),
+        heights as Map<string, number>,
+        containerWidth,
+        config.maxColumns,
+        config.gap
+      );
     }
   }
 }

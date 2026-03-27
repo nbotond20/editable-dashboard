@@ -83,7 +83,7 @@ describe("resolveZone", () => {
       // Center = (8 + 86, 8 + 42) = (94, 50)
       const zone = resolveZone(pt(94, 50), layout, widgets, STD.gap, STD.maxColumns, STD.containerWidth, "none");
 
-      expect(zone).toEqual({ type: "widget", targetId: "w1" });
+      expect(zone).toEqual({ type: "widget", targetId: "w1", side: "right" });
     });
 
     it("returns widget zone for each widget when multiple are present", () => {
@@ -96,10 +96,10 @@ describe("resolveZone", () => {
       const widgets = makeWidgets(["w1", "w2"]);
 
       const zone1 = resolveZone(pt(94, 50), layout, widgets, STD.gap, STD.maxColumns, STD.containerWidth, "none");
-      expect(zone1).toEqual({ type: "widget", targetId: "w1" });
+      expect(zone1).toEqual({ type: "widget", targetId: "w1", side: "right" });
 
       const zone2 = resolveZone(pt(298, 50), layout, widgets, STD.gap, STD.maxColumns, STD.containerWidth, "none");
-      expect(zone2).toEqual({ type: "widget", targetId: "w2" });
+      expect(zone2).toEqual({ type: "widget", targetId: "w2", side: "right" });
     });
   });
 
@@ -284,7 +284,7 @@ describe("resolveZone", () => {
       // Pointer over w2's center, w1 is source
       const zone = resolveZone(pt(298, 50), layout, widgets, STD.gap, STD.maxColumns, STD.containerWidth, "w1");
 
-      expect(zone).toEqual({ type: "widget", targetId: "w2" });
+      expect(zone).toEqual({ type: "widget", targetId: "w2", side: "right" });
     });
   });
 
@@ -300,7 +300,7 @@ describe("resolveZone", () => {
 
       const zone = resolveZone(pt(100, 50), layout, widgets, 16, 1, 200, "none");
 
-      expect(zone).toEqual({ type: "widget", targetId: "w1" });
+      expect(zone).toEqual({ type: "widget", targetId: "w1", side: "right" });
     });
 
     it("detects vertical gap in single column", () => {
@@ -348,7 +348,7 @@ describe("resolveZone", () => {
 
       const zone = resolveZone(pt(94, 50), layout, widgets, STD.gap, STD.maxColumns, STD.containerWidth, "none");
 
-      expect(zone).toEqual({ type: "widget", targetId: "w1" });
+      expect(zone).toEqual({ type: "widget", targetId: "w1", side: "right" });
     });
 
     it("returns gap after the widget when pointer is to its right", () => {
@@ -402,7 +402,7 @@ describe("resolveZone", () => {
       // inset = 8, so inset rect starts at x=8, y=8
       const zone = resolveZone(pt(8, 50), layout, widgets, STD.gap, STD.maxColumns, STD.containerWidth, "none");
 
-      expect(zone).toEqual({ type: "widget", targetId: "w1" });
+      expect(zone).toEqual({ type: "widget", targetId: "w1", side: "left" });
     });
 
     it("pointer just outside widget inset falls into gap region", () => {
@@ -471,6 +471,41 @@ describe("resolveZone", () => {
         index: 3,
       });
     });
+
+    it("does not claim unrelated columns as row-break gap", () => {
+      // Layout: A(span=2) B / C _ D — drag D, pointer in column 1 (between B and C columns)
+      // 3 columns, colWidth ≈ 189, gap = 16, containerWidth = 600
+      const cw = 600;
+      const colW = (cw - 16 * 2) / 3; // ≈ 189.33
+      const specs: WidgetSpec[] = [
+        // A spans cols 0-1
+        { id: "A", x: 0, y: 0, width: colW * 2 + 16, height: 200, colSpan: 2 },
+        // B at col 2
+        { id: "B", x: 2 * (colW + 16), y: 0, width: colW, height: 200, colSpan: 1 },
+        // C at col 0, row 1
+        { id: "C", x: 0, y: 216, width: colW, height: 200, colSpan: 1 },
+        // phantom for D at col 2, row 1
+        { id: "phantom_D", x: 2 * (colW + 16), y: 216, width: colW, height: 200, colSpan: 1 },
+      ];
+      const layout = makeLayout(specs, 416);
+      const widgets = makeWidgets(["A", "B", "C"]);
+
+      // Pointer in column 1 at row-break Y level (between row 0 bottom and row 1 top)
+      // This is in the vertical gap band between B and C, but column 1 has
+      // neither B nor C — should NOT be caught as a gap between them.
+      const zone = resolveZone(
+        pt(colW + 16 + colW / 2, 208), // mid column 1, in the row break
+        layout,
+        widgets,
+        16,
+        3,
+        cw,
+        "D"
+      );
+
+      // Should be open column space (column 1 below A), not a gap between B and C
+      expect(zone).toEqual({ type: "empty", column: 1 });
+    });
   });
 
   describe("widgets with varying colSpan", () => {
@@ -485,7 +520,7 @@ describe("resolveZone", () => {
 
       // Inside w1 center
       const zone1 = resolveZone(pt(196, 50), layout, widgets, STD.gap, STD.maxColumns, STD.containerWidth, "none");
-      expect(zone1).toEqual({ type: "widget", targetId: "w1" });
+      expect(zone1).toEqual({ type: "widget", targetId: "w1", side: "right" });
 
       // In gap between w1 and w2
       const zone2 = resolveZone(pt(400, 50), layout, widgets, STD.gap, STD.maxColumns, STD.containerWidth, "none");
@@ -495,6 +530,86 @@ describe("resolveZone", () => {
         afterId: "w2",
         index: 1,
       });
+    });
+  });
+
+  describe("open column space within the grid", () => {
+    it("returns empty zone when pointer is in a shorter column's open space", () => {
+      // Layout: A B C on row 0, phantom_D in column 1 row 1
+      // This simulates dragging D in a 3-column layout with A B C / _D_
+      const specs: WidgetSpec[] = [
+        { id: "w1", x: 0, y: 0, width: 188, height: 100, colSpan: 1 },
+        { id: "w2", x: 204, y: 0, width: 188, height: 100, colSpan: 1 },
+        { id: "w3", x: 408, y: 0, width: 188, height: 100, colSpan: 1 },
+        { id: "phantom", x: 204, y: 116, width: 188, height: 100, colSpan: 1 },
+      ];
+      // totalHeight includes the phantom row
+      const layout = makeLayout(specs, 216);
+      const widgets = makeWidgets(["w1", "w2", "w3"]);
+
+      // Pointer below w1 (column 0) at y=150, which is within totalHeight (216)
+      // but below column 0's content (which ends at y=100)
+      const zone = resolveZone(
+        pt(94, 150),
+        layout,
+        widgets,
+        STD.gap,
+        3,
+        3 * 188 + 2 * 16,
+        "source"
+      );
+
+      expect(zone).toEqual({ type: "empty", column: 0 });
+    });
+
+    it("returns empty zone for the right column's open space", () => {
+      // Same layout but pointer in column 2 (below w3)
+      const specs: WidgetSpec[] = [
+        { id: "w1", x: 0, y: 0, width: 188, height: 100, colSpan: 1 },
+        { id: "w2", x: 204, y: 0, width: 188, height: 100, colSpan: 1 },
+        { id: "w3", x: 408, y: 0, width: 188, height: 100, colSpan: 1 },
+        { id: "phantom", x: 204, y: 116, width: 188, height: 100, colSpan: 1 },
+      ];
+      const layout = makeLayout(specs, 216);
+      const widgets = makeWidgets(["w1", "w2", "w3"]);
+
+      const zone = resolveZone(
+        pt(500, 150),
+        layout,
+        widgets,
+        STD.gap,
+        3,
+        3 * 188 + 2 * 16,
+        "source"
+      );
+
+      expect(zone).toEqual({ type: "empty", column: 2 });
+    });
+
+    it("does not return empty zone for column with content at that height", () => {
+      // Pointer in column 1 at the phantom's level - not open space
+      const specs: WidgetSpec[] = [
+        { id: "w1", x: 0, y: 0, width: 188, height: 100, colSpan: 1 },
+        { id: "w2", x: 204, y: 0, width: 188, height: 100, colSpan: 1 },
+        { id: "w3", x: 408, y: 0, width: 188, height: 100, colSpan: 1 },
+        { id: "phantom", x: 204, y: 116, width: 188, height: 100, colSpan: 1 },
+      ];
+      const layout = makeLayout(specs, 216);
+      const widgets = makeWidgets(["w1", "w2", "w3"]);
+
+      // Pointer in column 1 at y=150 - phantom occupies this area
+      const zone = resolveZone(
+        pt(298, 150),
+        layout,
+        widgets,
+        STD.gap,
+        3,
+        3 * 188 + 2 * 16,
+        "source"
+      );
+
+      // Should NOT be empty zone since column 1 has content at this Y
+      expect(zone.type).not.toBe("empty");
     });
   });
 

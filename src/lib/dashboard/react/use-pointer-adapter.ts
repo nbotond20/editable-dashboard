@@ -29,6 +29,9 @@ export function usePointerAdapter(
       const container = containerRef.current;
       if (!container) return;
 
+      // Safety: clean up any lingering state from a previous drag
+      cleanupRef.current?.();
+
       let activePointerId: number | null = pointerId;
 
       const rect = container.getBoundingClientRect();
@@ -70,13 +73,26 @@ export function usePointerAdapter(
       function handlePointerUp(e: PointerEvent) {
         if (e.pointerId !== activePointerId) return;
         engine.send({ type: "POINTER_UP", timestamp: performance.now() });
-        cleanup();
+        // Remove pointer listeners but keep the RAF tick loop alive —
+        // the engine needs TICK events to transition "dropping" → "idle".
+        // The tick loop will stop itself when the phase leaves
+        // pending/dragging/dropping.
+        removePointerListeners();
       }
 
       function handlePointerCancel(e: PointerEvent) {
         if (e.pointerId !== activePointerId) return;
         engine.send({ type: "POINTER_CANCEL", timestamp: performance.now() });
+        // Cancel goes directly to "idle", so full cleanup is safe.
         cleanup();
+      }
+
+      function removePointerListeners() {
+        document.removeEventListener("pointermove", handlePointerMove);
+        document.removeEventListener("pointerup", handlePointerUp);
+        document.removeEventListener("pointercancel", handlePointerCancel);
+        activePointerId = null;
+        cleanupRef.current = cleanup;
       }
 
       function cleanup() {

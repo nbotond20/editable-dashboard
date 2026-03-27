@@ -532,6 +532,91 @@ describe("solvePreviewLayout", () => {
     expect(aPos.x).toBe(1 * (colWidth + GAP));
   });
 
+  it("column-pin: uninvolved widgets stay in their columns when baseLayout provided", () => {
+    // Layout: A(span=2) B / C D _  (3 columns, D at col 2 via columnStart)
+    // Pin C to column 1 → D should stay at column 2
+    const threeColConfig: LayoutSolverConfig = {
+      autoFillMode: "on-drop",
+      maxColumns: 3,
+      gap: GAP,
+    };
+    const cw = 3 * 100 + 2 * GAP; // 332
+    const colWidth = (cw - GAP * 2) / 3; // 100
+
+    const widgets: WidgetState[] = [
+      makeWidget("A", 0, 2),
+      makeWidget("B", 1, 1),
+      makeWidget("C", 2, 1),
+      { ...makeWidget("D", 3, 1), columnStart: 2 },
+    ];
+    const heights = makeHeights([
+      ["A", 100],
+      ["B", 100],
+      ["C", 100],
+      ["D", 100],
+    ]);
+
+    // Compute base layout: A at cols 0-1, B at col 2, C at col 0, D at col 2 (pinned)
+    const base = solveBaseLayout(widgets, heights, cw, threeColConfig);
+    expect(base.positions.get("D")!.x).toBe(2 * (colWidth + GAP));
+
+    // Now preview column-pin C to column 1, passing baseLayout
+    const preview = solvePreviewLayout(
+      widgets,
+      heights,
+      cw,
+      threeColConfig,
+      { type: "column-pin", column: 1 },
+      "C",
+      base
+    );
+
+    const cPos = preview.positions.get("C")!;
+    const dPos = preview.positions.get("D")!;
+
+    // C should be pinned to column 1
+    expect(cPos.x).toBe(1 * (colWidth + GAP));
+
+    // D should stay at column 2 (already has columnStart=2), not move
+    expect(dPos.x).toBe(2 * (colWidth + GAP));
+  });
+
+  it("column-pin: stabilizes widgets without columnStart using baseLayout", () => {
+    // Verify that stabilize pins unpinned widgets to their base positions
+    // A and B on row 0, C is dragged → B should not move
+    const widgets = [
+      makeWidget("A", 0, 1),
+      makeWidget("B", 1, 1),
+      makeWidget("C", 2, 1),
+    ];
+    const heights = makeHeights([
+      ["A", 100],
+      ["B", 100],
+      ["C", 100],
+    ]);
+
+    const colWidth = (CONTAINER_WIDTH - GAP * (MAX_COLUMNS - 1)) / MAX_COLUMNS;
+    const base = solveBaseLayout(widgets, heights, CONTAINER_WIDTH, baseConfig);
+
+    // B is at column 1 in base
+    expect(base.positions.get("B")!.x).toBe(colWidth + GAP);
+
+    // Pin C to column 1 (conflicts with B's greedy position)
+    const preview = solvePreviewLayout(
+      widgets,
+      heights,
+      CONTAINER_WIDTH,
+      baseConfig,
+      { type: "column-pin", column: 1 },
+      "C",
+      base
+    );
+
+    // B should be stabilized at column 1 (its base position)
+    const bPos = preview.positions.get("B")!;
+    expect(bPos.x).toBe(colWidth + GAP);
+  });
+
   it("reorder with missing source falls back to drag layout", () => {
     const widgets = [
       makeWidget("A", 0, 1),

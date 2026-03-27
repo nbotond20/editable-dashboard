@@ -51,16 +51,18 @@ export function resolveIntent(
 
       let sourceSpan: number;
       let targetSpan: number;
+      let needsResize = false;
 
       if (
         sourceWidget.colSpan + targetWidget.colSpan <=
         config.maxColumns
       ) {
-        // Both fit as-is.
+        // Both already fit side-by-side — no resize needed.
         sourceSpan = sourceWidget.colSpan;
         targetSpan = targetWidget.colSpan;
       } else {
-        // Compute halfSpan and clamp to each widget's constraints.
+        // Need to shrink — compute halfSpan and clamp to each widget's constraints.
+        needsResize = true;
         const halfSpan = Math.ceil(config.maxColumns / 2);
 
         const sourceConstraints = config.getWidgetConstraints(sourceWidget.id);
@@ -76,7 +78,33 @@ export function resolveIntent(
         );
       }
 
-      const targetIndex = widgets.indexOf(targetWidget);
+      // Guard: auto-resize only makes sense when at least one widget
+      // actually changes size. If both already fit as-is, fall back to
+      // swap — otherwise we'd just silently reorder surrounding widgets.
+      if (!needsResize) {
+        return { type: "swap", targetId: zone.targetId };
+      }
+
+      // Guard: if after clamping to constraints they still don't fit
+      // side-by-side, resizing is impossible — fall back to swap.
+      if (sourceSpan + targetSpan > config.maxColumns) {
+        return { type: "swap", targetId: zone.targetId };
+      }
+
+      // Direction-aware placement: use the pointer side to decide
+      // whether the source goes before or after the target in order.
+      const sourceIdx = widgets.findIndex((w) => w.id === sourceWidget.id);
+      const targetIdx = widgets.indexOf(targetWidget);
+
+      // Compute target's index after source is removed from the array
+      const adjustedTargetIdx =
+        sourceIdx < targetIdx ? targetIdx - 1 : targetIdx;
+
+      // "left" → source before target, "right" → source after target
+      const targetIndex =
+        zone.side === "left"
+          ? adjustedTargetIdx
+          : adjustedTargetIdx + 1;
 
       return {
         type: "auto-resize",

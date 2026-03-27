@@ -17,6 +17,7 @@ import {
   solveBaseLayout,
   solveDragLayout,
   solvePreviewLayout,
+  stabilizeUninvolvedWidgets,
 } from "./layout-solver.ts";
 import type { LayoutSolverConfig } from "./layout-solver.ts";
 import { dashboardReducer } from "../state/dashboard-reducer.ts";
@@ -181,8 +182,14 @@ export class DragEngine {
     // events back to the engine).
     const newSnapshot = this.getSnapshot();
     if (prevSnapshot && this.snapshotsEqual(prevSnapshot, newSnapshot)) {
-      // Preserve the old reference so useSyncExternalStore sees no change
-      this.cachedSnapshot = prevSnapshot;
+      // Nothing that React cares about changed. Preserve the old
+      // reference so useSyncExternalStore sees no change and skips
+      // re-rendering. Only do this when truly identical — if a
+      // non-rendered field like dwellProgress changed, keep the fresh
+      // snapshot so direct callers of getSnapshot() see current values.
+      if (prevSnapshot.dwellProgress === newSnapshot.dwellProgress) {
+        this.cachedSnapshot = prevSnapshot;
+      }
     } else {
       this.notify();
     }
@@ -396,7 +403,22 @@ export class DragEngine {
 
     // Commit the operation
     const committed = this.commitIntent(sourceId, intent);
-    const newState = applyOperation(this.history.present, committed);
+    let newState = applyOperation(this.history.present, committed);
+
+    // Pin uninvolved widgets to their current columns so they don't reflow
+    const involvedIds = this.getInvolvedIds(sourceId, committed);
+    const cfg = this.layoutConfig();
+    newState = {
+      ...newState,
+      widgets: stabilizeUninvolvedWidgets(
+        newState.widgets,
+        this.baseLayout,
+        involvedIds,
+        this.containerWidth,
+        cfg.maxColumns,
+        cfg.gap,
+      ),
+    };
 
     if (newState !== this.history.present) {
       this.history = pushState(this.history, newState, MAX_UNDO_DEPTH);
@@ -510,6 +532,9 @@ export class DragEngine {
     // Build and apply the committed operation
     let committed: CommittedOperation;
 
+    const cfg = this.layoutConfig();
+    const involvedIds = new Set([phase.sourceId]);
+
     if (
       phase.currentIndex !== phase.originalIndex &&
       phase.currentColSpan !== phase.originalColSpan
@@ -527,6 +552,7 @@ export class DragEngine {
         toIndex: phase.currentIndex,
       };
       state = applyOperation(state, reorder);
+      state = { ...state, widgets: stabilizeUninvolvedWidgets(state.widgets, this.baseLayout, involvedIds, this.containerWidth, cfg.maxColumns, cfg.gap) };
       this.history = pushState(this.history, state, MAX_UNDO_DEPTH);
       committed = reorder; // For announcement
     } else if (phase.currentIndex !== phase.originalIndex) {
@@ -535,7 +561,8 @@ export class DragEngine {
         fromIndex: phase.originalIndex,
         toIndex: phase.currentIndex,
       };
-      const newState = applyOperation(this.history.present, committed);
+      let newState = applyOperation(this.history.present, committed);
+      newState = { ...newState, widgets: stabilizeUninvolvedWidgets(newState.widgets, this.baseLayout, involvedIds, this.containerWidth, cfg.maxColumns, cfg.gap) };
       if (newState !== this.history.present) {
         this.history = pushState(this.history, newState, MAX_UNDO_DEPTH);
       }
@@ -545,7 +572,8 @@ export class DragEngine {
         id: phase.sourceId,
         newSpan: phase.currentColSpan,
       };
-      const newState = applyOperation(this.history.present, committed);
+      let newState = applyOperation(this.history.present, committed);
+      newState = { ...newState, widgets: stabilizeUninvolvedWidgets(newState.widgets, this.baseLayout, involvedIds, this.containerWidth, cfg.maxColumns, cfg.gap) };
       if (newState !== this.history.present) {
         this.history = pushState(this.history, newState, MAX_UNDO_DEPTH);
       }
@@ -645,8 +673,10 @@ export class DragEngine {
       newSpan,
     };
 
-    const newState = applyOperation(state, committed);
+    let newState = applyOperation(state, committed);
     if (newState !== state) {
+      const cfg = this.layoutConfig();
+      newState = { ...newState, widgets: stabilizeUninvolvedWidgets(newState.widgets, this.baseLayout, new Set([event.id]), this.containerWidth, cfg.maxColumns, cfg.gap) };
       this.history = pushState(this.history, newState, MAX_UNDO_DEPTH);
       this.recomputeLayouts();
     }
@@ -767,6 +797,7 @@ export class DragEngine {
               this.layoutConfig(),
               newIntent,
               sourceId,
+              this.baseLayout,
             )
           : null;
     }
@@ -851,6 +882,23 @@ export class DragEngine {
           column: intent.column,
           targetIndex: sourceIdx,
         };
+    }
+  }
+
+  private getInvolvedIds(sourceId: string, op: CommittedOperation): ReadonlySet<string> {
+    switch (op.type) {
+      case "reorder":
+        return new Set([sourceId]);
+      case "swap":
+        return new Set([op.sourceId, op.targetId]);
+      case "auto-resize":
+        return new Set([op.sourceId, op.targetId]);
+      case "column-pin":
+        return new Set([op.sourceId]);
+      case "resize-toggle":
+        return new Set([op.id]);
+      case "cancelled":
+        return new Set();
     }
   }
 
@@ -962,6 +1010,11 @@ export class DragEngine {
     //
     // phase is compared by type + sourceId only — pointerPos/grabOffset
     // change every move and are only consumed via dragPosition.
+    //
+    // dwellProgress is excluded — it changes every TICK frame while
+    // hovering over a widget zone (continuous 0→1). Including it would
+    // cause 60fps React re-renders. If UI needs it, read it via a
+    // separate subscription.
     return (
       this.phasesEqual(a.phase, b.phase) &&
       a.layout === b.layout &&
@@ -970,7 +1023,6 @@ export class DragEngine {
       a.zone === b.zone &&
       a.announcement === b.announcement &&
       a.widgets === b.widgets &&
-      a.dwellProgress === b.dwellProgress &&
       a.canUndo === b.canUndo &&
       a.canRedo === b.canRedo
     );

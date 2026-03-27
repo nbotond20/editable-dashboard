@@ -82,7 +82,7 @@ export type DropZone =
       afterId: string | null;
       index: number;
     }
-  | { type: "widget"; targetId: string }
+  | { type: "widget"; targetId: string; side: "left" | "right" }
   | { type: "empty"; column: number }
   | { type: "outside" };
 
@@ -200,6 +200,8 @@ export function zonesEqual(a: DropZone | null, b: DropZone | null): boolean {
         a.afterId === (b as typeof a).afterId
       );
     case "widget":
+      // Intentionally ignores `side` — changing which half of the widget
+      // the pointer is on should NOT reset the dwell timer.
       return a.targetId === (b as typeof a).targetId;
     case "empty":
       return a.column === (b as typeof a).column;

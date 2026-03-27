@@ -73,9 +73,16 @@ export function dashboardReducer(
       let nextOrder = visible.length;
       const reordered = state.widgets.map((w) => {
         if (orderMap.has(w.id)) {
-          return { ...w, order: orderMap.get(w.id)!, columnStart: undefined };
+          // Only clear columnStart for the moved widget; preserve for others
+          // so that column-pinned widgets stay where the user placed them.
+          const isMovedWidget = w.id === movedWidget.id;
+          return {
+            ...w,
+            order: orderMap.get(w.id)!,
+            ...(isMovedWidget ? { columnStart: undefined } : {}),
+          };
         }
-        return { ...w, order: nextOrder++, columnStart: undefined };
+        return { ...w, order: nextOrder++ };
       });
 
       return { ...state, widgets: reordered };

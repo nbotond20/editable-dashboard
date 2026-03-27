@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx vitest:*)",
+      "Bash(git checkout:*)",
+      "Bash(npx playwright:*)",
+      "Bash(npx eslint:*)",
+      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")"
+    ]
+  }
+}
