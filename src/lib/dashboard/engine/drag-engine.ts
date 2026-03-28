@@ -86,6 +86,7 @@ export class DragEngine {
 
   private pendingZone: DropZone | null = null;
   private pendingZoneFrames = 0;
+  private lastZonePointerPos: Point | null = null;
 
   private baseLayout: ComputedLayout = { positions: new Map(), totalHeight: 0 };
   private dragLayout: ComputedLayout | null = null;
@@ -360,6 +361,15 @@ export class DragEngine {
     const sourceId = this.phase.sourceId;
     const intent = this.currentIntent;
 
+    // ── DEBUG: log intent and zone at drop time ──
+    console.log("[drag-debug] pointerUp", {
+      sourceId,
+      intentType: intent?.type,
+      intent: intent ? JSON.parse(JSON.stringify(intent)) : null,
+      zone: this.currentZone ? JSON.parse(JSON.stringify(this.currentZone)) : null,
+      pointerPos: this.phase.type === "dragging" ? { ...this.phase.pointerPos } : null,
+    });
+
     if (!intent || intent.type === "none") {
       this.phase = { type: "idle" };
       this.clearDragState();
@@ -368,6 +378,9 @@ export class DragEngine {
     }
 
     const committed = this.commitIntent(sourceId, intent);
+
+    // ── DEBUG: log committed operation ──
+    console.log("[drag-debug] committed", JSON.parse(JSON.stringify(committed)));
 
     if (committed.type === "reorder" && committed.fromIndex === committed.toIndex) {
       this.phase = { type: "idle" };
@@ -417,10 +430,18 @@ export class DragEngine {
       const srcCol = preSrc?.columnStart;
       const tgtCol = preTgt?.columnStart;
 
+      // ── DEBUG: log auto-resize post-processing inputs ──
+      console.log("[drag-debug] auto-resize post-process", {
+        srcCol, tgtCol,
+        preOrderBefore: getVisibleSorted(preWidgets).map(w => `${w.id}(${w.order})`),
+        postOrderAfterApply: getVisibleSorted(newState.widgets).map(w => `${w.id}(${w.order},col=${w.columnStart})`),
+      });
+
       let needsSwap = false;
       if (srcCol != null) {
         const withoutSource = preWidgets.filter(w => w.visible && w.id !== committed.sourceId)
-          .sort((a, b) => a.order - b.order);
+          .sort((a, b) => a.order - b.order)
+          .map(w => w.id === committed.targetId ? { ...w, colSpan: committed.targetSpan } : w);
         const checkLayout = solveBaseLayout(
           withoutSource.map((w, i) => ({ ...w, order: i })),
           this.heights, this.containerWidth, cfg,
@@ -493,6 +514,10 @@ export class DragEngine {
           widgets: pinToGreedyColumns(newState.widgets, cfg.maxColumns),
         };
       }
+      // ── DEBUG: log final state after auto-resize post-processing ──
+      console.log("[drag-debug] auto-resize final", {
+        finalOrder: getVisibleSorted(newState.widgets).map(w => `${w.id}(${w.order},col=${w.columnStart})`),
+      });
     } else if (committed.type === "column-pin") {
       const maxSpanAtCol = Math.max(1, cfg.maxColumns - committed.column);
       newState = {
@@ -501,6 +526,19 @@ export class DragEngine {
           w.id === committed.sourceId && w.colSpan > maxSpanAtCol
             ? { ...w, colSpan: maxSpanAtCol }
             : w
+        ),
+      };
+    } else if (committed.type === "reorder" && this.baseLayout) {
+      const involvedIds = new Set([sourceId]);
+      newState = {
+        ...newState,
+        widgets: stabilizeUninvolvedWidgets(
+          newState.widgets,
+          this.baseLayout,
+          involvedIds,
+          this.containerWidth,
+          cfg.maxColumns,
+          cfg.gap,
         ),
       };
     } else {
@@ -793,6 +831,9 @@ export class DragEngine {
     const visible = getVisibleSorted(state.widgets);
     const layout = this.dragLayout ?? this.baseLayout;
 
+    const currentWidgetSide =
+      this.currentZone?.type === "widget" ? this.currentZone.side : undefined;
+
     const computedZone = resolveZone(
       this.phase.pointerPos,
       layout,
@@ -801,6 +842,7 @@ export class DragEngine {
       state.maxColumns,
       this.containerWidth,
       this.phase.sourceId,
+      currentWidgetSide,
     );
 
     if (!zonesEqual(computedZone, this.currentZone)) {
@@ -809,6 +851,7 @@ export class DragEngine {
         if (this.pendingZoneFrames >= 2) {
           this.currentZone = computedZone;
           this.zoneEnteredAt = timestamp;
+          this.lastZonePointerPos = null;
           this.pendingZone = null;
           this.pendingZoneFrames = 0;
         }
@@ -821,6 +864,7 @@ export class DragEngine {
         ) {
           this.currentZone = computedZone;
           this.zoneEnteredAt = timestamp;
+          this.lastZonePointerPos = null;
           this.pendingZone = null;
           this.pendingZoneFrames = 0;
         }
@@ -839,14 +883,53 @@ export class DragEngine {
 
     if (!this.currentZone) return;
 
+    // Reset dwell timer while the pointer is actively moving.
+    // We track the position where the cursor first "settled" in this zone.
+    // If it drifts more than 20px from that spot, it's real movement (not
+    // hand tremor) so we restart the dwell timer from the new position.
+    // This lets tremor (±5px jitter around one spot) accumulate dwell while
+    // a slow drag through a zone correctly resets it.
+    const pointerPos = this.phase.type === "dragging" ? this.phase.pointerPos : null;
+    if (pointerPos && this.lastZonePointerPos) {
+      const drift = distance(pointerPos, this.lastZonePointerPos);
+      if (drift > 20) {
+        this.zoneEnteredAt = timestamp;
+        this.lastZonePointerPos = { x: pointerPos.x, y: pointerPos.y };
+      }
+    } else if (pointerPos) {
+      this.lastZonePointerPos = { x: pointerPos.x, y: pointerPos.y };
+    }
+
     const dwellMs = timestamp - this.zoneEnteredAt;
     const sourceId = (this.phase as Extract<DragPhase, { type: "dragging" }>).sourceId;
     const source = state.widgets.find((w) => w.id === sourceId);
     if (!source) return;
 
+    // When the cursor is clearly on a side of the target widget (outer ~30%),
+    // the user intends auto-resize, not swap.  Collapse the resize dwell
+    // threshold down to swapDwellMs so the swap-only window is skipped.
+    let effectiveResizeDwellMs = this.config.resizeDwellMs;
+    if (
+      this.currentZone.type === "widget" &&
+      this.phase.type === "dragging" &&
+      layout
+    ) {
+      const targetPos = layout.positions.get(this.currentZone.targetId);
+      if (targetPos) {
+        const centerX = targetPos.x + targetPos.width / 2;
+        const halfWidth = targetPos.width / 2;
+        const sideStrength = halfWidth > 0
+          ? Math.abs(this.phase.pointerPos.x - centerX) / halfWidth
+          : 0;
+        if (sideStrength > 0.2) {
+          effectiveResizeDwellMs = this.config.swapDwellMs;
+        }
+      }
+    }
+
     let newIntent = resolveIntent(this.currentZone, dwellMs, source, visible, {
       swapDwellMs: this.config.swapDwellMs,
-      resizeDwellMs: this.config.resizeDwellMs,
+      resizeDwellMs: effectiveResizeDwellMs,
       maxColumns: state.maxColumns,
       isPositionLocked: this.config.isPositionLocked,
       canDrop: this.config.canDrop,
@@ -858,6 +941,16 @@ export class DragEngine {
     }
 
     if (!this.intentsEqual(newIntent, this.currentIntent)) {
+      // ── DEBUG: log intent transitions ──
+      console.log("[drag-debug] intent changed", {
+        from: this.currentIntent?.type,
+        to: newIntent.type,
+        newIntent: JSON.parse(JSON.stringify(newIntent)),
+        zone: this.currentZone ? JSON.parse(JSON.stringify(this.currentZone)) : null,
+        dwellMs: Math.round(dwellMs),
+        pointerX: this.phase.type === "dragging" ? Math.round(this.phase.pointerPos.x) : null,
+      });
+
       this.currentIntent = newIntent;
       this.previewLayout =
         newIntent.type !== "none"
@@ -969,6 +1062,7 @@ export class DragEngine {
     this.zoneEnteredAt = 0;
     this.pendingZone = null;
     this.pendingZoneFrames = 0;
+    this.lastZonePointerPos = null;
   }
 
   private recomputeBaseLayout(): void {

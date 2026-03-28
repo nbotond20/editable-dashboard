@@ -1,6 +1,7 @@
 import { expect, type Page } from "@playwright/test";
 import { widgetDragHandle, widgetByLabel, widgetById, widgetDragHandleById } from "./locators";
 import { capturePreviewGrid, getGridRepresentation } from "./layout-utils";
+import { humanizePath } from "./humanize-path";
 
 export async function dragWidgetToWidget(
   page: Page,
@@ -50,18 +51,15 @@ async function performDrag(
   endY: number,
   options?: { steps?: number; dwellMs?: number }
 ) {
-  const steps = options?.steps ?? 20;
   const dwellMs = options?.dwellMs ?? 500;
 
   await page.mouse.move(startX, startY);
   await page.mouse.down();
 
-  for (let i = 1; i <= steps; i++) {
-    const progress = i / steps;
-    await page.mouse.move(
-      startX + (endX - startX) * progress,
-      startY + (endY - startY) * progress,
-    );
+  const points = humanizePath(startX, startY, endX, endY);
+  for (const pt of points) {
+    await page.mouse.move(pt.x, pt.y);
+    if (pt.pauseMs) await page.waitForTimeout(pt.pauseMs);
   }
 
   // Dwell to allow zone resolution and intent computation
@@ -109,13 +107,10 @@ export async function startDragWithoutDrop(
   await page.mouse.down();
 
   // Move past the 5px activation threshold
-  const steps = 10;
-  for (let i = 1; i <= steps; i++) {
-    const progress = i / steps;
-    await page.mouse.move(
-      startX + deltaX * progress,
-      startY + deltaY * progress,
-    );
+  const points = humanizePath(startX, startY, startX + deltaX, startY + deltaY);
+  for (const pt of points) {
+    await page.mouse.move(pt.x, pt.y);
+    if (pt.pauseMs) await page.waitForTimeout(pt.pauseMs);
   }
 
   await page.waitForTimeout(100);
@@ -205,7 +200,7 @@ export async function dragWidgetToGapBetween(
   const gapPos = await getGapBetweenWidgets(page, beforeLabel, afterLabel);
   await dragWidgetToPosition(page, sourceLabel, gapPos.x, gapPos.y, {
     dwellMs: 150,
-    steps: 20,
+    steps: 60,
   });
 }
 
@@ -226,13 +221,10 @@ export async function performMultiZoneDrag(
 
   // Move past activation threshold toward first waypoint
   const firstWp = waypoints[0];
-  const activationSteps = 10;
-  for (let i = 1; i <= activationSteps; i++) {
-    const progress = i / activationSteps;
-    await page.mouse.move(
-      startX + (firstWp.x - startX) * progress,
-      startY + (firstWp.y - startY) * progress,
-    );
+  const firstPoints = humanizePath(startX, startY, firstWp.x, firstWp.y);
+  for (const pt of firstPoints) {
+    await page.mouse.move(pt.x, pt.y);
+    if (pt.pauseMs) await page.waitForTimeout(pt.pauseMs);
   }
   await page.waitForTimeout(firstWp.dwellMs);
 
@@ -240,13 +232,10 @@ export async function performMultiZoneDrag(
   for (let w = 1; w < waypoints.length; w++) {
     const wp = waypoints[w];
     const prev = waypoints[w - 1];
-    const steps = 10;
-    for (let i = 1; i <= steps; i++) {
-      const progress = i / steps;
-      await page.mouse.move(
-        prev.x + (wp.x - prev.x) * progress,
-        prev.y + (wp.y - prev.y) * progress,
-      );
+    const wpPoints = humanizePath(prev.x, prev.y, wp.x, wp.y);
+    for (const pt of wpPoints) {
+      await page.mouse.move(pt.x, pt.y);
+      if (pt.pauseMs) await page.waitForTimeout(pt.pauseMs);
     }
     await page.waitForTimeout(wp.dwellMs);
   }
@@ -369,7 +358,6 @@ export async function touchDragToWidget(
   options?: { dwellMs?: number; steps?: number },
 ) {
   const dwellMs = options?.dwellMs ?? 500;
-  const steps = options?.steps ?? 15;
 
   const start = await touchStartDrag(page, sourceLabel);
 
@@ -381,14 +369,11 @@ export async function touchDragToWidget(
   const endX = targetBox.x + targetBox.width / 2;
   const endY = targetBox.y + targetBox.height / 2;
 
-  // Move in steps
-  for (let i = 1; i <= steps; i++) {
-    const progress = i / steps;
-    await touchMove(
-      page,
-      start.x + (endX - start.x) * progress,
-      start.y + (endY - start.y) * progress,
-    );
+  // Move in humanized steps
+  const points = humanizePath(start.x, start.y, endX, endY);
+  for (const pt of points) {
+    await touchMove(page, pt.x, pt.y);
+    if (pt.pauseMs) await page.waitForTimeout(pt.pauseMs);
   }
 
   await page.waitForTimeout(dwellMs);
@@ -446,7 +431,7 @@ export async function dragByIdToId(
   const endY = targetBox.y + targetBox.height / 2;
 
   await performDrag(page, startX, startY, endX, endY, {
-    steps: options?.steps ?? 20,
+    steps: options?.steps ?? 60,
     dwellMs: options?.dwellMs ?? 350,
   });
 }
@@ -482,7 +467,7 @@ export async function dragByIdToSide(
   const endY = targetBox.y + targetBox.height / 2;
 
   await performDrag(page, startX, startY, endX, endY, {
-    steps: options?.steps ?? 20,
+    steps: options?.steps ?? 60,
     dwellMs: options?.dwellMs ?? 800,
   });
 }
@@ -530,7 +515,7 @@ export async function dragByIdToEmptyCell(
   const endY = lowestBottom + gap + 20;
 
   await performDrag(page, startX, startY, endX, endY, {
-    steps: options?.steps ?? 20,
+    steps: options?.steps ?? 60,
     dwellMs: options?.dwellMs ?? 350,
   });
 }
@@ -579,7 +564,7 @@ export async function dragByIdToAdjacentEmpty(
   const endY = widgetBox.y + widgetBox.height / 2;
 
   await performDrag(page, startX, startY, endX, endY, {
-    steps: options?.steps ?? 20,
+    steps: options?.steps ?? 60,
     dwellMs: options?.dwellMs ?? 350,
   });
 }
@@ -621,7 +606,7 @@ export async function dragByIdToColumn(
   const endY = widgetBox.y + widgetBox.height / 2;
 
   await performDrag(page, startX, startY, endX, endY, {
-    steps: options?.steps ?? 20,
+    steps: options?.steps ?? 60,
     dwellMs: options?.dwellMs ?? 350,
   });
 }
@@ -650,18 +635,15 @@ export async function attemptBlockedDragByIdToId(
   const endX = targetBox.x + targetBox.width / 2;
   const endY = targetBox.y + targetBox.height / 2;
 
-  const steps = options?.steps ?? 20;
   const dwellMs = options?.dwellMs ?? 350;
 
   await page.mouse.move(startX, startY);
   await page.mouse.down();
 
-  for (let i = 1; i <= steps; i++) {
-    const progress = i / steps;
-    await page.mouse.move(
-      startX + (endX - startX) * progress,
-      startY + (endY - startY) * progress,
-    );
+  const points = humanizePath(startX, startY, endX, endY);
+  for (const pt of points) {
+    await page.mouse.move(pt.x, pt.y);
+    if (pt.pauseMs) await page.waitForTimeout(pt.pauseMs);
   }
 
   await page.waitForTimeout(dwellMs);
@@ -688,7 +670,7 @@ export async function dragByIdToCoords(
   const startY = handleBox.y + handleBox.height / 2;
 
   await performDrag(page, startX, startY, targetX, targetY, {
-    steps: options?.steps ?? 20,
+    steps: options?.steps ?? 60,
     dwellMs: options?.dwellMs ?? 350,
   });
 }
@@ -784,7 +766,6 @@ async function performTouchDrag(
   endY: number,
   options?: { steps?: number; dwellMs?: number },
 ) {
-  const steps = options?.steps ?? 15;
   const dwellMs = options?.dwellMs ?? 350;
 
   const start = await touchStartDragById(page, sourceId);
@@ -792,15 +773,10 @@ async function performTouchDrag(
   // Wait for touch activation delay (200ms) + buffer
   await page.waitForTimeout(250);
 
-  for (let i = 1; i <= steps; i++) {
-    const progress = i / steps;
-    await dispatchPointerEventById(
-      page,
-      "pointermove",
-      start.x + (endX - start.x) * progress,
-      start.y + (endY - start.y) * progress,
-      "document",
-    );
+  const points = humanizePath(start.x, start.y, endX, endY);
+  for (const pt of points) {
+    await dispatchPointerEventById(page, "pointermove", pt.x, pt.y, "document");
+    if (pt.pauseMs) await page.waitForTimeout(pt.pauseMs);
   }
 
   await page.waitForTimeout(dwellMs);
@@ -839,7 +815,7 @@ export async function touchDragByIdToId(
   if (!targetBox) throw new Error(`Widget "${targetId}" not found`);
 
   await performTouchDrag(page, sourceId, targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, {
-    steps: options?.steps ?? 15,
+    steps: options?.steps ?? 40,
     dwellMs: options?.dwellMs ?? 350,
   });
 }
@@ -861,7 +837,7 @@ export async function touchDragByIdToSide(
     : targetBox.x + targetBox.width * 0.75;
 
   await performTouchDrag(page, sourceId, endX, targetBox.y + targetBox.height / 2, {
-    steps: options?.steps ?? 15,
+    steps: options?.steps ?? 40,
     dwellMs: options?.dwellMs ?? 800,
   });
 }
@@ -890,7 +866,7 @@ export async function touchDragByIdToAdjacentEmpty(
     : widgetBox.x + widgetBox.width + colWidth / 2;
 
   await performTouchDrag(page, sourceId, endX, widgetBox.y + widgetBox.height / 2, {
-    steps: options?.steps ?? 15,
+    steps: options?.steps ?? 40,
     dwellMs: options?.dwellMs ?? 350,
   });
 }
@@ -917,7 +893,7 @@ export async function touchDragByIdToColumn(
   const endX = gridBox.x + targetCol * (colWidth + gap) + colWidth / 2;
 
   await performTouchDrag(page, sourceId, endX, widgetBox.y + widgetBox.height / 2, {
-    steps: options?.steps ?? 15,
+    steps: options?.steps ?? 40,
     dwellMs: options?.dwellMs ?? 350,
   });
 }

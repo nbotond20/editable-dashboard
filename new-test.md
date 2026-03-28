@@ -257,3 +257,17 @@ E ->| x1
 Result:
 A B E
 C D D
+
+### 19
+
+Start:
+A A
+B C
+D E
+
+C ->| A>
+
+Result:
+A C
+B D
+E

@@ -1,6 +1,6 @@
-import { test } from "@playwright/test";
+import { test, expect } from "@playwright/test";
 import { setupDashboard } from "./helpers/setup";
-import { assertLayout } from "./helpers/layout-utils";
+import { assertLayout, capturePreviewGrid, getGridRepresentation } from "./helpers/layout-utils";
 import {
   dragByIdToId,
   dragByIdToSide,
@@ -9,7 +9,7 @@ import {
   dragByIdToCoords,
   dragByIdToColumnAtWidget,
 } from "./helpers/drag";
-import { widgetById } from "./helpers/locators";
+import { widgetById, widgetDragHandleById } from "./helpers/locators";
 
 // ── 2-col: A B / C (tests 1–5) ──────────────────────────────────
 
@@ -595,4 +595,117 @@ test("case 70: D ->| x (drag span-2 widget to empty col)", async ({ page }) => {
 
   await dragByIdToCoords(page, "d", targetX, targetY);
   await assertLayout(page, [["a", "b", "d"], ["c", "e"]]);
+});
+
+// ── 2-col: A A / B C / D E — auto-resize (test 73) ─────────────
+
+test("case 73: C ->| A> (auto-resize right)", async ({ page }) => {
+  await setupDashboard(page, ["A A", "B C", "D E"]);
+  await dragByIdToSide(page, "c", "a", "right");
+  await assertLayout(page, [["a", "c"], ["b", "d"], ["e"]]);
+});
+
+test("case 74: C ->| <A (auto-resize left, with D)", async ({ page }) => {
+  await setupDashboard(page, ["A A", "B C", "D"]);
+  await dragByIdToSide(page, "c", "a", "left");
+  await assertLayout(page, [["c", "a"], ["b", "d"]]);
+});
+
+test("case 75: C ->| A> (auto-resize right, with D)", async ({ page }) => {
+  await setupDashboard(page, ["A A", "B C", "D"]);
+  await dragByIdToSide(page, "c", "a", "right");
+  await assertLayout(page, [["a", "c"], ["b", "d"]]);
+});
+
+// ── Trackpad tremor near widget center (test 76) ────────────────────
+// Simulates a real trackpad user who holds C on A's right side but
+// with the cursor near A's center — tremor crosses the center line.
+// Before fix: side flips every frame, preview jumps, final is random.
+
+test("case 76: C ->| A> with trackpad tremor near center", async ({ page }) => {
+  await setupDashboard(page, ["A A", "B C", "D"]);
+
+  const handle = widgetDragHandleById(page, "c");
+  const target = widgetById(page, "a");
+
+  await handle.scrollIntoViewIfNeeded();
+  const handleBox = await handle.boundingBox();
+  const targetBox = await target.boundingBox();
+  if (!handleBox || !targetBox) throw new Error("Could not get bounding boxes");
+
+  const startX = handleBox.x + handleBox.width / 2;
+  const startY = handleBox.y + handleBox.height / 2;
+  // Just barely right of A's center — 3px past center.
+  // A is full-width (span=2) in the drag layout, so center is at viewport center.
+  const targetCenterX = targetBox.x + targetBox.width / 2;
+  const endX = targetCenterX + 3;
+  const endY = targetBox.y + targetBox.height / 2;
+
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+
+  // Move to the target
+  const steps = 30;
+  for (let i = 1; i <= steps; i++) {
+    const t = i / steps;
+    await page.mouse.move(
+      startX + (endX - startX) * t,
+      startY + (endY - startY) * t,
+    );
+  }
+
+  // Dwell with trackpad tremor that crosses A's center line.
+  // ±10px sinusoidal tremor around a point 3px right of center means
+  // the cursor regularly crosses from "right" side to "left" side.
+  for (let i = 0; i < 60; i++) {
+    const tremX = Math.sin(i * 0.7) * 10; // deterministic, crosses center
+    const tremY = Math.cos(i * 0.9) * 3;
+    await page.mouse.move(endX + tremX, endY + tremY);
+    await page.waitForTimeout(16);
+  }
+
+  const previewGrid = await capturePreviewGrid(page);
+
+  await page.mouse.up();
+  await page.waitForTimeout(350);
+
+  // The preview must be visible
+  expect(
+    previewGrid,
+    "Drop ghost must be visible during drag",
+  ).not.toBeNull();
+
+  // The final layout must match the preview (no flicker mismatch)
+  const finalGrid = await getGridRepresentation(page);
+  expect(
+    finalGrid,
+    `Preview during drag does not match layout after drop.\n` +
+    `Preview: ${JSON.stringify(previewGrid)}\n` +
+    `Final:   ${JSON.stringify(finalGrid)}`,
+  ).toEqual(previewGrid);
+
+  // And the result should be A C (right-side auto-resize), not C A
+  await assertLayout(page, [["a", "c"], ["b", "d"]]);
+});
+
+// ── Stale columnStart regression (test 78) ─────────────────────────
+// After any drag operation, pinToGreedyColumns sets columnStart on all
+// widgets.  A subsequent auto-resize must use post-resize spans in
+// its overflow check, not stale pre-resize spans.
+// Without the fix: needsSwap incorrectly fires → C A / B (sides flipped).
+
+test("case 78: swap B↔C twice then auto-resize C →| A> (stale columnStart)", async ({ page }) => {
+  await setupDashboard(page, ["A A", "B C"]);
+
+  // Two swaps set columnStart on every widget via pinToGreedyColumns
+  await dragByIdToId(page, "b", "c");
+  await assertLayout(page, [["a", "a"], ["c", "b"]]);
+
+  await dragByIdToId(page, "b", "c");
+  await assertLayout(page, [["a", "a"], ["b", "c"]]);
+
+  // Now all widgets carry columnStart from the greedy pin.
+  // Auto-resize C to the RIGHT side of A — should produce A C / B.
+  await dragByIdToSide(page, "c", "a", "right");
+  await assertLayout(page, [["a", "c"], ["b"]]);
 });
