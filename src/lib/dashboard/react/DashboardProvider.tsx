@@ -57,7 +57,7 @@ export function DashboardProviderV2(props: DashboardProviderProps) {
 
   const engine = useDragEngine(initialState, definitions, engineConfig);
 
-  const { measureRef, containerRef } = useMeasurementBridge(engine);
+  const { measureRef, containerRef, containerCallbackRef } = useMeasurementBridge(engine);
 
   const { startDrag } = usePointerAdapter(engine, containerRef);
 
@@ -247,7 +247,7 @@ export function DashboardProviderV2(props: DashboardProviderProps) {
       phase,
       dragState,
       getDragPosition,
-      containerRef,
+      containerRef: containerCallbackRef,
       measureRef,
       startDrag: constrainedStartDrag,
       updateDragPointer: () => {},
@@ -260,7 +260,7 @@ export function DashboardProviderV2(props: DashboardProviderProps) {
       isWidgetResizable,
       canAddWidget,
     }),
-    [state, definitions, layout, actions, snapshot.canUndo, snapshot.canRedo, phase, dragState, getDragPosition, containerRef, measureRef, constrainedStartDrag, getA11yProps, handleKeyboardDrag, isWidgetLocked, isWidgetRemovable, isWidgetHideable, isWidgetResizable, canAddWidget],
+    [state, definitions, layout, actions, snapshot.canUndo, snapshot.canRedo, phase, dragState, getDragPosition, containerCallbackRef, measureRef, constrainedStartDrag, getA11yProps, handleKeyboardDrag, isWidgetLocked, isWidgetRemovable, isWidgetHideable, isWidgetResizable, canAddWidget],
   );
 
   return (

@@ -170,7 +170,7 @@ export interface DashboardContextValue {
   phase: "idle" | "pending" | "dragging" | "keyboard-dragging" | "dropping";
   dragState: DragState;
   getDragPosition: () => { x: number; y: number } | null;
-  containerRef: React.RefObject<HTMLDivElement | null>;
+  containerRef: React.Ref<HTMLDivElement>;
   measureRef: (id: string) => (node: HTMLElement | null) => void;
   startDrag: (
     id: string,

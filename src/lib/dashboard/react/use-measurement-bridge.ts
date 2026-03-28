@@ -5,6 +5,7 @@ import { useMeasureCache } from "../layout/measure-cache.ts";
 export function useMeasurementBridge(engine: DragEngine) {
   const { heights, measureRef } = useMeasureCache();
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const observerRef = useRef<ResizeObserver | null>(null);
 
   const engineRef = useRef(engine);
   useEffect(() => { engineRef.current = engine; }, [engine]);
@@ -14,36 +15,26 @@ export function useMeasurementBridge(engine: DragEngine) {
   }, [heights]);
 
   useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-
-    const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const width =
-          entry.contentBoxSize?.[0]?.inlineSize ?? el.clientWidth;
-        engineRef.current.send({
-          type: "SET_CONTAINER",
-          width,
-        });
-      }
-    });
-
-    observer.observe(el);
-
-    engineRef.current.send({
-      type: "SET_CONTAINER",
-      width: el.clientWidth,
-    });
-
     return () => {
-      observer.disconnect();
+      observerRef.current?.disconnect();
     };
   }, []);
 
   const containerCallbackRef = useCallback((node: HTMLDivElement | null) => {
+    observerRef.current?.disconnect();
     containerRef.current = node;
 
     if (node) {
+      const observer = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          const width =
+            entry.contentBoxSize?.[0]?.inlineSize ?? node.clientWidth;
+          engineRef.current.send({ type: "SET_CONTAINER", width });
+        }
+      });
+      observer.observe(node);
+      observerRef.current = observer;
+
       engineRef.current.send({
         type: "SET_CONTAINER",
         width: node.clientWidth,

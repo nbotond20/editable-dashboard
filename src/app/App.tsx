@@ -9,6 +9,7 @@ import {
   type DashboardState,
 } from "../lib/dashboard/index.ts";
 import { DashboardGrid } from "./components/DashboardGrid.tsx";
+import { DashboardGridStatic } from "./components/DashboardGridStatic.tsx";
 import { DemoWidget } from "./DemoWidget.tsx";
 import { WidgetCatalog } from "./WidgetCatalog.tsx";
 import "./App.css";
@@ -33,6 +34,8 @@ const initialWidgets: WidgetState[] = [
 function DashboardContent({ onStateChange }: { onStateChange?: (state: DashboardState) => void }) {
   const { state, actions, definitions: defs, canUndo, canRedo } = useDashboard();
   const [catalogOpen, setCatalogOpen] = useState(false);
+  const [animated, setAnimated] = useState(true);
+  const Grid = animated ? DashboardGrid : DashboardGridStatic;
 
   useEffect(() => {
     onStateChange?.(state);
@@ -92,6 +95,12 @@ function DashboardContent({ onStateChange }: { onStateChange?: (state: Dashboard
             ))}
           </div>
           <button
+            className={`dash-btn ${animated ? "dash-btn--outline" : "dash-btn--primary"}`}
+            onClick={() => setAnimated((a) => !a)}
+          >
+            {animated ? "Animations: On" : "Animations: Off"}
+          </button>
+          <button
             className="dash-btn dash-btn--primary"
             onClick={() => setCatalogOpen(true)}
           >
@@ -102,7 +111,7 @@ function DashboardContent({ onStateChange }: { onStateChange?: (state: Dashboard
       </header>
 
       <main style={{ padding: 24, maxWidth: 1200, margin: "0 auto" }}>
-        <DashboardGrid style={{ width: "100%" }}>
+        <Grid style={{ width: "100%" }}>
           {(widget, slotProps) => (
             <DemoWidget
               widget={widget}
@@ -115,7 +124,7 @@ function DashboardContent({ onStateChange }: { onStateChange?: (state: Dashboard
               toggleVisibility={slotProps.toggleVisibility}
             />
           )}
-        </DashboardGrid>
+        </Grid>
 
         {hiddenWidgets.length > 0 && (
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 24, padding: "12px 16px", flexWrap: "wrap" }}>
@@ -144,35 +153,33 @@ function DashboardContent({ onStateChange }: { onStateChange?: (state: Dashboard
   );
 }
 
-function loadSavedWidgets(): WidgetState[] | undefined {
+function loadSavedState(): { widgets: WidgetState[]; maxColumns: number } | undefined {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return undefined;
     const data = JSON.parse(raw);
     const state = deserializeDashboard(data, definitions);
-    return state.widgets;
+    return { widgets: state.widgets, maxColumns: state.maxColumns };
   } catch {
     return undefined;
   }
 }
 
 export default function App() {
-  const [savedWidgets] = useState(() => loadSavedWidgets());
+  const [saved] = useState(() => loadSavedState());
 
   const handleStateChange = useCallback((state: DashboardState) => {
     try {
       const serialized = serializeDashboard(state);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(serialized));
-    } catch {
-      // Silently ignore storage errors
-    }
+    } catch { /* ignore storage errors */ }
   }, []);
 
   return (
     <DashboardProvider
       definitions={definitions}
-      initialWidgets={savedWidgets ?? initialWidgets}
-      maxColumns={2}
+      initialWidgets={saved?.widgets ?? initialWidgets}
+      maxColumns={saved?.maxColumns ?? 2}
       gap={16}
     >
       <DashboardContent onStateChange={handleStateChange} />
