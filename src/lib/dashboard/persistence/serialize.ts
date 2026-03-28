@@ -44,7 +44,7 @@ export function deserializeDashboard(
       };
 
       if (data.version === 1) {
-        if ((w as Record<string, unknown>).locked) base.lockPosition = true;
+        if ("locked" in w && w.locked) base.lockPosition = true;
       } else {
         if (w.lockPosition) base.lockPosition = true;
         if (w.lockResize) base.lockResize = true;

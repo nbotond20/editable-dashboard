@@ -176,14 +176,12 @@ describe("DragEngine", () => {
       engine.send({
         type: "SET_CONTAINER",
         width: 800,
-        rect: { left: 0, top: 0 },
       });
       const callsAfterFirst = listener.mock.calls.length;
 
       engine.send({
         type: "SET_CONTAINER",
         width: 800,
-        rect: { left: 0, top: 0 },
       });
       expect(listener.mock.calls.length).toBe(callsAfterFirst);
     });
@@ -224,13 +222,11 @@ describe("DragEngine", () => {
       engine.send({
         type: "SET_CONTAINER",
         width: 800,
-        rect: { left: 0, top: 0 },
       });
       engine.send({ type: "SET_HEIGHTS", heights: makeHeights(["a", "b"]) });
       engine.send({
         type: "SET_CONTAINER",
         width: 800,
-        rect: { left: 0, top: 0 },
       });
 
       expect(renderCount).toBeLessThan(MAX_RENDERS);

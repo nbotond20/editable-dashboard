@@ -13,7 +13,7 @@ export function useDragEngine(
       ...config,
       isPositionLocked: buildIsPositionLocked(state, definitions),
       isResizeLocked: buildIsResizeLocked(state, definitions),
-      getWidgetConstraints: buildGetConstraints(definitions, config.getWidgetConstraints),
+      getWidgetConstraints: buildGetConstraints(config.getWidgetConstraints),
     }),
   );
 
@@ -21,7 +21,7 @@ export function useDragEngine(
     ...config,
     isPositionLocked: buildIsPositionLocked(engine.getState(), definitions),
     isResizeLocked: buildIsResizeLocked(engine.getState(), definitions),
-    getWidgetConstraints: buildGetConstraints(definitions, config.getWidgetConstraints),
+    getWidgetConstraints: buildGetConstraints(config.getWidgetConstraints),
   });
 
   return engine;
@@ -54,7 +54,6 @@ function buildIsResizeLocked(
 }
 
 function buildGetConstraints(
-  definitions: WidgetDefinition[],
   custom?: (id: string) => { minSpan: number; maxSpan: number },
 ): (id: string) => { minSpan: number; maxSpan: number } {
   return (id: string) => {
