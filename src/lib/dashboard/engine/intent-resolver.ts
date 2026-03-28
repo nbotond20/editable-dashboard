@@ -22,6 +22,20 @@ export function resolveIntent(
       if (!config.canDrop(sourceWidget.id, zone.index)) {
         return { type: "none" };
       }
+
+      const sourceIdx = widgets.findIndex(w => w.id === sourceWidget.id);
+      if (sourceIdx >= 0 && zone.index !== sourceIdx) {
+        const adjustedTarget = zone.index > sourceIdx ? zone.index - 1 : zone.index;
+        const [lo, hi] = sourceIdx < adjustedTarget
+          ? [sourceIdx + 1, adjustedTarget]
+          : [adjustedTarget, sourceIdx - 1];
+        for (let i = lo; i <= hi; i++) {
+          if (widgets[i] && config.isLocked(widgets[i].id)) {
+            return { type: "none" };
+          }
+        }
+      }
+
       return { type: "reorder", targetIndex: zone.index };
     }
 

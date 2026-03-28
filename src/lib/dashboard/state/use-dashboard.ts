@@ -17,7 +17,6 @@ export function useDashboard() {
   return ctx;
 }
 
-/** Resolve whether a widget is locked by checking runtime state then definition. */
 function isLocked(
   id: string,
   state: DashboardState,
@@ -30,7 +29,6 @@ function isLocked(
   return def?.locked === true;
 }
 
-/** Look up a definition-level constraint for a widget. */
 function getDefConstraint(
   id: string,
   field: "removable" | "hideable" | "resizable",

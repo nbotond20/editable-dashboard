@@ -7,10 +7,6 @@ import type {
 
 const CURRENT_VERSION = 1;
 
-/**
- * Produces a JSON-safe snapshot of the dashboard state,
- * stripping transient fields like `containerWidth`.
- */
 export function serializeDashboard(
   state: DashboardState
 ): SerializedDashboard {
@@ -22,10 +18,6 @@ export function serializeDashboard(
   };
 }
 
-/**
- * Validates and rebuilds DashboardState from a serialized snapshot.
- * Widgets whose `type` has no matching definition are silently dropped.
- */
 export function deserializeDashboard(
   data: SerializedDashboard,
   definitions: WidgetDefinition[]

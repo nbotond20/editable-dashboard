@@ -10,7 +10,6 @@ export function usePointerAdapter(
   const isDraggingRef = useRef(false);
   const cleanupRef = useRef<(() => void) | null>(null);
 
-  // Clean up on unmount
   useEffect(() => {
     return () => {
       cancelAnimationFrame(rafRef.current);
@@ -29,7 +28,6 @@ export function usePointerAdapter(
       const container = containerRef.current;
       if (!container) return;
 
-      // Safety: clean up any lingering state from a previous drag
       cleanupRef.current?.();
 
       let activePointerId: number | null = pointerId;
@@ -53,7 +51,6 @@ export function usePointerAdapter(
         pointerType: (pointerType ?? "mouse") as PointerType,
       });
 
-      // Define handlers inside callback (not during render)
       function handlePointerMove(e: PointerEvent) {
         if (e.pointerId !== activePointerId) return;
         const c = containerRef.current;
@@ -73,17 +70,12 @@ export function usePointerAdapter(
       function handlePointerUp(e: PointerEvent) {
         if (e.pointerId !== activePointerId) return;
         engine.send({ type: "POINTER_UP", timestamp: performance.now() });
-        // Remove pointer listeners but keep the RAF tick loop alive —
-        // the engine needs TICK events to transition "dropping" → "idle".
-        // The tick loop will stop itself when the phase leaves
-        // pending/dragging/dropping.
         removePointerListeners();
       }
 
       function handlePointerCancel(e: PointerEvent) {
         if (e.pointerId !== activePointerId) return;
         engine.send({ type: "POINTER_CANCEL", timestamp: performance.now() });
-        // Cancel goes directly to "idle", so full cleanup is safe.
         cleanup();
       }
 
@@ -111,7 +103,6 @@ export function usePointerAdapter(
       document.addEventListener("pointerup", handlePointerUp);
       document.addEventListener("pointercancel", handlePointerCancel);
 
-      // Start RAF tick loop for dwell timing
       isDraggingRef.current = true;
       const tick = () => {
         if (!isDraggingRef.current) return;

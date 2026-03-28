@@ -16,13 +16,9 @@ export function useDragEngine(
     }),
   );
 
-  // Update config synchronously during render — safe because updateConfig
-  // has no React-visible side effects (no notify, no setState).
-  // This ensures getSnapshot() always reflects the latest config when
-  // useSyncExternalStore calls it during render.
   engine.updateConfig({
     ...config,
-    isLocked: buildIsLocked(state, definitions, config.isLocked),
+    isLocked: buildIsLocked(engine.getState(), definitions, config.isLocked),
     getWidgetConstraints: buildGetConstraints(definitions, config.getWidgetConstraints),
   });
 

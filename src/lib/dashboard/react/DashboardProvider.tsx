@@ -47,11 +47,9 @@ export function DashboardProviderV2(props: DashboardProviderProps) {
     containerWidth: 0,
   };
 
-  // Stable config ref for canDrop (avoids recreating the wrapper every render)
   const canDropRef = useRef(canDrop);
   useEffect(() => { canDropRef.current = canDrop; });
 
-  // Create the headless engine
   const engineConfig = useMemo(() => ({
     maxColumns,
     gap,
@@ -59,26 +57,20 @@ export function DashboardProviderV2(props: DashboardProviderProps) {
 
   const engine = useDragEngine(initialState, definitions, engineConfig);
 
-  // Bridge measurements
   const { measureRef, containerRef } = useMeasurementBridge(engine);
 
-  // Bridge pointer events
   const { startDrag } = usePointerAdapter(engine, containerRef);
 
-  // Bridge keyboard events
   const { handleKeyDown } = useKeyboardAdapter(engine);
 
-  // Subscribe to engine snapshot
   const snapshot = useSyncExternalStore(
     engine.subscribe,
     engine.getSnapshot,
   );
 
-  // Forward controlled state changes
   const onStateChangeRef = useRef(onStateChange);
   useEffect(() => { onStateChangeRef.current = onStateChange; });
 
-  // Announcements
   const { announce, LiveRegion } = useDragAnnouncements();
   useEffect(() => {
     if (snapshot.announcement) {
@@ -86,18 +78,15 @@ export function DashboardProviderV2(props: DashboardProviderProps) {
     }
   }, [snapshot.announcement, announce]);
 
-  // Auto-scroll
   const getDragPositionForScroll = useCallback(() => snapshot.dragPosition, [snapshot.dragPosition]);
   useAutoScroll(
     snapshot.phase.type === "dragging",
     getDragPositionForScroll,
   );
 
-  // Build actions that delegate to the engine
   const dispatch = useCallback(
     (action: DashboardAction) => {
       if (onStateChangeRef.current) {
-        // Controlled mode: compute next state and hand to parent
         const nextState = dashboardReducer(engine.getState(), action);
         onStateChangeRef.current(nextState);
       } else {
@@ -110,7 +99,6 @@ export function DashboardProviderV2(props: DashboardProviderProps) {
   const getState = useCallback(() => engine.getState(), [engine]);
   const actions = useActions({ dispatch, definitions, getState, maxWidgets });
 
-  // Constraint helpers
   const isWidgetLocked = useCallback(
     (id: string) => resolveConstraint(id, "locked", engine.getState(), definitions),
     [engine, definitions],
@@ -132,7 +120,6 @@ export function DashboardProviderV2(props: DashboardProviderProps) {
     [engine, maxWidgets],
   );
 
-  // Map engine snapshot to legacy DragState for compatibility
   const dragState: DragState = useMemo(() => {
     const phase = snapshot.phase;
     if (phase.type === "dragging") {
@@ -175,15 +162,11 @@ export function DashboardProviderV2(props: DashboardProviderProps) {
     };
   }, [snapshot]);
 
-  // Read drag position directly from the engine phase, bypassing the
-  // snapshot cache. Called 60fps by the WidgetSlot RAF loop — MUST
-  // always return the latest pointer position without any caching.
   const getDragPosition = useCallback(
     () => engine.getDragPosition(),
     [engine],
   );
 
-  // A11y props
   const getA11yProps = useCallback(
     (widgetId: string): DragHandleA11yProps => {
       const widget = engine.getState().widgets.find((w) => w.id === widgetId);
@@ -206,7 +189,6 @@ export function DashboardProviderV2(props: DashboardProviderProps) {
     [engine, definitions, snapshot.phase],
   );
 
-  // Wrap start drag to check locked
   const constrainedStartDrag = useCallback(
     (
       id: string,
@@ -221,7 +203,6 @@ export function DashboardProviderV2(props: DashboardProviderProps) {
     [startDrag, isWidgetLocked],
   );
 
-  // Keyboard drag handler
   const handleKeyboardDrag = useCallback(
     (widgetId: string, e: React.KeyboardEvent) => {
       handleKeyDown(widgetId, e);
@@ -229,7 +210,6 @@ export function DashboardProviderV2(props: DashboardProviderProps) {
     [handleKeyDown],
   );
 
-  // Undo/redo keyboard shortcuts
   useEffect(() => {
     if (!keyboardShortcuts) return;
     const container = containerRef.current;
@@ -270,8 +250,8 @@ export function DashboardProviderV2(props: DashboardProviderProps) {
       containerRef,
       measureRef,
       startDrag: constrainedStartDrag,
-      updateDragPointer: () => {},  // No-op: engine handles pointer tracking
-      endDrag: () => {},            // No-op: engine handles drop
+      updateDragPointer: () => {},
+      endDrag: () => {},
       getA11yProps,
       handleKeyboardDrag,
       isWidgetLocked,
@@ -290,8 +270,6 @@ export function DashboardProviderV2(props: DashboardProviderProps) {
     </DashboardContext.Provider>
   );
 }
-
-// ─── Helpers ─────────────────────────────────────────────────
 
 function resolveConstraint(
   id: string,

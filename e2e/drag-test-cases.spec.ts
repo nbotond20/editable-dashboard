@@ -559,3 +559,23 @@ test.describe("3-col: A A B / x C D", () => {
     await assertLayout(page, [["a", "a", "b"], [null, "d", "c"]]);
   });
 });
+
+// ── 3-col: A B x / C D D / x E — drag to empty (test 70) ────────
+
+test("case 70: D ->| x (drag span-2 widget to empty col)", async ({ page }) => {
+  await setupDashboard(page, ["A B x", "C x x", "x D D", "x E"]);
+
+  // Drag D to empty col 2 at row 0's vertical position
+  const aBox = await widgetById(page, "a").boundingBox();
+  const grid = page.locator('[data-testid="dashboard-grid"]');
+  const gridBox = await grid.boundingBox();
+  const maxCols = Number(await grid.evaluate((el) => (el as HTMLElement).dataset.maxColumns));
+  const gap = Number(await grid.evaluate((el) => (el as HTMLElement).dataset.gap));
+  const colWidth = (gridBox!.width - gap * (maxCols - 1)) / maxCols;
+
+  const targetX = gridBox!.x + 2 * (colWidth + gap) + colWidth / 2;
+  const targetY = aBox!.y + aBox!.height / 2;
+
+  await dragByIdToCoords(page, "d", targetX, targetY);
+  await assertLayout(page, [["a", "b", "d"], ["c", "e"]]);
+});

@@ -147,13 +147,13 @@ export type DashboardProviderProps = {
   children: ReactNode;
 } & (
   | {
-      /** Controlled mode: pass external state and a change handler. */
+      
       state: DashboardState;
       onStateChange: (state: DashboardState) => void;
       initialWidgets?: never;
     }
   | {
-      /** Uncontrolled mode: optionally seed with initial widgets. */
+      
       state?: never;
       onStateChange?: never;
       initialWidgets?: WidgetState[];

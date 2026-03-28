@@ -627,6 +627,49 @@ export async function dragByIdToColumn(
 }
 
 /**
+ * Attempt a drag that is expected to have no effect (locked source or locked
+ * target).  Performs the full mouse gesture without any ghost assertions.
+ * Callers should follow up with assertLayout to verify nothing moved.
+ */
+export async function attemptBlockedDragByIdToId(
+  page: Page,
+  sourceId: string,
+  targetId: string,
+  options?: { steps?: number; dwellMs?: number },
+) {
+  const handle = widgetDragHandleById(page, sourceId);
+  const target = widgetById(page, targetId);
+
+  await handle.scrollIntoViewIfNeeded();
+  const handleBox = await handle.boundingBox();
+  const targetBox = await target.boundingBox();
+  if (!handleBox || !targetBox) throw new Error("Could not get bounding boxes");
+
+  const startX = handleBox.x + handleBox.width / 2;
+  const startY = handleBox.y + handleBox.height / 2;
+  const endX = targetBox.x + targetBox.width / 2;
+  const endY = targetBox.y + targetBox.height / 2;
+
+  const steps = options?.steps ?? 20;
+  const dwellMs = options?.dwellMs ?? 350;
+
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+
+  for (let i = 1; i <= steps; i++) {
+    const progress = i / steps;
+    await page.mouse.move(
+      startX + (endX - startX) * progress,
+      startY + (endY - startY) * progress,
+    );
+  }
+
+  await page.waitForTimeout(dwellMs);
+  await page.mouse.up();
+  await page.waitForTimeout(350);
+}
+
+/**
  * Drag a widget to arbitrary pixel coordinates.
  */
 export async function dragByIdToCoords(

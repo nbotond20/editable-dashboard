@@ -23,7 +23,6 @@ export function useDragAnnouncements() {
     messageRef.current = message;
     const el = nodeRef.current;
     if (el) {
-      // Clear then set to ensure screen readers re-announce identical messages
       el.textContent = "";
       requestAnimationFrame(() => {
         el.textContent = message;

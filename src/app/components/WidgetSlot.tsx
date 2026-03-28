@@ -3,8 +3,6 @@ import { motion } from "motion/react";
 import { useDashboard, type WidgetState, type DragHandleProps } from "../../lib/dashboard/index.ts";
 import { LAYOUT_SPRING } from "../animation-config.ts";
 
-// ── Spring simulation for settling animation ──
-// Uses the same parameters as LAYOUT_SPRING so the feel matches.
 function springStep(current: number, target: number, velocity: number, dt: number) {
   const { stiffness, damping, mass } = LAYOUT_SPRING;
   const springForce = -stiffness * (current - target);
@@ -84,10 +82,6 @@ export function WidgetSlot({ widget, children }: WidgetSlotProps) {
     [actions, widget.id]
   );
 
-  // ── Drag offset managed via ref + CSS `translate` property ──
-  // We bypass Framer Motion's MotionValues for x/y because FM's animation
-  // system was overriding our values during the drop transition.
-  // The CSS `translate` property stacks with FM's `transform` (used for scale).
   const elRef = useRef<HTMLDivElement>(null);
   const offsetRef = useRef({ x: 0, y: 0 });
   const rafId = useRef(0);
@@ -96,8 +90,6 @@ export function WidgetSlot({ widget, children }: WidgetSlotProps) {
   const [prevIsDragging, setPrevIsDragging] = useState(false);
   const [isSettling, setIsSettling] = useState(false);
   const [dragOrigin, setDragOrigin] = useState<{ x: number; y: number } | null>(null);
-  // Stores the FLIP data computed during the drag→drop transition.
-  // Written during render (via setState) and consumed in the layout effect.
   const [flipTarget, setFlipTarget] = useState<{ originX: number; originY: number; posX: number; posY: number } | null>(null);
 
   if (isDragging && !prevIsDragging && position) {
@@ -106,7 +98,6 @@ export function WidgetSlot({ widget, children }: WidgetSlotProps) {
   } else if (!isDragging && prevIsDragging) {
     setPrevIsDragging(false);
     setIsSettling(true);
-    // Schedule FLIP offset computation for the layout effect
     if (dragOrigin && position) {
       setFlipTarget({ originX: dragOrigin.x, originY: dragOrigin.y, posX: position.x, posY: position.y });
     }
@@ -117,8 +108,6 @@ export function WidgetSlot({ widget, children }: WidgetSlotProps) {
   useLayoutEffect(() => {
     cancelAnimationFrame(rafId.current);
 
-    // Compute FLIP offset so the element stays visually in place
-    // while its CSS left/top jumps to the new grid position.
     if (flipTarget && flipTarget !== consumedFlipRef.current) {
       consumedFlipRef.current = flipTarget;
       const visualX = flipTarget.originX + offsetRef.current.x;
@@ -170,7 +159,7 @@ export function WidgetSlot({ widget, children }: WidgetSlotProps) {
       if (elRef.current) elRef.current.style.translate = "";
     }
     return () => cancelAnimationFrame(rafId.current);
-  }, [isDragging, isSettling, getDragPosition, flipTarget]); // flipTarget triggers re-run when new FLIP data arrives
+  }, [isDragging, isSettling, getDragPosition, flipTarget]);
 
   useEffect(() => {
     positionRef.current = position;

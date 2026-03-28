@@ -54,7 +54,6 @@ export {
   canRedo,
 } from "./state/undo-history.ts";
 
-// Headless engine (framework-agnostic)
 export { DragEngine } from "./engine/drag-engine.ts";
 export type {
   DragEvent as EngineDragEvent,

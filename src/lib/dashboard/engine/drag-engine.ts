@@ -244,6 +244,10 @@ export class DragEngine {
       return;
     }
 
+    if (action.type === "RESIZE_WIDGET" && this.config.isLocked(action.id)) {
+      return;
+    }
+
     let newState = dashboardReducer(this.history.present, action);
     if (newState === this.history.present) return;
 
@@ -364,7 +368,6 @@ export class DragEngine {
 
     const committed = this.commitIntent(sourceId, intent);
 
-    // No-op: reorder to same position — cancel without mutating state
     if (committed.type === "reorder" && committed.fromIndex === committed.toIndex) {
       this.phase = { type: "idle" };
       this.clearDragState();
@@ -455,7 +458,17 @@ export class DragEngine {
           widgets: pinToGreedyColumns(newState.widgets, cfg.maxColumns),
         };
       }
-    } else if (committed.type !== "column-pin") {
+    } else if (committed.type === "column-pin") {
+      const maxSpanAtCol = Math.max(1, cfg.maxColumns - committed.column);
+      newState = {
+        ...newState,
+        widgets: newState.widgets.map(w =>
+          w.id === committed.sourceId && w.colSpan > maxSpanAtCol
+            ? { ...w, colSpan: maxSpanAtCol }
+            : w
+        ),
+      };
+    } else {
       newState = {
         ...newState,
         widgets: pinToGreedyColumns(newState.widgets, cfg.maxColumns),
@@ -666,6 +679,7 @@ export class DragEngine {
     event: Extract<DragEvent, { type: "RESIZE_TOGGLE" }>,
   ): void {
     if (this.phase.type !== "idle") return;
+    if (this.config.isLocked(event.id)) return;
 
     const state = this.history.present;
     const widget = state.widgets.find((w) => w.id === event.id);

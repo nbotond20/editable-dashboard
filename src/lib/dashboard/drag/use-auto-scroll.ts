@@ -4,13 +4,6 @@ import {
   AUTO_SCROLL_MAX_SPEED,
 } from "../constants.ts";
 
-/**
- * Auto-scrolls the viewport (and any scrollable ancestor) when a drag
- * operation brings the pointer close to the edges.
- *
- * Scroll speed is linearly interpolated from 0 at the edge boundary to
- * `AUTO_SCROLL_MAX_SPEED` at the very edge of the viewport.
- */
 export function useAutoScroll(
   isDragging: boolean,
   getPointerPosition: () => { x: number; y: number } | null
@@ -34,12 +27,6 @@ export function useAutoScroll(
   }, [isDragging, getPointerPosition]);
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/** Compute a signed scroll delta for a single axis.
- *  Returns negative when near the start edge, positive near the end edge. */
 function edgeDelta(
   pointer: number,
   viewportSize: number,
@@ -47,19 +34,16 @@ function edgeDelta(
   maxSpeed: number
 ): number {
   if (pointer < edgeSize) {
-    // Near start edge — scroll backward
     const ratio = 1 - pointer / edgeSize;
     return -Math.round(ratio * maxSpeed);
   }
   if (pointer > viewportSize - edgeSize) {
-    // Near end edge — scroll forward
     const ratio = 1 - (viewportSize - pointer) / edgeSize;
     return Math.round(ratio * maxSpeed);
   }
   return 0;
 }
 
-/** Scroll the window / documentElement when near viewport edges. */
 function scrollViewport(pos: { x: number; y: number }) {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
@@ -72,8 +56,6 @@ function scrollViewport(pos: { x: number; y: number }) {
   }
 }
 
-/** Walk up from `document.elementFromPoint` looking for scrollable containers
- *  and scroll them when the pointer is near their edges. */
 function scrollAncestors(pos: { x: number; y: number }) {
   let el = document.elementFromPoint(pos.x, pos.y) as HTMLElement | null;
 

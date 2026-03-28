@@ -9,12 +9,10 @@ export function useMeasurementBridge(engine: DragEngine) {
   const engineRef = useRef(engine);
   useEffect(() => { engineRef.current = engine; }, [engine]);
 
-  // Forward heights to engine whenever they change
   useEffect(() => {
     engineRef.current.send({ type: "SET_HEIGHTS", heights });
   }, [heights]);
 
-  // Watch container width via ResizeObserver
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -32,7 +30,6 @@ export function useMeasurementBridge(engine: DragEngine) {
 
     observer.observe(el);
 
-    // Initial measurement
     engineRef.current.send({
       type: "SET_CONTAINER",
       width: el.clientWidth,

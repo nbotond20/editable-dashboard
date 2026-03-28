@@ -113,6 +113,22 @@ export function resolveZone(
     if (colBottoms[col] > 0 && pointer.y >= colBottoms[col] && pointer.y < layout.totalHeight) {
       return { type: "empty", column: col };
     }
+
+    if (colBottoms[col] > 0 && pointer.y < colBottoms[col]) {
+      const overlaps = resolved.some((r) => {
+        const rCol = Math.round(r.x / (colWidth + gap));
+        const rSpan = Math.max(1, Math.round((r.width + gap) / (colWidth + gap)));
+        return (
+          col >= rCol &&
+          col < rCol + rSpan &&
+          pointer.y >= r.y &&
+          pointer.y < r.y + r.height
+        );
+      });
+      if (!overlaps) {
+        return { type: "empty", column: col };
+      }
+    }
   }
 
   if (resolved.length > 0) {
@@ -207,7 +223,7 @@ function isInGapBetween(
     if (aRight < containerWidth) {
       if (
         pointer.x >= aInsetRight &&
-        pointer.x < containerWidth &&
+        pointer.x < aRight + inset &&
         pointer.y >= a.y &&
         pointer.y < aBottom
       ) {

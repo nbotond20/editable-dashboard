@@ -6,18 +6,6 @@ const DEFAULT_BREAKPOINTS: Required<ResponsiveBreakpoints> = {
   lg: 1024,
 };
 
-/**
- * Pure utility that maps a container width to a column count.
- *
- * Consumers call this and pass the result to `setMaxColumns()` — it is NOT
- * auto-applied by the library.
- *
- * Default breakpoint mapping:
- *  - `< sm`  → 1 column
- *  - `< md`  → 2 columns
- *  - `< lg`  → 3 columns
- *  - `>= lg` → 4 columns (lg + 1)
- */
 export function getResponsiveColumns(
   containerWidth: number,
   breakpoints?: ResponsiveBreakpoints

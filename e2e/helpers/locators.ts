@@ -102,3 +102,7 @@ export function widgetResizeButtonById(page: Page, id: string, cols: number): Lo
   const ariaLabel = cols === 1 ? "1 column wide" : `${cols} columns wide`;
   return widgetById(page, id).getByRole("button", { name: ariaLabel });
 }
+
+export function widgetLockButtonById(page: Page, id: string): Locator {
+  return widgetById(page, id).getByRole("button", { name: /^(Lock|Unlock)$/ });
+}

@@ -9,8 +9,6 @@ import {
 import type { WidgetState } from "../../types.ts";
 import { DEFAULT_WIDGET_HEIGHT } from "../../constants.ts";
 
-// ─── Helpers ──────────────────────────────────────────────────
-
 function makeWidget(
   id: string,
   order: number,
@@ -29,15 +27,12 @@ function makeHeights(
 const CONTAINER_WIDTH = 400;
 const MAX_COLUMNS = 2;
 const GAP = 16;
-// colWidth = (400 - 16) / 2 = 192
 
 const baseConfig: LayoutSolverConfig = {
   autoFillMode: "on-drop",
   maxColumns: MAX_COLUMNS,
   gap: GAP,
 };
-
-// ─── computeLayout with phantom ─────────────────────────────
 
 describe("computeLayout with phantom", () => {
   it("phantom occupies the excluded widget's space and B stays put", () => {
@@ -50,12 +45,10 @@ describe("computeLayout with phantom", () => {
       ["B", 120],
     ]);
 
-    // Base layout for reference
     const base = computeLayout(widgets, heights, CONTAINER_WIDTH, MAX_COLUMNS, GAP);
     const baseA = base.positions.get("A")!;
     const baseB = base.positions.get("B")!;
 
-    // Exclude A, insert phantom at A's position
     const result = computeLayout(
       widgets,
       heights,
@@ -76,12 +69,10 @@ describe("computeLayout with phantom", () => {
     const phantom = result.positions.get("__phantom_A")!;
     const bPos = result.positions.get("B")!;
 
-    // Phantom should be at A's original position
     expect(phantom.x).toBe(baseA.x);
     expect(phantom.y).toBe(baseA.y);
     expect(phantom.height).toBe(100);
 
-    // B should not have moved
     expect(bPos.x).toBe(baseB.x);
     expect(bPos.y).toBe(baseB.y);
   });
@@ -98,7 +89,6 @@ describe("computeLayout with phantom", () => {
       ["C", 100],
     ]);
 
-    // Exclude A, insert a 2-column phantom at order 0
     const result = computeLayout(
       widgets,
       heights,
@@ -120,18 +110,14 @@ describe("computeLayout with phantom", () => {
     const bPos = result.positions.get("B")!;
     const cPos = result.positions.get("C")!;
 
-    // Full-width phantom at top
     expect(phantom.x).toBe(0);
     expect(phantom.y).toBe(0);
     expect(phantom.colSpan).toBe(2);
 
-    // B and C should be pushed below the phantom
     expect(bPos.y).toBe(80 + GAP);
     expect(cPos.y).toBe(80 + GAP);
   });
 });
-
-// ─── computeLayout with excludeIds ──────────────────────────
 
 describe("computeLayout with excludeIds", () => {
   it("excluded widget is removed and B repacks to fill the gap", () => {
@@ -153,10 +139,8 @@ describe("computeLayout with excludeIds", () => {
       { excludeIds: new Set(["A"]) }
     );
 
-    // A should not be in positions
     expect(result.positions.has("A")).toBe(false);
 
-    // B should repack to the first column (x=0, y=0)
     const bPos = result.positions.get("B")!;
     expect(bPos.x).toBe(0);
     expect(bPos.y).toBe(0);
@@ -192,8 +176,6 @@ describe("computeLayout with excludeIds", () => {
   });
 });
 
-// ─── solveBaseLayout ────────────────────────────────────────
-
 describe("solveBaseLayout", () => {
   it("produces the same result as raw computeLayout", () => {
     const widgets = [
@@ -223,8 +205,6 @@ describe("solveBaseLayout", () => {
   });
 });
 
-// ─── solveDragLayout ───────────────────────────────────────
-
 describe("solveDragLayout", () => {
   it("on-drop mode: phantom holds position, other widgets stable", () => {
     const widgets = [
@@ -247,22 +227,18 @@ describe("solveDragLayout", () => {
       "A"
     );
 
-    // A should not be in positions (excluded)
     expect(drag.positions.has("A")).toBe(false);
 
-    // Phantom should exist at A's original position
     const phantom = drag.positions.get("__phantom_A")!;
     expect(phantom).toBeDefined();
     expect(phantom.x).toBe(base.positions.get("A")!.x);
     expect(phantom.y).toBe(base.positions.get("A")!.y);
 
-    // B should not move
     const bBase = base.positions.get("B")!;
     const bDrag = drag.positions.get("B")!;
     expect(bDrag.x).toBe(bBase.x);
     expect(bDrag.y).toBe(bBase.y);
 
-    // C should not move
     const cBase = base.positions.get("C")!;
     const cDrag = drag.positions.get("C")!;
     expect(cDrag.x).toBe(cBase.x);
@@ -289,17 +265,13 @@ describe("solveDragLayout", () => {
       "A"
     );
 
-    // A should not be in positions
     expect(drag.positions.has("A")).toBe(false);
-    // No phantom either
     expect(drag.positions.has("__phantom_A")).toBe(false);
 
-    // B repacks to column 0
     const bPos = drag.positions.get("B")!;
     expect(bPos.x).toBe(0);
     expect(bPos.y).toBe(0);
 
-    // C takes column 1
     const cPos = drag.positions.get("C")!;
     const colWidth = (CONTAINER_WIDTH - GAP * (MAX_COLUMNS - 1)) / MAX_COLUMNS;
     expect(cPos.x).toBe(colWidth + GAP);
@@ -324,7 +296,6 @@ describe("solveDragLayout", () => {
       "nonexistent"
     );
 
-    // Should be same as base layout
     const base = solveBaseLayout(widgets, heights, CONTAINER_WIDTH, baseConfig);
     expect(drag.totalHeight).toBe(base.totalHeight);
     expect(drag.positions.size).toBe(base.positions.size);
@@ -335,7 +306,6 @@ describe("solveDragLayout", () => {
       makeWidget("A", 0, 1),
       makeWidget("B", 1, 1),
     ];
-    // No height entry for A
     const heights = makeHeights([["B", 100]]);
 
     const drag = solveDragLayout(
@@ -351,8 +321,6 @@ describe("solveDragLayout", () => {
   });
 });
 
-// ─── solvePreviewLayout ─────────────────────────────────────
-
 describe("solvePreviewLayout", () => {
   it("reorder: shows correct preview positions", () => {
     const widgets = [
@@ -366,7 +334,6 @@ describe("solvePreviewLayout", () => {
       ["C", 100],
     ]);
 
-    // Move A to index 2 (after C)
     const preview = solvePreviewLayout(
       widgets,
       heights,
@@ -376,21 +343,17 @@ describe("solvePreviewLayout", () => {
       "A"
     );
 
-    // New order should be: B(0), C(1), A(2)
     const aPos = preview.positions.get("A")!;
     const bPos = preview.positions.get("B")!;
     const cPos = preview.positions.get("C")!;
 
-    // B should be at column 0, row 0
     expect(bPos.x).toBe(0);
     expect(bPos.y).toBe(0);
 
     const colWidth = (CONTAINER_WIDTH - GAP * (MAX_COLUMNS - 1)) / MAX_COLUMNS;
-    // C should be at column 1, row 0
     expect(cPos.x).toBe(colWidth + GAP);
     expect(cPos.y).toBe(0);
 
-    // A should be in the next row (column 0)
     expect(aPos.x).toBe(0);
     expect(aPos.y).toBe(100 + GAP);
   });
@@ -419,8 +382,6 @@ describe("solvePreviewLayout", () => {
     const aPos = preview.positions.get("A")!;
     const bPos = preview.positions.get("B")!;
 
-    // After swap: A gets B's order (1), B gets A's order (0)
-    // B now at order 0 -> column 0, A now at order 1 -> column 1
     expect(bPos.x).toBe(base.positions.get("A")!.x);
     expect(bPos.y).toBe(0);
     expect(aPos.x).toBe(base.positions.get("B")!.x);
@@ -428,14 +389,12 @@ describe("solvePreviewLayout", () => {
   });
 
   it("auto-resize: shows both widgets at new spans", () => {
-    // 4-column layout so we can resize meaningfully
     const fourColConfig: LayoutSolverConfig = {
       autoFillMode: "on-drop",
       maxColumns: 4,
       gap: GAP,
     };
     const containerWidth = 400;
-    // colWidth = (400 - 16*3) / 4 = (400 - 48) / 4 = 88
 
     const widgets = [
       makeWidget("A", 0, 2),
@@ -448,7 +407,6 @@ describe("solvePreviewLayout", () => {
       ["C", 100],
     ]);
 
-    // Auto-resize: A becomes 1-span, B becomes 1-span, A moves to index 1
     const preview = solvePreviewLayout(
       widgets,
       heights,
@@ -467,11 +425,9 @@ describe("solvePreviewLayout", () => {
     const aPos = preview.positions.get("A")!;
     const bPos = preview.positions.get("B")!;
 
-    // Both should have colSpan 1
     expect(aPos.colSpan).toBe(1);
     expect(bPos.colSpan).toBe(1);
 
-    // New order: B(0), A(1), C(2) — all with 1-span fit in first row of a 4-col grid
     expect(bPos.y).toBe(0);
     expect(aPos.y).toBe(0);
   });
@@ -528,20 +484,17 @@ describe("solvePreviewLayout", () => {
     );
 
     const aPos = preview.positions.get("A")!;
-    // A should be pinned to column 1
     expect(aPos.x).toBe(1 * (colWidth + GAP));
   });
 
   it("column-pin: uninvolved widgets stay in their columns when baseLayout provided", () => {
-    // Layout: A(span=2) B / C D _  (3 columns, D at col 2 via columnStart)
-    // Pin C to column 1 → D should stay at column 2
     const threeColConfig: LayoutSolverConfig = {
       autoFillMode: "on-drop",
       maxColumns: 3,
       gap: GAP,
     };
-    const cw = 3 * 100 + 2 * GAP; // 332
-    const colWidth = (cw - GAP * 2) / 3; // 100
+    const cw = 3 * 100 + 2 * GAP;
+    const colWidth = (cw - GAP * 2) / 3;
 
     const widgets: WidgetState[] = [
       makeWidget("A", 0, 2),
@@ -556,11 +509,9 @@ describe("solvePreviewLayout", () => {
       ["D", 100],
     ]);
 
-    // Compute base layout: A at cols 0-1, B at col 2, C at col 0, D at col 2 (pinned)
     const base = solveBaseLayout(widgets, heights, cw, threeColConfig);
     expect(base.positions.get("D")!.x).toBe(2 * (colWidth + GAP));
 
-    // Now preview column-pin C to column 1, passing baseLayout
     const preview = solvePreviewLayout(
       widgets,
       heights,
@@ -574,16 +525,12 @@ describe("solvePreviewLayout", () => {
     const cPos = preview.positions.get("C")!;
     const dPos = preview.positions.get("D")!;
 
-    // C should be pinned to column 1
     expect(cPos.x).toBe(1 * (colWidth + GAP));
 
-    // D should stay at column 2 (already has columnStart=2), not move
     expect(dPos.x).toBe(2 * (colWidth + GAP));
   });
 
   it("column-pin: stabilizes widgets without columnStart using baseLayout", () => {
-    // Verify that stabilize pins unpinned widgets to their base positions
-    // A and B on row 0, C is dragged → B should not move
     const widgets = [
       makeWidget("A", 0, 1),
       makeWidget("B", 1, 1),
@@ -598,10 +545,8 @@ describe("solvePreviewLayout", () => {
     const colWidth = (CONTAINER_WIDTH - GAP * (MAX_COLUMNS - 1)) / MAX_COLUMNS;
     const base = solveBaseLayout(widgets, heights, CONTAINER_WIDTH, baseConfig);
 
-    // B is at column 1 in base
     expect(base.positions.get("B")!.x).toBe(colWidth + GAP);
 
-    // Pin C to column 1 (conflicts with B's greedy position)
     const preview = solvePreviewLayout(
       widgets,
       heights,
@@ -612,7 +557,6 @@ describe("solvePreviewLayout", () => {
       base
     );
 
-    // B should be stabilized at column 1 (its base position)
     const bPos = preview.positions.get("B")!;
     expect(bPos.x).toBe(colWidth + GAP);
   });
@@ -636,7 +580,6 @@ describe("solvePreviewLayout", () => {
       "nonexistent"
     );
 
-    // Should fall back to drag layout
     const drag = solveDragLayout(widgets, heights, CONTAINER_WIDTH, baseConfig, "nonexistent");
     expect(preview.totalHeight).toBe(drag.totalHeight);
   });

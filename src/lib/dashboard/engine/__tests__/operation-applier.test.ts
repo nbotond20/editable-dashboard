@@ -26,14 +26,12 @@ function createState(
   };
 }
 
-/** Returns visible widgets sorted by order. */
 function visibleSorted(state: DashboardState): WidgetState[] {
   return state.widgets
     .filter((w) => w.visible)
     .sort((a, b) => a.order - b.order);
 }
 
-/** Find a widget by id. */
 function findWidget(state: DashboardState, id: string): WidgetState {
   const w = state.widgets.find((w) => w.id === id);
   if (!w) throw new Error(`Widget ${id} not found`);
@@ -41,7 +39,6 @@ function findWidget(state: DashboardState, id: string): WidgetState {
 }
 
 describe("applyOperation", () => {
-  // ─── Reorder ────────────────────────────────────────────────
 
   describe("reorder", () => {
     it("moves a widget from one position to another", () => {
@@ -95,8 +92,6 @@ describe("applyOperation", () => {
     });
   });
 
-  // ─── Swap ──────────────────────────────────────────────────
-
   describe("swap", () => {
     it("exchanges order values of two widgets", () => {
       const state = createState([
@@ -113,7 +108,6 @@ describe("applyOperation", () => {
 
       expect(findWidget(result, "a").order).toBe(2);
       expect(findWidget(result, "c").order).toBe(0);
-      // Widget b should remain unchanged
       expect(findWidget(result, "b").order).toBe(1);
     });
 
@@ -182,8 +176,6 @@ describe("applyOperation", () => {
     });
   });
 
-  // ─── Auto-Resize ───────────────────────────────────────────
-
   describe("auto-resize", () => {
     it("resizes both widgets and places source adjacent to target", () => {
       const state = createState([
@@ -203,14 +195,11 @@ describe("applyOperation", () => {
 
       expect(findWidget(result, "a").colSpan).toBe(2);
       expect(findWidget(result, "c").colSpan).toBe(2);
-      // Widget b should retain its span
       expect(findWidget(result, "b").colSpan).toBe(4);
 
-      // Source should be at or near targetIndex in the visible ordering
       const sorted = visibleSorted(result);
       const sourceIdx = sorted.findIndex((w) => w.id === "a");
       const targetIdx = sorted.findIndex((w) => w.id === "c");
-      // They should be adjacent
       expect(Math.abs(sourceIdx - targetIdx)).toBe(1);
     });
 
@@ -234,8 +223,6 @@ describe("applyOperation", () => {
     });
   });
 
-  // ─── Column-Pin ────────────────────────────────────────────
-
   describe("column-pin", () => {
     it("sets columnStart and moves widget to target position", () => {
       const state = createState([
@@ -254,7 +241,6 @@ describe("applyOperation", () => {
       const pinned = findWidget(result, "a");
       expect(pinned.columnStart).toBe(3);
 
-      // Verify it was reordered
       const sorted = visibleSorted(result);
       expect(sorted[sorted.length - 1].id).toBe("a");
     });
@@ -292,8 +278,6 @@ describe("applyOperation", () => {
     });
   });
 
-  // ─── Resize-Toggle ─────────────────────────────────────────
-
   describe("resize-toggle", () => {
     it("changes the colSpan of the target widget", () => {
       const state = createState([
@@ -308,7 +292,6 @@ describe("applyOperation", () => {
       });
 
       expect(findWidget(result, "b").colSpan).toBe(4);
-      // Other widgets unchanged
       expect(findWidget(result, "a").colSpan).toBe(1);
     });
 
@@ -323,7 +306,6 @@ describe("applyOperation", () => {
         newSpan: 10,
       });
 
-      // maxColumns is 4 in our test state
       expect(findWidget(result, "a").colSpan).toBe(4);
     });
 
@@ -342,8 +324,6 @@ describe("applyOperation", () => {
     });
   });
 
-  // ─── Cancelled ─────────────────────────────────────────────
-
   describe("cancelled", () => {
     it("returns the exact same state reference", () => {
       const state = createState([
@@ -356,8 +336,6 @@ describe("applyOperation", () => {
       expect(result).toBe(state);
     });
   });
-
-  // ─── Hidden widgets ────────────────────────────────────────
 
   describe("hidden widgets", () => {
     it("reorder skips hidden widgets", () => {

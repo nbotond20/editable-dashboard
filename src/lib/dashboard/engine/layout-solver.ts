@@ -286,7 +286,13 @@ export function solvePreviewLayout(
       const visibleSorted = visible.filter(w => w.id !== sourceId);
       const source = visible.find(w => w.id === sourceId);
       if (!source) return solveDragLayout(widgets, heights, containerWidth, config, sourceId);
-      const reordered = [...visibleSorted, { ...source, columnStart: intent.column }];
+      const maxSpanAtCol = Math.max(1, config.maxColumns - intent.column);
+      const pinnedSource = {
+        ...source,
+        columnStart: intent.column,
+        colSpan: Math.min(source.colSpan, maxSpanAtCol),
+      };
+      const reordered = [...visibleSorted, pinnedSource];
       const previewWidgets = reordered.map((w, i) => ({ ...w, order: i }));
       const hidden = widgets.filter(w => !w.visible);
       return computeLayout(

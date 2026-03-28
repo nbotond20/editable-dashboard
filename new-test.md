@@ -218,3 +218,16 @@ C resize to 2 columns
 Result:
 A B B
 C C D
+
+### 16
+
+Start:
+A B x1
+C D D
+x2 E
+
+D ->| x1
+
+Result:
+A B D
+C E

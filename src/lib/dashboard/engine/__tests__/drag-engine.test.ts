@@ -3,8 +3,6 @@ import { DragEngine } from "../drag-engine.ts";
 import type { DashboardState, WidgetState } from "../../types.ts";
 import type { DragEngineConfig } from "../types.ts";
 
-// ─── Helpers ─────────────────────────────────────────────────
-
 function makeWidgets(
   specs: Array<{ id: string; colSpan?: number; order: number; visible?: boolean }>
 ): WidgetState[] {
@@ -45,7 +43,6 @@ function createTestEngine(
     gap: 16,
     ...configOverrides,
   });
-  // Set container and heights
   engine.send({
     type: "SET_CONTAINER",
     width: 800,
@@ -56,8 +53,6 @@ function createTestEngine(
   });
   return engine;
 }
-
-// ─── Tests ───────────────────────────────────────────────────
 
 describe("DragEngine", () => {
   describe("detached method calls (useSyncExternalStore contract)", () => {
@@ -113,7 +108,6 @@ describe("DragEngine", () => {
         snapshots.push(getSnapshot());
       });
 
-      // Two sends should produce two different snapshots
       engine.send({
         type: "POINTER_DOWN",
         id: "a",
@@ -159,18 +153,15 @@ describe("DragEngine", () => {
         { id: "b", order: 1 },
       ]);
 
-      // Force a snapshot to exist as the baseline
       engine.getSnapshot();
 
       const listener = vi.fn();
       engine.subscribe(listener);
 
-      // Send the same heights again — snapshot should be referentially stable
       const heights = makeHeights(["a", "b"]);
       engine.send({ type: "SET_HEIGHTS", heights });
       const callsAfterFirst = listener.mock.calls.length;
 
-      // Send again with same data
       engine.send({ type: "SET_HEIGHTS", heights });
       expect(listener.mock.calls.length).toBe(callsAfterFirst);
     });
@@ -182,7 +173,6 @@ describe("DragEngine", () => {
       const listener = vi.fn();
       engine.subscribe(listener);
 
-      // Same container dimensions as setup
       engine.send({
         type: "SET_CONTAINER",
         width: 800,
@@ -204,13 +194,10 @@ describe("DragEngine", () => {
         { id: "b", order: 1 },
       ]);
 
-      // Use the same Map reference (matches real behavior: useMeasureCache
-      // preserves the Map ref when heights haven't changed)
       const heights = makeHeights(["a", "b"]);
       engine.send({ type: "SET_HEIGHTS", heights });
       const snap1 = engine.getSnapshot();
 
-      // Send the same reference again (simulates effect re-fire)
       engine.send({ type: "SET_HEIGHTS", heights });
       const snap2 = engine.getSnapshot();
       expect(snap2).toBe(snap1);
@@ -230,22 +217,16 @@ describe("DragEngine", () => {
         if (renderCount > MAX_RENDERS) {
           throw new Error("Infinite render loop detected!");
         }
-        // Simulate what useSyncExternalStore does: call getSnapshot
         engine.getSnapshot();
       });
 
-      // Simulate what React effects do on mount:
-      // 1. Send heights
       engine.send({ type: "SET_HEIGHTS", heights: makeHeights(["a", "b"]) });
-      // 2. Send container dimensions
       engine.send({
         type: "SET_CONTAINER",
         width: 800,
         rect: { left: 0, top: 0 },
       });
-      // 3. Send heights again (effect re-fire in strict mode)
       engine.send({ type: "SET_HEIGHTS", heights: makeHeights(["a", "b"]) });
-      // 4. Send container again
       engine.send({
         type: "SET_CONTAINER",
         width: 800,
@@ -264,17 +245,13 @@ describe("DragEngine", () => {
         { id: "c", colSpan: 1, order: 2 },
       ]);
 
-      // Initially 2 columns
-      // Change to 3 columns via dispatch (how the UI does it)
       engine.dispatch({ type: "SET_MAX_COLUMNS", maxColumns: 3 });
 
       const snap2 = engine.getSnapshot();
-      // All 3 widgets should fit in one row at 3 columns
       const aPos2 = snap2.layout.positions.get("a")!;
       const bPos2 = snap2.layout.positions.get("b")!;
       const cPos2 = snap2.layout.positions.get("c")!;
 
-      // All on the same row (y=0)
       expect(aPos2.y).toBe(0);
       expect(bPos2.y).toBe(0);
       expect(cPos2.y).toBe(0);
@@ -292,9 +269,7 @@ describe("DragEngine", () => {
       const aPos = snap.layout.positions.get("a")!;
       const bPos = snap.layout.positions.get("b")!;
 
-      // B should be below A
       expect(bPos.y).toBeGreaterThan(aPos.y);
-      // Both should be full width
       expect(aPos.width).toBe(bPos.width);
     });
   });
@@ -306,7 +281,6 @@ describe("DragEngine", () => {
         { id: "b", order: 1 },
       ]);
 
-      // Start dragging widget A
       engine.send({
         type: "POINTER_DOWN",
         id: "a",
@@ -321,7 +295,6 @@ describe("DragEngine", () => {
       });
       expect(engine.getSnapshot().phase.type).toBe("dragging");
 
-      // The dragged widget MUST still be in the layout
       const snap = engine.getSnapshot();
       expect(snap.layout.positions.has("a")).toBe(true);
       expect(snap.layout.positions.has("b")).toBe(true);
@@ -351,8 +324,6 @@ describe("DragEngine", () => {
       });
       expect(engine.getSnapshot().phase.type).toBe("dragging");
 
-      // Send one POINTER_MOVE to clear the "Dragging started" announcement
-      // (the announcement change is a legitimate notify)
       engine.send({
         type: "POINTER_MOVE",
         position: { x: startX + 15, y: startY },
@@ -362,8 +333,6 @@ describe("DragEngine", () => {
       const listener = vi.fn();
       engine.subscribe(listener);
 
-      // Multiple POINTER_MOVEs — getDragPosition must update each time
-      // even if no notify fires (snapshot cache preserves old reference)
       engine.send({
         type: "POINTER_MOVE",
         position: { x: startX + 50, y: startY + 30 },
@@ -380,11 +349,9 @@ describe("DragEngine", () => {
       const pos2 = engine.getDragPosition();
       expect(pos2).not.toBeNull();
 
-      // Positions must actually differ
       expect(pos2!.x).not.toBe(pos1!.x);
       expect(pos2!.y).not.toBe(pos1!.y);
 
-      // No notify for pointer position changes — only zone/intent changes
       expect(listener).not.toHaveBeenCalled();
     });
 
@@ -411,9 +378,6 @@ describe("DragEngine", () => {
 
       const snap = engine.getSnapshot();
       expect(snap.dragPosition).not.toBeNull();
-      // dragPosition = pointerPos - grabOffset
-      // grabOffset = startPos - widgetPos = (aPos.x+20 - aPos.x, aPos.y+20 - aPos.y) = (20, 20)
-      // dragPosition = (aPos.x+30 - 20, aPos.y+20 - 20) = (aPos.x+10, aPos.y)
       expect(snap.dragPosition!.x).toBeCloseTo(aPos.x + 10, 0);
       expect(snap.dragPosition!.y).toBeCloseTo(aPos.y, 0);
     });
@@ -452,7 +416,6 @@ describe("DragEngine", () => {
         { id: "b", order: 1 },
       ]);
 
-      // idle → pending
       engine.send({
         type: "POINTER_DOWN",
         id: "a",
@@ -462,7 +425,6 @@ describe("DragEngine", () => {
       });
       expect(engine.getSnapshot().phase.type).toBe("pending");
 
-      // pending → dragging (move past threshold)
       engine.send({
         type: "POINTER_MOVE",
         position: { x: 110, y: 50 },
@@ -470,7 +432,6 @@ describe("DragEngine", () => {
       });
       expect(engine.getSnapshot().phase.type).toBe("dragging");
 
-      // Move over widget B area to get a swap intent
       const bPos = engine.getSnapshot().layout.positions.get("b");
       if (bPos) {
         engine.send({
@@ -478,17 +439,15 @@ describe("DragEngine", () => {
           position: { x: bPos.x + bPos.width / 2, y: bPos.y + bPos.height / 2 },
           timestamp: 100,
         });
-        // Dwell to get swap intent
         engine.send({
           type: "TICK",
-          timestamp: 500, // past default 300ms swap threshold
+          timestamp: 500,
         });
       }
 
       const snapDragging = engine.getSnapshot();
       expect(snapDragging.phase.type).toBe("dragging");
 
-      // Drop
       engine.send({ type: "POINTER_UP", timestamp: 600 });
       const snapDropping = engine.getSnapshot();
       expect(
@@ -496,7 +455,6 @@ describe("DragEngine", () => {
           snapDropping.phase.type === "idle"
       ).toBe(true);
 
-      // Tick past animation
       engine.send({ type: "TICK", timestamp: 1000 });
       expect(engine.getSnapshot().phase.type).toBe("idle");
     });
@@ -548,7 +506,6 @@ describe("DragEngine", () => {
       });
       expect(engine.getSnapshot().phase.type).toBe("dragging");
 
-      // Move to outside zone
       engine.send({
         type: "POINTER_MOVE",
         position: { x: -100, y: -100 },
@@ -573,11 +530,9 @@ describe("DragEngine", () => {
       });
       expect(engine.getSnapshot().phase.type).toBe("pending");
 
-      // TICK before delay — still pending
       engine.send({ type: "TICK", timestamp: 100 });
       expect(engine.getSnapshot().phase.type).toBe("pending");
 
-      // TICK after delay — activates
       engine.send({ type: "TICK", timestamp: 250 });
       expect(engine.getSnapshot().phase.type).toBe("dragging");
     });
@@ -593,7 +548,6 @@ describe("DragEngine", () => {
         pointerType: "touch",
       });
 
-      // Move far (> touchMoveTolerance of 10px)
       engine.send({
         type: "POINTER_MOVE",
         position: { x: 100, y: 70 },
@@ -650,18 +604,15 @@ describe("DragEngine", () => {
         expect(kbPhase.originalIndex).toBe(1);
       }
 
-      // Move down
       engine.send({ type: "KEY_MOVE", direction: "down", timestamp: 100 });
       const movedPhase = engine.getSnapshot().phase;
       if (movedPhase.type === "keyboard-dragging") {
         expect(movedPhase.currentIndex).toBe(2);
       }
 
-      // Drop
       engine.send({ type: "KEY_DROP", timestamp: 200 });
       expect(engine.getSnapshot().phase.type).toBe("idle");
 
-      // Verify state changed
       const newState = engine.getState();
       expect(newState).not.toBe(initialState);
     });
@@ -710,7 +661,6 @@ describe("DragEngine", () => {
 
       engine.send({ type: "KEY_PICKUP", id: "a", timestamp: 0 });
 
-      // Try moving up from index 0 — should stay at 0
       engine.send({ type: "KEY_MOVE", direction: "up", timestamp: 100 });
       const phase = engine.getSnapshot().phase;
       if (phase.type === "keyboard-dragging") {
@@ -732,7 +682,6 @@ describe("DragEngine", () => {
       });
       expect(engine.getSnapshot().phase.type).toBe("pending");
 
-      // Second POINTER_DOWN while pending — ignored
       engine.send({
         type: "POINTER_DOWN",
         id: "a",
@@ -954,7 +903,6 @@ describe("DragEngine", () => {
         { dropAnimationDuration: 100 }
       );
 
-      // Get into dragging state
       engine.send({
         type: "POINTER_DOWN",
         id: "a",
@@ -968,10 +916,8 @@ describe("DragEngine", () => {
         timestamp: 10,
       });
 
-      // Move to a gap zone to get reorder intent
       const bPos = engine.getSnapshot().layout.positions.get("b");
       if (bPos) {
-        // Move to gap after b
         engine.send({
           type: "POINTER_MOVE",
           position: { x: bPos.x + bPos.width + 10, y: bPos.y + bPos.height / 2 },
@@ -979,15 +925,12 @@ describe("DragEngine", () => {
         });
       }
 
-      // Drop
       engine.send({ type: "POINTER_UP", timestamp: 100 });
 
       if (engine.getSnapshot().phase.type === "dropping") {
-        // Not yet done
         engine.send({ type: "TICK", timestamp: 150 });
         expect(engine.getSnapshot().phase.type).toBe("dropping");
 
-        // Animation done
         engine.send({ type: "TICK", timestamp: 250 });
         expect(engine.getSnapshot().phase.type).toBe("idle");
       }
@@ -1071,7 +1014,6 @@ describe("DragEngine", () => {
 
       engine.updateConfig({ maxColumns: 4 });
 
-      // Verify layout recomputed with new columns
       const snap = engine.getSnapshot();
       expect(snap.layout.positions.size).toBeGreaterThan(0);
     });
