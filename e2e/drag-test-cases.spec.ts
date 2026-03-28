@@ -7,6 +7,7 @@ import {
   dragByIdToAdjacentEmpty,
   dragByIdToColumn,
   dragByIdToCoords,
+  dragByIdToColumnAtWidget,
 } from "./helpers/drag";
 import { widgetById } from "./helpers/locators";
 
@@ -485,6 +486,22 @@ test("case 60: D ->| <A (auto-resize left)", async ({ page }) => {
   await setupDashboard(page, ["A A B", "C D"]);
   await dragByIdToSide(page, "d", "a", "left");
   await assertLayout(page, [["d", "a", "b"], ["c"]]);
+});
+
+// ── 3-col: A B x / C D D / x x E — drag to empty (tests 71–72) ──
+
+test.describe("3-col: A B x / C D D / x x E", () => {
+  test("case 71: E -> x1 (drag to empty col in row 0)", async ({ page }) => {
+    await setupDashboard(page, ["A B x", "C D D", "x x E"]);
+    await dragByIdToColumnAtWidget(page, "e", 2, "a");
+    await assertLayout(page, [["a", "b", "e"], ["c", "d", "d"]]);
+  });
+
+  test("case 72: E ->| x1 (auto-resize to right of B)", async ({ page }) => {
+    await setupDashboard(page, ["A B x", "C D D", "x x E"]);
+    await dragByIdToSide(page, "e", "b", "right");
+    await assertLayout(page, [["a", "b", "e"], ["c", "d", "d"]]);
+  });
 });
 
 // ── 3-col: A A B / C D x — drag to empty (test 61) ──────────────

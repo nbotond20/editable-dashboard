@@ -115,7 +115,7 @@ export function resolveZone(
     }
 
     if (colBottoms[col] > 0 && pointer.y < colBottoms[col]) {
-      const overlaps = resolved.some((r) => {
+      const overlaps = Array.from(layout.positions.values()).some((r) => {
         const rCol = Math.round(r.x / (colWidth + gap));
         const rSpan = Math.max(1, Math.round((r.width + gap) / (colWidth + gap)));
         return (
@@ -221,9 +221,12 @@ function isInGapBetween(
 
     const aRight = a.x + a.width;
     if (aRight < containerWidth) {
+      // When the next widget wraps to a new row starting at or before
+      // the current widget's column, the gap extends to the container edge.
+      const gapRight = (b.x <= a.x) ? containerWidth : aRight + inset;
       if (
         pointer.x >= aInsetRight &&
-        pointer.x < aRight + inset &&
+        pointer.x < gapRight &&
         pointer.y >= a.y &&
         pointer.y < aBottom
       ) {

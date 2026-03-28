@@ -44,11 +44,14 @@ export function parseNotation(lines: string[]): TestConfig {
   const orderList: string[] = []; // preserves first-seen order
   let maxColumns = 0;
 
+  let needsColumnStart = false;
+
   for (const line of lines) {
     const tokens = line.trim().split(/\s+/);
     maxColumns = Math.max(maxColumns, tokens.length);
 
     const hasEmpty = tokens.some((t) => t.toUpperCase() === "X");
+    if (hasEmpty) needsColumnStart = true;
 
     let colPos = 0;
     let i = 0;
@@ -69,7 +72,7 @@ export function parseNotation(lines: string[]): TestConfig {
       const id = token.toLowerCase();
       if (!seen.has(id)) {
         const entry: { colSpan: number; columnStart?: number } = { colSpan: span };
-        if (hasEmpty) {
+        if (needsColumnStart) {
           entry.columnStart = colPos;
         }
         seen.set(id, entry);

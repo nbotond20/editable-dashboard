@@ -89,7 +89,7 @@ export type OperationIntent =
       targetSpan: number;
       targetIndex: number;
     }
-  | { type: "column-pin"; column: number };
+  | { type: "column-pin"; column: number; pointerY?: number };
 
 export type CommittedOperation =
   | { type: "reorder"; fromIndex: number; toIndex: number }

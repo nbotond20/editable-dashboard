@@ -231,3 +231,29 @@ D ->| x1
 Result:
 A B D
 C E
+
+### 17
+
+Start:
+A B x1
+C D D
+x2 x3 E
+
+E -> x1
+
+Result:
+A B E
+C D D
+
+### 18
+
+Start:
+A B x1
+C D D
+x2 x3 E
+
+E ->| x1
+
+Result:
+A B E
+C D D

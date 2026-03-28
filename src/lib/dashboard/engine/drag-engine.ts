@@ -19,6 +19,7 @@ import {
   solvePreviewLayout,
   stabilizeUninvolvedWidgets,
   pinToGreedyColumns,
+  findColumnPinInsertionIndex,
 } from "./layout-solver.ts";
 import type { LayoutSolverConfig } from "./layout-solver.ts";
 import { dashboardReducer } from "../state/dashboard-reducer.ts";
@@ -416,32 +417,66 @@ export class DragEngine {
       const srcCol = preSrc?.columnStart;
       const tgtCol = preTgt?.columnStart;
 
-      if (srcCol != null || tgtCol != null) {
-        const preVisible = getVisibleSorted(preWidgets);
-        const srcOrigIdx = preVisible.findIndex(w => w.id === committed.sourceId);
-        const postVisible = getVisibleSorted(newState.widgets);
-        const tgtCurIdx = postVisible.findIndex(w => w.id === committed.targetId);
-
-        if (srcCol != null && srcOrigIdx >= 0 && tgtCurIdx >= 0 && tgtCurIdx !== srcOrigIdx) {
-          newState = applyOperation(newState, {
-            type: "reorder",
-            fromIndex: tgtCurIdx,
-            toIndex: srcOrigIdx,
-          });
+      let needsSwap = false;
+      if (srcCol != null) {
+        const withoutSource = preWidgets.filter(w => w.visible && w.id !== committed.sourceId)
+          .sort((a, b) => a.order - b.order);
+        const checkLayout = solveBaseLayout(
+          withoutSource.map((w, i) => ({ ...w, order: i })),
+          this.heights, this.containerWidth, cfg,
+        );
+        const tgtPos = checkLayout.positions.get(committed.targetId);
+        if (tgtPos) {
+          const colW = (this.containerWidth - cfg.gap * (cfg.maxColumns - 1)) / cfg.maxColumns;
+          let rowOcc = 0;
+          for (const [, p] of checkLayout.positions) {
+            if (Math.abs(p.y - tgtPos.y) < 1) {
+              rowOcc += Math.max(1, Math.round((p.width + cfg.gap) / (colW + cfg.gap)));
+            }
+          }
+          if (rowOcc + committed.sourceSpan > cfg.maxColumns) {
+            needsSwap = true;
+          }
         }
 
-        newState = {
-          ...newState,
-          widgets: newState.widgets.map(w => {
-            if (w.id === committed.sourceId && tgtCol != null) {
-              return { ...w, columnStart: tgtCol };
-            }
-            if (w.id === committed.targetId && srcCol != null) {
-              return { ...w, columnStart: srcCol };
-            }
-            return w;
-          }),
-        };
+        if (!needsSwap && tgtCol != null) {
+          const postVisible = getVisibleSorted(newState.widgets);
+          const srcPostIdx = postVisible.findIndex(w => w.id === committed.sourceId);
+          const tgtPostIdx = postVisible.findIndex(w => w.id === committed.targetId);
+          const srcAfterTgt = srcPostIdx > tgtPostIdx;
+          if (srcAfterTgt && srcCol <= tgtCol) needsSwap = true;
+          if (!srcAfterTgt && srcCol >= tgtCol) needsSwap = true;
+        }
+      }
+
+      if (srcCol != null || tgtCol != null) {
+        if (needsSwap) {
+          const preVisible = getVisibleSorted(preWidgets);
+          const srcOrigIdx = preVisible.findIndex(w => w.id === committed.sourceId);
+          const postVisible = getVisibleSorted(newState.widgets);
+          const tgtCurIdx = postVisible.findIndex(w => w.id === committed.targetId);
+
+          if (srcCol != null && srcOrigIdx >= 0 && tgtCurIdx >= 0 && tgtCurIdx !== srcOrigIdx) {
+            newState = applyOperation(newState, {
+              type: "reorder",
+              fromIndex: tgtCurIdx,
+              toIndex: srcOrigIdx,
+            });
+          }
+
+          newState = {
+            ...newState,
+            widgets: newState.widgets.map(w => {
+              if (w.id === committed.sourceId && tgtCol != null) {
+                return { ...w, columnStart: tgtCol };
+              }
+              if (w.id === committed.targetId && srcCol != null) {
+                return { ...w, columnStart: srcCol };
+              }
+              return w;
+            }),
+          };
+        }
 
         const pinned = new Set<string>();
         for (const w of newState.widgets) {
@@ -809,7 +844,7 @@ export class DragEngine {
     const source = state.widgets.find((w) => w.id === sourceId);
     if (!source) return;
 
-    const newIntent = resolveIntent(this.currentZone, dwellMs, source, visible, {
+    let newIntent = resolveIntent(this.currentZone, dwellMs, source, visible, {
       swapDwellMs: this.config.swapDwellMs,
       resizeDwellMs: this.config.resizeDwellMs,
       maxColumns: state.maxColumns,
@@ -817,6 +852,10 @@ export class DragEngine {
       canDrop: this.config.canDrop,
       getWidgetConstraints: this.config.getWidgetConstraints,
     });
+
+    if (newIntent.type === "column-pin" && this.phase.type === "dragging") {
+      newIntent = { ...newIntent, pointerY: this.phase.pointerPos.y };
+    }
 
     if (!this.intentsEqual(newIntent, this.currentIntent)) {
       this.currentIntent = newIntent;
@@ -906,12 +945,17 @@ export class DragEngine {
         };
 
       case "column-pin": {
-        const targetIndex = visible.length - 1;
+        const remaining = visible.filter(w => w.id !== sourceId);
+        const cfg = this.layoutConfig();
+        const insertIdx = findColumnPinInsertionIndex(
+          remaining, intent.column, intent.pointerY,
+          cfg.maxColumns, this.containerWidth, cfg.gap, this.heights,
+        );
         return {
           type: "column-pin",
           sourceId,
           column: intent.column,
-          targetIndex,
+          targetIndex: Math.min(insertIdx, remaining.length),
         };
       }
     }

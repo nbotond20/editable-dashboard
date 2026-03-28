@@ -82,6 +82,65 @@ export function stabilizeUninvolvedWidgets(
   return changed ? result : widgets;
 }
 
+/**
+ * Find the optimal insertion index for a column-pinned widget.
+ *
+ * Simulates the greedy layout of `remainingWidgets` and returns the first
+ * index where the source would be placed at a Y position that contains the
+ * pointer. Falls back to appending at end.
+ */
+export function findColumnPinInsertionIndex(
+  remainingWidgets: WidgetState[],
+  targetColumn: number,
+  pointerY: number | undefined,
+  maxColumns: number,
+  containerWidth: number,
+  gap: number,
+  heights: ReadonlyMap<string, number>,
+): number {
+  if (pointerY == null) return remainingWidgets.length;
+
+  const colWidth = (containerWidth - gap * (maxColumns - 1)) / maxColumns;
+  const columnHeights = new Array(maxColumns).fill(0);
+
+  for (let i = 0; i < remainingWidgets.length; i++) {
+    const w = remainingWidgets[i];
+    const span = Math.max(1, Math.min(w.colSpan, maxColumns));
+    const widgetHeight = heights.get(w.id) ?? DEFAULT_WIDGET_HEIGHT;
+
+    let bestStartCol = 0;
+    let bestY = Infinity;
+    for (let startCol = 0; startCol <= maxColumns - span; startCol++) {
+      let maxY = 0;
+      for (let c = startCol; c < startCol + span; c++) {
+        maxY = Math.max(maxY, columnHeights[c]);
+      }
+      if (maxY < bestY) {
+        bestY = maxY;
+        bestStartCol = startCol;
+      }
+    }
+    if (w.columnStart != null) {
+      bestStartCol = Math.max(0, Math.min(w.columnStart, maxColumns - span));
+      bestY = 0;
+      for (let c = bestStartCol; c < bestStartCol + span; c++) {
+        bestY = Math.max(bestY, columnHeights[c]);
+      }
+    }
+
+    const sourceY = columnHeights[targetColumn];
+    if (sourceY <= pointerY && bestY > pointerY) {
+      return i;
+    }
+
+    for (let c = bestStartCol; c < bestStartCol + span; c++) {
+      columnHeights[c] = bestY + widgetHeight + gap;
+    }
+  }
+
+  return remainingWidgets.length;
+}
+
 export interface LayoutSolverConfig {
   autoFillMode: "immediate" | "on-drop" | "none";
   maxColumns: number;
@@ -238,7 +297,39 @@ export function solvePreviewLayout(
       const [moved] = reordered.splice(sourceIdx, 1);
       reordered.splice(intent.targetIndex, 0, moved);
 
+      // Determine if source/target should swap column positions.
+      // Swap when: (a) target's row overflows, or (b) source columnStart
+      // is on the wrong side of target columnStart.
+      // Skip swap when source fits alongside target without displacing others.
+      let needsSwap = false;
       if (srcCol != null) {
+        const withoutSource = resized.filter(w => w.visible && w.id !== sourceId).sort((a, b) => a.order - b.order);
+        const checkLayout = computeLayout(
+          withoutSource.map((w, i) => ({ ...w, order: i })),
+          heights as Map<string, number>, containerWidth, config.maxColumns, config.gap,
+        );
+        const tgtPos = checkLayout.positions.get(intent.targetId);
+        if (tgtPos) {
+          const colW = (containerWidth - config.gap * (config.maxColumns - 1)) / config.maxColumns;
+          let rowOcc = 0;
+          for (const [, p] of checkLayout.positions) {
+            if (Math.abs(p.y - tgtPos.y) < 1) {
+              rowOcc += Math.max(1, Math.round((p.width + config.gap) / (colW + config.gap)));
+            }
+          }
+          if (rowOcc + intent.sourceSpan > config.maxColumns) {
+            needsSwap = true;
+          }
+        }
+
+        if (!needsSwap && tgtCol != null) {
+          const srcAfterTgt = reordered.findIndex(w => w.id === sourceId) > reordered.findIndex(w => w.id === intent.targetId);
+          if (srcAfterTgt && srcCol <= tgtCol) needsSwap = true;
+          if (!srcAfterTgt && srcCol >= tgtCol) needsSwap = true;
+        }
+      }
+
+      if (needsSwap) {
         const tgtIdx = reordered.findIndex(w => w.id === intent.targetId);
         if (tgtIdx >= 0 && sourceIdx < reordered.length && tgtIdx !== sourceIdx) {
           const temp = reordered[tgtIdx];
@@ -251,10 +342,10 @@ export function solvePreviewLayout(
         ...w,
         order: i,
         ...(w.id === sourceId
-          ? { columnStart: tgtCol != null ? tgtCol : undefined }
+          ? { columnStart: needsSwap && tgtCol != null ? tgtCol : undefined }
           : {}),
         ...(w.id === intent.targetId
-          ? { columnStart: srcCol != null ? srcCol : undefined }
+          ? { columnStart: needsSwap && srcCol != null ? srcCol : undefined }
           : {}),
       }));
       const hidden = widgets.filter(w => !w.visible);
@@ -292,7 +383,12 @@ export function solvePreviewLayout(
         columnStart: intent.column,
         colSpan: Math.min(source.colSpan, maxSpanAtCol),
       };
-      const reordered = [...visibleSorted, pinnedSource];
+      const insertIdx = findColumnPinInsertionIndex(
+        visibleSorted, intent.column, intent.pointerY,
+        config.maxColumns, containerWidth, config.gap, heights,
+      );
+      const reordered = [...visibleSorted];
+      reordered.splice(insertIdx, 0, pinnedSource);
       const previewWidgets = reordered.map((w, i) => ({ ...w, order: i }));
       const hidden = widgets.filter(w => !w.visible);
       return computeLayout(

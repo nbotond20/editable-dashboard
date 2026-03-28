@@ -79,7 +79,7 @@ function DashboardContent({ onStateChange }: { onStateChange?: (state: Dashboard
             </button>
           </div>
           <div style={{ display: "flex", gap: 4 }}>
-            {[1, 2, 3].map((n) => (
+            {[1, 2, 3, 4, 5].map((n) => (
               <button
                 key={n}
                 className={`dash-btn ${state.maxColumns === n ? "dash-btn--primary" : "dash-btn--outline"}`}

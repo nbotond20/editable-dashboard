@@ -693,6 +693,39 @@ export async function dragByIdToCoords(
   });
 }
 
+/**
+ * Drag a widget to a specific column at another widget's vertical position.
+ * Useful for targeting an empty cell at a different row.
+ */
+export async function dragByIdToColumnAtWidget(
+  page: Page,
+  sourceId: string,
+  targetCol: number,
+  refWidgetId: string,
+  options?: { steps?: number; dwellMs?: number },
+) {
+  const refWidget = widgetById(page, refWidgetId);
+  const refBox = await refWidget.boundingBox();
+  if (!refBox) throw new Error(`Widget "${refWidgetId}" not found`);
+
+  const grid = page.locator('[data-testid="dashboard-grid"]');
+  const gridBox = await grid.boundingBox();
+  if (!gridBox) throw new Error("Could not get grid bounding box");
+
+  const maxColumns = Number(
+    await grid.evaluate((el) => (el as HTMLElement).dataset.maxColumns),
+  );
+  const gap = Number(
+    await grid.evaluate((el) => (el as HTMLElement).dataset.gap),
+  );
+  const colWidth = (gridBox.width - gap * (maxColumns - 1)) / maxColumns;
+
+  const targetX = gridBox.x + targetCol * (colWidth + gap) + colWidth / 2;
+  const targetY = refBox.y + refBox.height / 2;
+
+  await dragByIdToCoords(page, sourceId, targetX, targetY, options);
+}
+
 // ── ID-based touch drag helpers ───────────────────────────────────
 
 async function dispatchPointerEventById(
