@@ -13,7 +13,16 @@ export default defineConfig({
     actionTimeout: 10_000,
   },
   projects: [
-    { name: "chromium", use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 1200 } } },
+    {
+      name: "chromium",
+      use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 1200 } },
+      testMatch: ["drag-test-cases.spec.ts", "keyboard-drag.spec.ts", "resize-test-cases.spec.ts"],
+    },
+    {
+      name: "mobile-chrome",
+      use: { ...devices["Pixel 5"] },
+      testMatch: ["touch-drag.spec.ts"],
+    },
   ],
   webServer: {
     command: "pnpm dev --port 4174",

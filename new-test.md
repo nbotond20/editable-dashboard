@@ -134,3 +134,87 @@ A -> B
 Result:
 B A C
 x x D
+
+### 9
+
+Start:
+A B C
+x x D
+
+D -> D (dragging and dropping onto itself)
+
+Result:
+A B C
+x x D
+
+### 10
+
+Start:
+A B C
+x x D
+
+D ->| D (dragging and move it just a few pixels but within it's own space and dropping onto itself)
+
+Result:
+A B C
+x x D
+
+### 11
+
+Start:
+A A B
+x C D
+
+C Resize to 2 columns
+
+Result:
+A A B
+C C D
+
+### 12
+
+Start:
+A A B
+x C D
+
+C -> D
+
+Result:
+A A B
+x D C
+
+### 13
+
+Start:
+A A B
+x C D
+
+C ->| D
+
+Result:
+A A B
+x D C
+
+### 14
+
+Start:
+A B B
+C x D
+
+D resize to 2 columns
+
+Result:
+A B B
+C D D
+
+### 15
+
+Start:
+A B B
+C D x
+
+C resize to 2 columns
+
+Result:
+A B B
+C C D

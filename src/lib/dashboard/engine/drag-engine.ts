@@ -244,8 +244,13 @@ export class DragEngine {
       return;
     }
 
-    const newState = dashboardReducer(this.history.present, action);
+    let newState = dashboardReducer(this.history.present, action);
     if (newState === this.history.present) return;
+
+    if (action.type === "RESIZE_WIDGET") {
+      const cfg = this.layoutConfig();
+      newState = { ...newState, widgets: pinToGreedyColumns(newState.widgets, cfg.maxColumns) };
+    }
 
     if (UNDOABLE_ACTIONS.has(action.type)) {
       this.history = pushState(this.history, newState, MAX_UNDO_DEPTH);
@@ -358,6 +363,15 @@ export class DragEngine {
     }
 
     const committed = this.commitIntent(sourceId, intent);
+
+    // No-op: reorder to same position — cancel without mutating state
+    if (committed.type === "reorder" && committed.fromIndex === committed.toIndex) {
+      this.phase = { type: "idle" };
+      this.clearDragState();
+      this.announcement = "Drop cancelled";
+      return;
+    }
+
     let newState = applyOperation(this.history.present, committed);
 
     const cfg = this.layoutConfig();
@@ -395,15 +409,17 @@ export class DragEngine {
     } else if (committed.type === "auto-resize") {
       const preWidgets = this.history.present.widgets;
       const preSrc = preWidgets.find(w => w.id === committed.sourceId);
+      const preTgt = preWidgets.find(w => w.id === committed.targetId);
       const srcCol = preSrc?.columnStart;
+      const tgtCol = preTgt?.columnStart;
 
-      if (srcCol != null) {
+      if (srcCol != null || tgtCol != null) {
         const preVisible = getVisibleSorted(preWidgets);
         const srcOrigIdx = preVisible.findIndex(w => w.id === committed.sourceId);
         const postVisible = getVisibleSorted(newState.widgets);
         const tgtCurIdx = postVisible.findIndex(w => w.id === committed.targetId);
 
-        if (srcOrigIdx >= 0 && tgtCurIdx >= 0 && tgtCurIdx !== srcOrigIdx) {
+        if (srcCol != null && srcOrigIdx >= 0 && tgtCurIdx >= 0 && tgtCurIdx !== srcOrigIdx) {
           newState = applyOperation(newState, {
             type: "reorder",
             fromIndex: tgtCurIdx,
@@ -413,9 +429,15 @@ export class DragEngine {
 
         newState = {
           ...newState,
-          widgets: newState.widgets.map(w =>
-            w.id === committed.targetId ? { ...w, columnStart: srcCol } : w
-          ),
+          widgets: newState.widgets.map(w => {
+            if (w.id === committed.sourceId && tgtCol != null) {
+              return { ...w, columnStart: tgtCol };
+            }
+            if (w.id === committed.targetId && srcCol != null) {
+              return { ...w, columnStart: srcCol };
+            }
+            return w;
+          }),
         };
 
         const pinned = new Set<string>();

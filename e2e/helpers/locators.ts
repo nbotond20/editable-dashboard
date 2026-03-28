@@ -97,3 +97,8 @@ export function widgetById(page: Page, id: string): Locator {
 export function widgetDragHandleById(page: Page, id: string): Locator {
   return widgetById(page, id).locator(".dash-widget__drag-handle");
 }
+
+export function widgetResizeButtonById(page: Page, id: string, cols: number): Locator {
+  const ariaLabel = cols === 1 ? "1 column wide" : `${cols} columns wide`;
+  return widgetById(page, id).getByRole("button", { name: ariaLabel });
+}

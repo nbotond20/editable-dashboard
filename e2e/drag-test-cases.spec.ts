@@ -526,3 +526,36 @@ test.describe("3-col: A B C / x x D — same-row swaps", () => {
     await assertLayout(page, [["b", "a", "c"], [null, null, "d"]]);
   });
 });
+
+// ── 3-col: A B C / x x D — self-drag (tests 66–67) ──────────────
+
+test.describe("3-col: A B C / x x D — self-drag", () => {
+  test("case 66: D -> D (drag and drop onto itself)", async ({ page }) => {
+    await setupDashboard(page, ["A B C", "x x D"]);
+    await dragByIdToId(page, "d", "d");
+    await assertLayout(page, [["a", "b", "c"], [null, null, "d"]]);
+  });
+
+  test("case 67: D ->| D (small move within own space)", async ({ page }) => {
+    await setupDashboard(page, ["A B C", "x x D"]);
+    const dBox = await widgetById(page, "d").boundingBox();
+    await dragByIdToCoords(page, "d", dBox!.x + dBox!.width / 2 + 15, dBox!.y + dBox!.height / 2 + 10);
+    await assertLayout(page, [["a", "b", "c"], [null, null, "d"]]);
+  });
+});
+
+// ── 3-col: A A B / x C D (tests 68–69) ──────────────────────────
+
+test.describe("3-col: A A B / x C D", () => {
+  test("case 68: C -> D (swap)", async ({ page }) => {
+    await setupDashboard(page, ["A A B", "x C D"]);
+    await dragByIdToId(page, "c", "d");
+    await assertLayout(page, [["a", "a", "b"], [null, "d", "c"]]);
+  });
+
+  test("case 69: C ->| D (auto-resize right)", async ({ page }) => {
+    await setupDashboard(page, ["A A B", "x C D"]);
+    await dragByIdToSide(page, "c", "d", "right");
+    await assertLayout(page, [["a", "a", "b"], [null, "d", "c"]]);
+  });
+});

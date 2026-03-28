@@ -222,7 +222,9 @@ export function solvePreviewLayout(
 
     case "auto-resize": {
       const sourceWidget = widgets.find(w => w.id === sourceId);
+      const targetWidget = widgets.find(w => w.id === intent.targetId);
       const srcCol = sourceWidget?.columnStart;
+      const tgtCol = targetWidget?.columnStart;
 
       const resized = widgets.map(w => {
         if (w.id === sourceId) return { ...w, colSpan: intent.sourceSpan };
@@ -248,14 +250,16 @@ export function solvePreviewLayout(
       const previewWidgets = reordered.map((w, i) => ({
         ...w,
         order: i,
-        ...(w.id === sourceId ? { columnStart: undefined } : {}),
+        ...(w.id === sourceId
+          ? { columnStart: tgtCol != null ? tgtCol : undefined }
+          : {}),
         ...(w.id === intent.targetId
           ? { columnStart: srcCol != null ? srcCol : undefined }
           : {}),
       }));
       const hidden = widgets.filter(w => !w.visible);
 
-      if (srcCol != null) {
+      if (srcCol != null || tgtCol != null) {
         const pinned = new Set<string>();
         for (const pw of previewWidgets) {
           if (pw.visible && pw.columnStart != null) pinned.add(pw.id);

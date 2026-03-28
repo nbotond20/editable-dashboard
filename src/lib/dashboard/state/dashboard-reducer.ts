@@ -40,7 +40,7 @@ export function dashboardReducer(
         ...state,
         widgets: state.widgets.map((w) =>
           w.id === action.id
-            ? { ...w, colSpan: Math.max(1, Math.min(action.colSpan, state.maxColumns)) }
+            ? { ...w, colSpan: Math.max(1, Math.min(action.colSpan, state.maxColumns)), columnStart: undefined }
             : w
         ),
       };
