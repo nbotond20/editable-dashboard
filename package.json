@@ -27,6 +27,7 @@
   "sideEffects": false,
   "scripts": {
     "dev": "vite",
+    "typecheck:lib": "tsc --noEmit --project tsconfig.lib.json",
     "build": "tsc -b && vite build",
     "build:lib": "vite build --config vite.config.lib.ts",
     "lint": "eslint .",

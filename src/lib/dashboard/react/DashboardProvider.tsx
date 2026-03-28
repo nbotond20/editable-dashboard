@@ -166,7 +166,7 @@ export function DashboardProvider(props: DashboardProviderProps) {
 
   const { measureRef, containerRef, containerCallbackRef } = useMeasurementBridge(engine);
 
-  const { startDrag } = usePointerAdapter(engine, containerRef);
+  const { startDrag, clientPosRef } = usePointerAdapter(engine, containerRef);
 
   const { handleKeyDown } = useKeyboardAdapter(engine);
 
@@ -232,15 +232,13 @@ export function DashboardProvider(props: DashboardProviderProps) {
     }
   }, [snapshot.phase]);
 
-  // ── Auto-scroll (perf: ref-based getDragPosition) ──────────────────────
-  const dragPositionRef = useRef(snapshot.dragPosition);
-  dragPositionRef.current = snapshot.dragPosition;
-  const getDragPositionForScroll = useCallback(() => dragPositionRef.current, []);
+  // ── Auto-scroll (uses raw viewport pointer position from the pointer adapter) ──
+  const getClientPointerForScroll = useCallback(() => clientPosRef.current, [clientPosRef]);
   const autoScrollEdgeSize = dragConfig?.autoScrollEdgeSize ?? AUTO_SCROLL_EDGE_SIZE;
   const autoScrollMaxSpeed = dragConfig?.autoScrollMaxSpeed ?? AUTO_SCROLL_MAX_SPEED;
   useAutoScroll(
     snapshot.phase.type === "dragging",
-    getDragPositionForScroll,
+    getClientPointerForScroll,
     autoScrollEdgeSize,
     autoScrollMaxSpeed,
   );

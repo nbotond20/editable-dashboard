@@ -9,6 +9,8 @@ export function usePointerAdapter(
   const rafRef = useRef<number>(0);
   const isDraggingRef = useRef(false);
   const cleanupRef = useRef<(() => void) | null>(null);
+  /** Raw viewport-relative pointer position — used by useAutoScroll. */
+  const clientPosRef = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     return () => {
@@ -22,7 +24,7 @@ export function usePointerAdapter(
       id: string,
       pointerId: number,
       clientPos: { x: number; y: number },
-      _element: HTMLElement,
+      element: HTMLElement,
       pointerType?: string,
     ) => {
       const container = containerRef.current;
@@ -51,10 +53,20 @@ export function usePointerAdapter(
         pointerType: (pointerType ?? "mouse") as PointerType,
       });
 
+      clientPosRef.current = clientPos;
+
+      try {
+        element.setPointerCapture(pointerId);
+      } catch {
+        // Capture fails for synthetic events (e2e tests) — graceful fallback.
+      }
+
       function handlePointerMove(e: PointerEvent) {
         if (e.pointerId !== activePointerId) return;
         const c = containerRef.current;
         if (!c) return;
+
+        clientPosRef.current = { x: e.clientX, y: e.clientY };
 
         const r = c.getBoundingClientRect();
         engine.send({
@@ -83,6 +95,10 @@ export function usePointerAdapter(
         document.removeEventListener("pointermove", handlePointerMove);
         document.removeEventListener("pointerup", handlePointerUp);
         document.removeEventListener("pointercancel", handlePointerCancel);
+        if (activePointerId != null) {
+          try { element.releasePointerCapture(activePointerId); } catch { /* already released */ }
+        }
+        clientPosRef.current = null;
         activePointerId = null;
         cleanupRef.current = cleanup;
       }
@@ -91,8 +107,12 @@ export function usePointerAdapter(
         document.removeEventListener("pointermove", handlePointerMove);
         document.removeEventListener("pointerup", handlePointerUp);
         document.removeEventListener("pointercancel", handlePointerCancel);
+        if (activePointerId != null) {
+          try { element.releasePointerCapture(activePointerId); } catch { /* already released */ }
+        }
         cancelAnimationFrame(rafRef.current);
         isDraggingRef.current = false;
+        clientPosRef.current = null;
         activePointerId = null;
         cleanupRef.current = null;
       }
@@ -124,5 +144,5 @@ export function usePointerAdapter(
     [engine, containerRef],
   );
 
-  return { startDrag };
+  return { startDrag, clientPosRef };
 }
