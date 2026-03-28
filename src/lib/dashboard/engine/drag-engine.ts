@@ -48,7 +48,6 @@ const UNDOABLE_ACTIONS = new Set<string>([
   "REORDER_WIDGETS",
   "RESIZE_WIDGET",
   "SWAP_WIDGETS",
-  "TOGGLE_VISIBILITY",
   "BATCH_UPDATE",
   "SET_MAX_COLUMNS",
 ]);
@@ -66,7 +65,8 @@ function defaultConfig(): DragEngineConfig {
     maxColumns: DEFAULT_MAX_COLUMNS,
     gap: DEFAULT_GAP,
     dropAnimationDuration: DROP_ANIMATION_DURATION,
-    isLocked: () => false,
+    isPositionLocked: () => false,
+    isResizeLocked: () => false,
     canDrop: () => true,
     getWidgetConstraints: () => ({ minSpan: 1, maxSpan: Infinity }),
   };
@@ -244,7 +244,7 @@ export class DragEngine {
       return;
     }
 
-    if (action.type === "RESIZE_WIDGET" && this.config.isLocked(action.id)) {
+    if (action.type === "RESIZE_WIDGET" && this.config.isResizeLocked(action.id)) {
       return;
     }
 
@@ -292,7 +292,7 @@ export class DragEngine {
     event: Extract<DragEvent, { type: "POINTER_DOWN" }>,
   ): void {
     if (this.phase.type !== "idle") return;
-    if (this.config.isLocked(event.id)) return;
+    if (this.config.isPositionLocked(event.id)) return;
 
     this.lastTimestamp = event.timestamp;
     this.phase = {
@@ -504,7 +504,7 @@ export class DragEngine {
     event: Extract<DragEvent, { type: "KEY_PICKUP" }>,
   ): void {
     if (this.phase.type !== "idle") return;
-    if (this.config.isLocked(event.id)) return;
+    if (this.config.isPositionLocked(event.id)) return;
 
     const visible = getVisibleSorted(this.history.present.widgets);
     const idx = visible.findIndex((w) => w.id === event.id);
@@ -679,7 +679,7 @@ export class DragEngine {
     event: Extract<DragEvent, { type: "RESIZE_TOGGLE" }>,
   ): void {
     if (this.phase.type !== "idle") return;
-    if (this.config.isLocked(event.id)) return;
+    if (this.config.isResizeLocked(event.id)) return;
 
     const state = this.history.present;
     const widget = state.widgets.find((w) => w.id === event.id);
@@ -813,7 +813,7 @@ export class DragEngine {
       swapDwellMs: this.config.swapDwellMs,
       resizeDwellMs: this.config.resizeDwellMs,
       maxColumns: state.maxColumns,
-      isLocked: this.config.isLocked,
+      isPositionLocked: this.config.isPositionLocked,
       canDrop: this.config.canDrop,
       getWidgetConstraints: this.config.getWidgetConstraints,
     });

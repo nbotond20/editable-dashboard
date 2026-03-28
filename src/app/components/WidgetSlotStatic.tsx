@@ -13,17 +13,16 @@ interface WidgetSlotStaticProps {
       colSpan: number;
       resize: (colSpan: number) => void;
       remove: () => void;
-      toggleVisibility: () => void;
     }
   ) => React.ReactNode;
 }
 
 export function WidgetSlotStatic({ widget, children }: WidgetSlotStaticProps) {
-  const { layout, actions, dragState, getDragPosition, measureRef, startDrag, getA11yProps, handleKeyboardDrag, isWidgetLocked } = useDashboard();
+  const { layout, actions, dragState, getDragPosition, measureRef, startDrag, getA11yProps, handleKeyboardDrag, isWidgetLockActive } = useDashboard();
 
   const isDragging = dragState.activeId === widget.id;
   const isAnyDragging = dragState.activeId !== null;
-  const locked = isWidgetLocked(widget.id);
+  const locked = isWidgetLockActive(widget.id, "position");
 
   const previewPos = dragState.previewLayout?.positions.get(widget.id);
   const normalPos = layout.positions.get(widget.id);
@@ -62,11 +61,6 @@ export function WidgetSlotStatic({ widget, children }: WidgetSlotStaticProps) {
 
   const remove = useCallback(
     () => actions.removeWidget(widget.id),
-    [actions, widget.id]
-  );
-
-  const toggleVisibility = useCallback(
-    () => actions.toggleVisibility(widget.id),
     [actions, widget.id]
   );
 
@@ -134,7 +128,6 @@ export function WidgetSlotStatic({ widget, children }: WidgetSlotStaticProps) {
         colSpan: widget.colSpan,
         resize,
         remove,
-        toggleVisibility,
       })}
     </div>
   );

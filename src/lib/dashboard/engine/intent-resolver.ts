@@ -5,7 +5,7 @@ export interface IntentResolverConfig {
   swapDwellMs: number;
   resizeDwellMs: number;
   maxColumns: number;
-  isLocked: (id: string) => boolean;
+  isPositionLocked: (id: string) => boolean;
   canDrop: (sourceId: string, targetIndex: number) => boolean;
   getWidgetConstraints: (id: string) => { minSpan: number; maxSpan: number };
 }
@@ -30,7 +30,7 @@ export function resolveIntent(
           ? [sourceIdx + 1, adjustedTarget]
           : [adjustedTarget, sourceIdx - 1];
         for (let i = lo; i <= hi; i++) {
-          if (widgets[i] && config.isLocked(widgets[i].id)) {
+          if (widgets[i] && config.isPositionLocked(widgets[i].id)) {
             return { type: "none" };
           }
         }
@@ -44,7 +44,7 @@ export function resolveIntent(
         return { type: "none" };
       }
 
-      if (config.isLocked(zone.targetId)) {
+      if (config.isPositionLocked(zone.targetId)) {
         return { type: "none" };
       }
 

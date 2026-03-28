@@ -30,7 +30,6 @@ interface DemoWidgetProps {
   maxColumns: number;
   resize: (colSpan: number) => void;
   remove: () => void;
-  toggleVisibility: () => void;
 }
 
 const GripIcon = () => (
@@ -57,19 +56,17 @@ export function DemoWidget({
   maxColumns,
   resize,
   remove,
-  toggleVisibility,
 }: DemoWidgetProps) {
-  const { actions, isWidgetLocked, isWidgetRemovable, isWidgetHideable, isWidgetResizable } = useDashboard();
+  const { actions, isWidgetLockActive } = useDashboard();
   const Component = widgetComponents[widget.type];
   const label = widgetLabels[widget.type] ?? widget.type;
-  const locked = isWidgetLocked(widget.id);
-  const removable = isWidgetRemovable(widget.id);
-  const hideable = isWidgetHideable(widget.id);
-  const resizable = isWidgetResizable(widget.id);
+  const positionLocked = isWidgetLockActive(widget.id, "position");
+  const resizeLocked = isWidgetLockActive(widget.id, "resize");
+  const removeLocked = isWidgetLockActive(widget.id, "remove");
 
   const widgetClass = [
     "dash-widget",
-    locked && "dash-widget--locked",
+    positionLocked && "dash-widget--locked",
     isDragging && "dash-widget--dragging",
   ].filter(Boolean).join(" ");
 
@@ -79,13 +76,13 @@ export function DemoWidget({
         <div
           {...dragHandleProps}
           style={{ ...dragHandleProps.style }}
-          className={`dash-widget__drag-handle ${locked ? "dash-widget__drag-handle--locked" : ""}`}
+          className={`dash-widget__drag-handle ${positionLocked ? "dash-widget__drag-handle--locked" : ""}`}
         >
           <GripIcon />
         </div>
         <span style={{ flex: 1 }} className="dash-label-emphasis">{label}</span>
         <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-          {maxColumns > 1 && resizable && (
+          {maxColumns > 1 && !resizeLocked && (
             <div className="dash-toggle-group" role="group" aria-label="Widget width">
               {Array.from({ length: maxColumns }, (_, i) => i + 1).map((n) => (
                 <button
@@ -100,26 +97,41 @@ export function DemoWidget({
             </div>
           )}
           <button
-            className="dash-icon-btn"
-            aria-label={locked ? "Unlock" : "Lock"}
-            onClick={() => locked ? actions.unlockWidget(widget.id) : actions.lockWidget(widget.id)}
+            className={`dash-icon-btn ${positionLocked ? "dash-icon-btn--active" : ""}`}
+            aria-label={positionLocked ? "Unlock position" : "Lock position"}
+            onClick={() => actions.setWidgetLock(widget.id, "position", !positionLocked)}
           >
-            {locked ? (
+            {positionLocked ? (
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
             ) : (
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
             )}
           </button>
-          {hideable && (
-            <button
-              className="dash-icon-btn"
-              aria-label="Hide"
-              onClick={toggleVisibility}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-            </button>
-          )}
-          {removable && (
+          <button
+            className={`dash-icon-btn ${resizeLocked ? "dash-icon-btn--active" : ""}`}
+            aria-label={resizeLocked ? "Unlock resize" : "Lock resize"}
+            onClick={() => actions.setWidgetLock(widget.id, "resize", !resizeLocked)}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/>
+              {resizeLocked && <line x1="4" y1="4" x2="20" y2="20" strokeWidth="2.5"/>}
+            </svg>
+          </button>
+          <button
+            className={`dash-icon-btn ${removeLocked ? "dash-icon-btn--active" : ""}`}
+            aria-label={removeLocked ? "Unlock remove" : "Lock remove"}
+            onClick={() => actions.setWidgetLock(widget.id, "remove", !removeLocked)}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              {removeLocked ? (
+                <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
+              ) : (
+                <line x1="15" y1="9" x2="9" y2="15"/>
+              )}
+            </svg>
+          </button>
+          {!removeLocked && (
             <button
               className="dash-icon-btn dash-icon-btn--danger"
               aria-label="Remove"

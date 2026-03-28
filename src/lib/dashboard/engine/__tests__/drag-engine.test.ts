@@ -557,11 +557,11 @@ describe("DragEngine", () => {
     });
   });
 
-  describe("locked widget handling", () => {
-    it("ignores POINTER_DOWN on locked widget", () => {
+  describe("position-locked widget handling", () => {
+    it("ignores POINTER_DOWN on position-locked widget", () => {
       const engine = createTestEngine(
         [{ id: "a", order: 0 }],
-        { isLocked: (id) => id === "a" }
+        { isPositionLocked: (id) => id === "a" }
       );
 
       engine.send({
@@ -574,14 +574,73 @@ describe("DragEngine", () => {
       expect(engine.getSnapshot().phase.type).toBe("idle");
     });
 
-    it("ignores KEY_PICKUP on locked widget", () => {
+    it("ignores KEY_PICKUP on position-locked widget", () => {
       const engine = createTestEngine(
         [{ id: "a", order: 0 }],
-        { isLocked: (id) => id === "a" }
+        { isPositionLocked: (id) => id === "a" }
       );
 
       engine.send({ type: "KEY_PICKUP", id: "a", timestamp: 0 });
       expect(engine.getSnapshot().phase.type).toBe("idle");
+    });
+
+    it("allows POINTER_DOWN when only resize-locked", () => {
+      const engine = createTestEngine(
+        [{ id: "a", order: 0 }],
+        { isResizeLocked: (id) => id === "a" }
+      );
+
+      engine.send({
+        type: "POINTER_DOWN",
+        id: "a",
+        position: { x: 100, y: 50 },
+        timestamp: 0,
+        pointerType: "mouse",
+      });
+      expect(engine.getSnapshot().phase.type).toBe("pending");
+    });
+  });
+
+  describe("resize-locked widget handling", () => {
+    it("RESIZE_TOGGLE is blocked on resize-locked widget", () => {
+      const engine = createTestEngine(
+        [{ id: "a", colSpan: 1, order: 0 }],
+        { isResizeLocked: (id) => id === "a" }
+      );
+
+      const stateBefore = engine.getState();
+      engine.send({ type: "RESIZE_TOGGLE", id: "a", timestamp: 0 });
+      expect(engine.getState()).toBe(stateBefore);
+    });
+
+    it("RESIZE_TOGGLE works when only position-locked", () => {
+      const engine = createTestEngine(
+        [{ id: "a", colSpan: 1, order: 0 }],
+        { isPositionLocked: (id) => id === "a" }
+      );
+
+      engine.send({ type: "RESIZE_TOGGLE", id: "a", timestamp: 0 });
+      expect(engine.getState().widgets[0].colSpan).toBe(2);
+    });
+
+    it("dispatch RESIZE_WIDGET is blocked on resize-locked widget", () => {
+      const engine = createTestEngine(
+        [{ id: "a", colSpan: 1, order: 0 }],
+        { isResizeLocked: (id) => id === "a" }
+      );
+
+      engine.dispatch({ type: "RESIZE_WIDGET", id: "a", colSpan: 2 });
+      expect(engine.getState().widgets[0].colSpan).toBe(1);
+    });
+
+    it("dispatch RESIZE_WIDGET works when only position-locked", () => {
+      const engine = createTestEngine(
+        [{ id: "a", colSpan: 1, order: 0 }],
+        { isPositionLocked: (id) => id === "a" }
+      );
+
+      engine.dispatch({ type: "RESIZE_WIDGET", id: "a", colSpan: 2 });
+      expect(engine.getState().widgets[0].colSpan).toBe(2);
     });
   });
 

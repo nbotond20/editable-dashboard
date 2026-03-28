@@ -11,15 +11,19 @@ export function widgetDragHandle(page: Page, label: string): Locator {
 }
 
 export function widgetRemoveButton(page: Page, label: string): Locator {
-  return widgetByLabel(page, label).getByRole("button", { name: "Remove" });
+  return widgetByLabel(page, label).getByRole("button", { name: "Remove", exact: true });
 }
 
-export function widgetHideButton(page: Page, label: string): Locator {
-  return widgetByLabel(page, label).getByRole("button", { name: "Hide" });
+export function widgetPositionLockButton(page: Page, label: string): Locator {
+  return widgetByLabel(page, label).getByRole("button", { name: /^(Lock position|Unlock position)$/ });
 }
 
-export function widgetLockButton(page: Page, label: string): Locator {
-  return widgetByLabel(page, label).getByRole("button", { name: /^(Lock|Unlock)$/ });
+export function widgetResizeLockButton(page: Page, label: string): Locator {
+  return widgetByLabel(page, label).getByRole("button", { name: /^(Lock resize|Unlock resize)$/ });
+}
+
+export function widgetRemoveLockButton(page: Page, label: string): Locator {
+  return widgetByLabel(page, label).getByRole("button", { name: /^(Lock remove|Unlock remove)$/ });
 }
 
 export function widgetResizeButton(page: Page, label: string, cols: number): Locator {
@@ -66,9 +70,6 @@ export function catalogItemAddButton(page: Page, label: string): Locator {
   return catalogItem(page, label).getByRole("button");
 }
 
-export function hiddenTag(page: Page, label: string): Locator {
-  return page.locator(".dash-tag--clickable").filter({ hasText: label });
-}
 
 export function allWidgetLabels(page: Page): Locator {
   return page.locator(".dash-widget .dash-widget__header .dash-label-emphasis");
@@ -103,6 +104,14 @@ export function widgetResizeButtonById(page: Page, id: string, cols: number): Lo
   return widgetById(page, id).getByRole("button", { name: ariaLabel });
 }
 
-export function widgetLockButtonById(page: Page, id: string): Locator {
-  return widgetById(page, id).getByRole("button", { name: /^(Lock|Unlock)$/ });
+export function widgetPositionLockButtonById(page: Page, id: string): Locator {
+  return widgetById(page, id).getByRole("button", { name: /^(Lock position|Unlock position)$/ });
+}
+
+export function widgetResizeLockButtonById(page: Page, id: string): Locator {
+  return widgetById(page, id).getByRole("button", { name: /^(Lock resize|Unlock resize)$/ });
+}
+
+export function widgetRemoveLockButtonById(page: Page, id: string): Locator {
+  return widgetById(page, id).getByRole("button", { name: /^(Lock remove|Unlock remove)$/ });
 }

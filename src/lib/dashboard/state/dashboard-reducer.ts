@@ -1,4 +1,12 @@
-import type { DashboardAction, DashboardState, WidgetState } from "../types.ts";
+import type { DashboardAction, DashboardState, LockType, WidgetState } from "../types.ts";
+
+function lockField(lockType: LockType): "lockPosition" | "lockResize" | "lockRemove" {
+  switch (lockType) {
+    case "position": return "lockPosition";
+    case "resize": return "lockResize";
+    case "remove": return "lockRemove";
+  }
+}
 
 export function dashboardReducer(
   state: DashboardState,
@@ -25,14 +33,6 @@ export function dashboardReducer(
       return {
         ...state,
         widgets: state.widgets.filter((w) => w.id !== action.id),
-      };
-
-    case "TOGGLE_VISIBILITY":
-      return {
-        ...state,
-        widgets: state.widgets.map((w) =>
-          w.id === action.id ? { ...w, visible: !w.visible } : w
-        ),
       };
 
     case "RESIZE_WIDGET":
@@ -112,21 +112,17 @@ export function dashboardReducer(
         ),
       };
 
-    case "LOCK_WIDGET":
+    case "SET_WIDGET_LOCK": {
+      const field = lockField(action.lockType);
       return {
         ...state,
         widgets: state.widgets.map((w) =>
-          w.id === action.id ? { ...w, locked: true } : w
+          w.id === action.id
+            ? { ...w, [field]: action.locked || undefined }
+            : w
         ),
       };
-
-    case "UNLOCK_WIDGET":
-      return {
-        ...state,
-        widgets: state.widgets.map((w) =>
-          w.id === action.id ? { ...w, locked: undefined } : w
-        ),
-      };
+    }
 
     default:
       return state;

@@ -116,7 +116,8 @@ export interface DragEngineConfig {
   maxColumns: number;
   gap: number;
   dropAnimationDuration: number;
-  isLocked: (id: string) => boolean;
+  isPositionLocked: (id: string) => boolean;
+  isResizeLocked: (id: string) => boolean;
   canDrop: (sourceId: string, targetIndex: number) => boolean;
   getWidgetConstraints: (id: string) => { minSpan: number; maxSpan: number };
 }

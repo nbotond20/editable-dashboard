@@ -12,7 +12,6 @@ interface WidgetSlotCallbackProps {
   colSpan: number;
   resize: (colSpan: number) => void;
   remove: () => void;
-  toggleVisibility: () => void;
 }
 
 interface DashboardGridProps {

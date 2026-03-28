@@ -18,7 +18,6 @@ const UNDOABLE_ACTIONS: ReadonlySet<DashboardAction["type"]> = new Set([
   "REMOVE_WIDGET",
   "REORDER_WIDGETS",
   "RESIZE_WIDGET",
-  "TOGGLE_VISIBILITY",
   "BATCH_UPDATE",
   "SET_MAX_COLUMNS",
 ]);

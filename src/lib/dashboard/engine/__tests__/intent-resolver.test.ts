@@ -36,7 +36,7 @@ function defaultConfig(
     swapDwellMs: 300,
     resizeDwellMs: 800,
     maxColumns: 2,
-    isLocked: () => false,
+    isPositionLocked: () => false,
     canDrop: () => true,
     getWidgetConstraints: () => ({ minSpan: 1, maxSpan: 2 }),
     ...overrides,
@@ -148,7 +148,7 @@ describe("resolveIntent - widget zone", () => {
 
   it("returns none when target is locked regardless of dwell", () => {
     const config = defaultConfig({
-      isLocked: (id) => id === "target",
+      isPositionLocked: (id) => id === "target",
     });
 
     expect(resolveIntent(widgetZone, 0, source, widgets, config)).toEqual({
@@ -164,7 +164,7 @@ describe("resolveIntent - widget zone", () => {
 
   it("returns swap for locked target even below swap threshold (still none)", () => {
     const config = defaultConfig({
-      isLocked: (id) => id === "target",
+      isPositionLocked: (id) => id === "target",
     });
     expect(resolveIntent(widgetZone, 150, source, widgets, config)).toEqual({
       type: "none",

@@ -1,4 +1,5 @@
 export type {
+  LockType,
   WidgetDefinition,
   WidgetState,
   DashboardState,

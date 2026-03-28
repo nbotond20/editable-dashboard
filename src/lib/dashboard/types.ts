@@ -1,15 +1,16 @@
 import type { ReactNode, PointerEvent as ReactPointerEvent } from "react";
 
+export type LockType = "position" | "resize" | "remove";
+
 export interface WidgetDefinition {
   type: string;
   label: string;
   defaultColSpan: number;
   minColSpan?: number;
   maxColSpan?: number;
-  locked?: boolean;
-  removable?: boolean;
-  hideable?: boolean;
-  resizable?: boolean;
+  lockPosition?: boolean;
+  lockResize?: boolean;
+  lockRemove?: boolean;
 }
 
 export interface WidgetState {
@@ -20,7 +21,9 @@ export interface WidgetState {
   order: number;
   columnStart?: number;
   config?: Record<string, unknown>;
-  locked?: boolean;
+  lockPosition?: boolean;
+  lockResize?: boolean;
+  lockRemove?: boolean;
 }
 
 export interface DashboardState {
@@ -64,7 +67,6 @@ export interface DropTarget {
 export type DashboardAction =
   | { type: "ADD_WIDGET"; widgetType: string; colSpan: number; config?: Record<string, unknown> }
   | { type: "REMOVE_WIDGET"; id: string }
-  | { type: "TOGGLE_VISIBILITY"; id: string }
   | { type: "RESIZE_WIDGET"; id: string; colSpan: number }
   | { type: "REORDER_WIDGETS"; fromIndex: number; toIndex: number }
   | { type: "SET_CONTAINER_WIDTH"; width: number }
@@ -72,22 +74,19 @@ export type DashboardAction =
   | { type: "BATCH_UPDATE"; widgets: WidgetState[] }
   | { type: "UPDATE_WIDGET_CONFIG"; id: string; config: Record<string, unknown> }
   | { type: "SWAP_WIDGETS"; sourceId: string; targetId: string }
-  | { type: "LOCK_WIDGET"; id: string }
-  | { type: "UNLOCK_WIDGET"; id: string }
+  | { type: "SET_WIDGET_LOCK"; id: string; lockType: LockType; locked: boolean }
   | { type: "UNDO" }
   | { type: "REDO" };
 
 export interface DashboardActions {
   addWidget: (widgetType: string, colSpan?: number, config?: Record<string, unknown>) => void;
   removeWidget: (id: string) => void;
-  toggleVisibility: (id: string) => void;
   resizeWidget: (id: string, colSpan: number) => void;
   reorderWidgets: (fromIndex: number, toIndex: number) => void;
   setMaxColumns: (maxColumns: number) => void;
   batchUpdate: (widgets: WidgetState[]) => void;
   updateWidgetConfig: (id: string, config: Record<string, unknown>) => void;
-  lockWidget: (id: string) => void;
-  unlockWidget: (id: string) => void;
+  setWidgetLock: (id: string, lockType: LockType, locked: boolean) => void;
   undo: () => void;
   redo: () => void;
 }
@@ -114,7 +113,6 @@ export interface WidgetSlotRenderProps {
   colSpan: number;
   resize: (colSpan: number) => void;
   remove: () => void;
-  toggleVisibility: () => void;
 }
 
 export interface SerializedDashboard {
@@ -183,9 +181,6 @@ export interface DashboardContextValue {
   endDrag: () => void;
   getA11yProps: (widgetId: string) => DragHandleA11yProps;
   handleKeyboardDrag: (widgetId: string, e: React.KeyboardEvent) => void;
-  isWidgetLocked: (id: string) => boolean;
-  isWidgetRemovable: (id: string) => boolean;
-  isWidgetHideable: (id: string) => boolean;
-  isWidgetResizable: (id: string) => boolean;
+  isWidgetLockActive: (id: string, lockType: LockType) => boolean;
   canAddWidget: () => boolean;
 }

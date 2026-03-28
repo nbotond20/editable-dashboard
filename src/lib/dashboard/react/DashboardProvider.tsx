@@ -6,6 +6,7 @@ import type {
   DragHandleA11yProps,
   DragState,
   WidgetDefinition,
+  LockType,
 } from "../types.ts";
 import { DEFAULT_MAX_COLUMNS, DEFAULT_GAP } from "../constants.ts";
 import { dashboardReducer } from "../state/dashboard-reducer.ts";
@@ -99,20 +100,8 @@ export function DashboardProviderV2(props: DashboardProviderProps) {
   const getState = useCallback(() => engine.getState(), [engine]);
   const actions = useActions({ dispatch, definitions, getState, maxWidgets });
 
-  const isWidgetLocked = useCallback(
-    (id: string) => resolveConstraint(id, "locked", engine.getState(), definitions),
-    [engine, definitions],
-  );
-  const isWidgetRemovable = useCallback(
-    (id: string) => resolveDefConstraint(id, "removable", engine.getState(), definitions),
-    [engine, definitions],
-  );
-  const isWidgetHideable = useCallback(
-    (id: string) => resolveDefConstraint(id, "hideable", engine.getState(), definitions),
-    [engine, definitions],
-  );
-  const isWidgetResizable = useCallback(
-    (id: string) => resolveDefConstraint(id, "resizable", engine.getState(), definitions),
+  const isWidgetLockActive = useCallback(
+    (id: string, lockType: LockType) => resolveLock(id, lockType, engine.getState(), definitions),
     [engine, definitions],
   );
   const canAddWidget = useCallback(
@@ -197,10 +186,10 @@ export function DashboardProviderV2(props: DashboardProviderProps) {
       element: HTMLElement,
       pointerType?: string,
     ) => {
-      if (isWidgetLocked(id)) return;
+      if (isWidgetLockActive(id, "position")) return;
       startDrag(id, pointerId, initialPos, element, pointerType);
     },
-    [startDrag, isWidgetLocked],
+    [startDrag, isWidgetLockActive],
   );
 
   const handleKeyboardDrag = useCallback(
@@ -254,13 +243,10 @@ export function DashboardProviderV2(props: DashboardProviderProps) {
       endDrag: () => {},
       getA11yProps,
       handleKeyboardDrag,
-      isWidgetLocked,
-      isWidgetRemovable,
-      isWidgetHideable,
-      isWidgetResizable,
+      isWidgetLockActive,
       canAddWidget,
     }),
-    [state, definitions, layout, actions, snapshot.canUndo, snapshot.canRedo, phase, dragState, getDragPosition, containerCallbackRef, measureRef, constrainedStartDrag, getA11yProps, handleKeyboardDrag, isWidgetLocked, isWidgetRemovable, isWidgetHideable, isWidgetResizable, canAddWidget],
+    [state, definitions, layout, actions, snapshot.canUndo, snapshot.canRedo, phase, dragState, getDragPosition, containerCallbackRef, measureRef, constrainedStartDrag, getA11yProps, handleKeyboardDrag, isWidgetLockActive, canAddWidget],
   );
 
   return (
@@ -271,27 +257,24 @@ export function DashboardProviderV2(props: DashboardProviderProps) {
   );
 }
 
-function resolveConstraint(
-  id: string,
-  _field: "locked",
-  state: DashboardState,
-  definitions: WidgetDefinition[],
-): boolean {
-  const widget = state.widgets.find((w) => w.id === id);
-  if (widget?.locked != null) return widget.locked;
-  if (!widget) return false;
-  const def = definitions.find((d) => d.type === widget.type);
-  return def?.locked === true;
+function lockFieldName(lockType: LockType): "lockPosition" | "lockResize" | "lockRemove" {
+  switch (lockType) {
+    case "position": return "lockPosition";
+    case "resize": return "lockResize";
+    case "remove": return "lockRemove";
+  }
 }
 
-function resolveDefConstraint(
+function resolveLock(
   id: string,
-  field: "removable" | "hideable" | "resizable",
+  lockType: LockType,
   state: DashboardState,
   definitions: WidgetDefinition[],
 ): boolean {
   const widget = state.widgets.find((w) => w.id === id);
-  if (!widget) return true;
+  if (!widget) return false;
+  const field = lockFieldName(lockType);
+  if (widget[field] != null) return widget[field]!;
   const def = definitions.find((d) => d.type === widget.type);
-  return def?.[field] !== false;
+  return def?.[field] === true;
 }

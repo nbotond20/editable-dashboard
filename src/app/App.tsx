@@ -46,11 +46,6 @@ function DashboardContent({ onStateChange }: { onStateChange?: (state: Dashboard
     [state.widgets]
   );
 
-  const hiddenWidgets = useMemo(
-    () => state.widgets.filter((w) => !w.visible),
-    [state.widgets]
-  );
-
   const handleAdd = useCallback(
     (type: string) => {
       actions.addWidget(type);
@@ -121,25 +116,10 @@ function DashboardContent({ onStateChange }: { onStateChange?: (state: Dashboard
               maxColumns={state.maxColumns}
               resize={slotProps.resize}
               remove={slotProps.remove}
-              toggleVisibility={slotProps.toggleVisibility}
             />
           )}
         </Grid>
 
-        {hiddenWidgets.length > 0 && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 24, padding: "12px 16px", flexWrap: "wrap" }}>
-            <span className="dash-label-sm">Hidden:</span>
-            {hiddenWidgets.map((w) => (
-              <button
-                key={w.id}
-                className="dash-tag dash-tag--neutral dash-tag--clickable"
-                onClick={() => actions.toggleVisibility(w.id)}
-              >
-                {defs.find((d) => d.type === w.type)?.label ?? w.type}
-              </button>
-            ))}
-          </div>
-        )}
       </main>
 
       <WidgetCatalog

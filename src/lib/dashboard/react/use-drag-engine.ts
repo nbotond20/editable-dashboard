@@ -11,32 +11,45 @@ export function useDragEngine(
   const [engine] = useState(() =>
     new DragEngine(state, {
       ...config,
-      isLocked: buildIsLocked(state, definitions, config.isLocked),
+      isPositionLocked: buildIsPositionLocked(state, definitions),
+      isResizeLocked: buildIsResizeLocked(state, definitions),
       getWidgetConstraints: buildGetConstraints(definitions, config.getWidgetConstraints),
     }),
   );
 
   engine.updateConfig({
     ...config,
-    isLocked: buildIsLocked(engine.getState(), definitions, config.isLocked),
+    isPositionLocked: buildIsPositionLocked(engine.getState(), definitions),
+    isResizeLocked: buildIsResizeLocked(engine.getState(), definitions),
     getWidgetConstraints: buildGetConstraints(definitions, config.getWidgetConstraints),
   });
 
   return engine;
 }
 
-function buildIsLocked(
+function buildIsPositionLocked(
   state: DashboardState,
   definitions: WidgetDefinition[],
-  custom?: (id: string) => boolean,
 ): (id: string) => boolean {
   return (id: string) => {
-    if (custom?.(id)) return true;
     const widget = state.widgets.find((w) => w.id === id);
     if (!widget) return false;
-    if (widget.locked) return true;
+    if (widget.lockPosition != null) return widget.lockPosition;
     const def = definitions.find((d) => d.type === widget.type);
-    return def?.locked ?? false;
+    return def?.lockPosition ?? false;
+  };
+}
+
+function buildIsResizeLocked(
+  state: DashboardState,
+  definitions: WidgetDefinition[],
+): (id: string) => boolean {
+  return (id: string) => {
+    const widget = state.widgets.find((w) => w.id === id);
+    if (!widget) return false;
+    if (widget.lockResize != null) return widget.lockResize;
+    const def = definitions.find((d) => d.type === widget.type);
+    return def?.lockResize ?? false;
   };
 }
 
