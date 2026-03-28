@@ -10,7 +10,7 @@ export function createDashboardError(
 ): DashboardError {
   const error: DashboardError = { code, message, ...(context != null ? { context } : {}) };
 
-  if (process.env.NODE_ENV !== "production") {
+  if (import.meta.env.DEV) {
     console.warn(`[editable-dashboard] ${code}: ${message}`, context ?? "");
   }
 
