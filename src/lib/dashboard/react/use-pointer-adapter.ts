@@ -95,6 +95,8 @@ export function usePointerAdapter(
         document.removeEventListener("pointermove", handlePointerMove);
         document.removeEventListener("pointerup", handlePointerUp);
         document.removeEventListener("pointercancel", handlePointerCancel);
+        document.removeEventListener("contextmenu", preventContextMenu);
+        document.removeEventListener("selectstart", preventSelectStart);
         if (activePointerId != null) {
           try { element.releasePointerCapture(activePointerId); } catch { /* already released */ }
         }
@@ -107,6 +109,8 @@ export function usePointerAdapter(
         document.removeEventListener("pointermove", handlePointerMove);
         document.removeEventListener("pointerup", handlePointerUp);
         document.removeEventListener("pointercancel", handlePointerCancel);
+        document.removeEventListener("contextmenu", preventContextMenu);
+        document.removeEventListener("selectstart", preventSelectStart);
         if (activePointerId != null) {
           try { element.releasePointerCapture(activePointerId); } catch { /* already released */ }
         }
@@ -119,9 +123,14 @@ export function usePointerAdapter(
 
       cleanupRef.current = cleanup;
 
+      function preventContextMenu(e: Event) { e.preventDefault(); }
+      function preventSelectStart(e: Event) { e.preventDefault(); }
+
       document.addEventListener("pointermove", handlePointerMove);
       document.addEventListener("pointerup", handlePointerUp);
       document.addEventListener("pointercancel", handlePointerCancel);
+      document.addEventListener("contextmenu", preventContextMenu);
+      document.addEventListener("selectstart", preventSelectStart);
 
       isDraggingRef.current = true;
       const tick = () => {

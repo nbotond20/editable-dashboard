@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useDashboard, type WidgetState, type DragHandleProps } from "../../lib/dashboard/index.ts";
 import { WidgetSlotStatic } from "./WidgetSlotStatic.tsx";
 
@@ -32,6 +32,15 @@ export function DashboardGridStatic({ className, style, ghostClassName, children
         .sort((a, b) => a.order - b.order),
     [state.widgets]
   );
+
+  useEffect(() => {
+    if (phase === "pending" || phase === "dragging") {
+      document.body.classList.add("dash-dragging");
+    } else {
+      document.body.classList.remove("dash-dragging");
+    }
+    return () => document.body.classList.remove("dash-dragging");
+  }, [phase]);
 
   const activeLayout = dragState.previewLayout ?? layout;
   const containerHeight = activeLayout.totalHeight;

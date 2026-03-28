@@ -161,6 +161,10 @@ export default function App() {
       initialWidgets={saved?.widgets ?? initialWidgets}
       maxColumns={saved?.maxColumns ?? 2}
       gap={16}
+      dragConfig={{
+        touchMoveTolerance: 20,
+        autoScrollEdgeSize: 80,
+      }}
     >
       <DashboardContent onStateChange={handleStateChange} />
     </DashboardProvider>

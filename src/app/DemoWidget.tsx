@@ -57,17 +57,19 @@ export function DemoWidget({
   resize,
   remove,
 }: DemoWidgetProps) {
-  const { actions, isWidgetLockActive } = useDashboard();
+  const { actions, isWidgetLockActive, dragState } = useDashboard();
   const Component = widgetComponents[widget.type];
   const label = widgetLabels[widget.type] ?? widget.type;
   const positionLocked = isWidgetLockActive(widget.id, "position");
   const resizeLocked = isWidgetLockActive(widget.id, "resize");
   const removeLocked = isWidgetLockActive(widget.id, "remove");
+  const isLongPressing = dragState.longPressTargetId === widget.id;
 
   const widgetClass = [
     "dash-widget",
     positionLocked && "dash-widget--locked",
     isDragging && "dash-widget--dragging",
+    isLongPressing && "dash-widget--long-pressing",
   ].filter(Boolean).join(" ");
 
   return (
