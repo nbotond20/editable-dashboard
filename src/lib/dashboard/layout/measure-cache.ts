@@ -48,24 +48,35 @@ export function useMeasureCache() {
     };
   }, []);
 
+  const callbackCacheRef = useRef<Map<string, (node: HTMLElement | null) => void>>(new Map());
+
   const measureRef = useCallback(
-    (id: string) => (node: HTMLElement | null) => {
-      const observer = observerRef.current;
-      if (!observer) return;
+    (id: string) => {
+      const cached = callbackCacheRef.current.get(id);
+      if (cached) return cached;
 
-      const prev = nodesRef.current.get(id);
-      if (prev) {
-        observer.unobserve(prev);
-        idByElement.current.delete(prev);
-      }
+      const callback = (node: HTMLElement | null) => {
+        const observer = observerRef.current;
+        if (!observer) return;
 
-      if (node) {
-        nodesRef.current.set(id, node);
-        idByElement.current.set(node, id);
-        observer.observe(node);
-      } else {
-        nodesRef.current.delete(id);
-      }
+        const prev = nodesRef.current.get(id);
+        if (prev) {
+          observer.unobserve(prev);
+          idByElement.current.delete(prev);
+        }
+
+        if (node) {
+          nodesRef.current.set(id, node);
+          idByElement.current.set(node, id);
+          observer.observe(node);
+        } else {
+          nodesRef.current.delete(id);
+          callbackCacheRef.current.delete(id);
+        }
+      };
+
+      callbackCacheRef.current.set(id, callback);
+      return callback;
     },
     []
   );

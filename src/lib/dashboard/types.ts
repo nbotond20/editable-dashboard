@@ -1,4 +1,29 @@
 import type { ReactNode, PointerEvent as ReactPointerEvent } from "react";
+import type { CommittedOperation } from "./engine/types.ts";
+
+/**
+ * Structured error emitted by the dashboard when validation fails.
+ *
+ * Subscribe to these via the `onError` callback on `<DashboardProvider>`.
+ *
+ * @example
+ * ```tsx
+ * <DashboardProvider
+ *   definitions={defs}
+ *   onError={(err) => console.error(err.code, err.message)}
+ * >
+ *   ...
+ * </DashboardProvider>
+ * ```
+ */
+export type DashboardError = {
+  /** Machine-readable error code (e.g. `'INVALID_WIDGET_TYPE'`). */
+  code: string;
+  /** Human-readable description of the problem. */
+  message: string;
+  /** Optional bag of contextual data for debugging. */
+  context?: Record<string, unknown>;
+};
 
 /**
  * The three dimensions along which a widget can be locked.
@@ -54,7 +79,14 @@ export interface WidgetState {
   type: string;
   /** Current width in grid columns. Clamped to `[1, maxColumns]`. */
   colSpan: number;
-  /** Whether the widget is visible on the grid. */
+  /**
+   * Whether the widget is visible on the grid.
+   *
+   * When `false`, the widget is hidden but retained in state (soft-hide).
+   * Hidden widgets are excluded from layout but can be shown again via
+   * {@link DashboardActions.showWidget}. Use {@link DashboardActions.removeWidget}
+   * to permanently delete a widget.
+   */
   visible: boolean;
   /** Sort order — lower values appear first in the layout. */
   order: number;
@@ -71,18 +103,41 @@ export interface WidgetState {
 }
 
 /**
- * Complete state of the dashboard.
+ * The externally-facing dashboard state for controlled mode.
  *
- * In controlled mode this is the value you pass to `<DashboardProvider state={…}>`.
+ * Pass this to `<DashboardProvider state={…}>`. It omits the transient
+ * `containerWidth` field, which is managed internally by the provider.
+ *
+ * @see {@link DashboardState} for the full internal state including `containerWidth`.
  */
-export interface DashboardState {
+export interface DashboardStateInput {
   /** All widget instances (visible and hidden). */
   widgets: WidgetState[];
   /** Current number of grid columns. */
   maxColumns: number;
   /** Gap between widgets in pixels. */
   gap: number;
-  /** Measured container width in pixels. Transient — not serialized, defaults to 0 before first measurement. */
+}
+
+/**
+ * Complete internal state of the dashboard.
+ *
+ * Extends {@link DashboardStateInput} with the transient `containerWidth` field.
+ * In controlled mode, consumers pass {@link DashboardStateInput} and the provider
+ * merges in the internally tracked `containerWidth`.
+ *
+ * **Note:** `containerWidth` is transient — it is not serialized, is set to 0 on
+ * deserialization, and is managed internally by the provider's measurement system.
+ * The `onStateChange` callback emits {@link DashboardStateInput} (without `containerWidth`).
+ */
+export interface DashboardState extends DashboardStateInput {
+  /**
+   * Measured container width in pixels.
+   *
+   * Transient — not serialized, defaults to 0 before first measurement.
+   * Managed internally by the provider; consumers should not set this directly.
+   * @readonly
+   */
   containerWidth: number;
 }
 
@@ -168,6 +223,8 @@ export type DashboardAction =
   | { type: "UPDATE_WIDGET_CONFIG"; id: string; config: Record<string, unknown> }
   | { type: "SWAP_WIDGETS"; sourceId: string; targetId: string }
   | { type: "SET_WIDGET_LOCK"; id: string; lockType: LockType; locked: boolean }
+  | { type: "SHOW_WIDGET"; id: string }
+  | { type: "HIDE_WIDGET"; id: string }
   | { type: "UNDO" }
   | { type: "REDO" };
 
@@ -191,6 +248,22 @@ export interface DashboardActions {
   batchUpdate: (widgets: WidgetState[]) => void;
   /** Shallow-merge into a widget's `config` object. */
   updateWidgetConfig: (id: string, config: Record<string, unknown>) => void;
+  /**
+   * Show a previously hidden widget (sets `visible: true`).
+   *
+   * Hidden widgets are retained in state but excluded from layout.
+   * This is a soft-show — the widget is not re-added, just made visible again.
+   */
+  showWidget: (id: string) => void;
+  /**
+   * Hide a widget without removing it from state (sets `visible: false`).
+   *
+   * Hidden widgets are retained in state but excluded from layout.
+   * This is a soft-hide — the widget remains in the `widgets` array and
+   * can be shown again via {@link showWidget}. Use {@link removeWidget}
+   * to permanently delete a widget.
+   */
+  hideWidget: (id: string) => void;
   /** Set or clear a lock on a widget instance. */
   setWidgetLock: (id: string, lockType: LockType, locked: boolean) => void;
   /** Undo the last undoable action. */
@@ -260,6 +333,34 @@ export interface KeyboardDragState {
 }
 
 /**
+ * User-facing drag / interaction timing configuration.
+ *
+ * Every field is optional — omitted values fall back to the compile-time
+ * defaults in `constants.ts`.
+ *
+ * Pass to `<DashboardProvider dragConfig={…}>` to tune drag behaviour
+ * without forking the library.
+ */
+export interface DragConfig {
+  /** Minimum pointer movement (px) before a mouse/pen drag activates. @defaultValue 5 */
+  activationThreshold?: number;
+  /** Delay (ms) before a touch-and-hold activates a drag. @defaultValue 200 */
+  touchActivationDelay?: number;
+  /** Maximum pointer drift (px) allowed during a touch long-press. @defaultValue 10 */
+  touchMoveTolerance?: number;
+  /** Distance (px) from viewport edge that triggers auto-scroll during drag. @defaultValue 60 */
+  autoScrollEdgeSize?: number;
+  /** Maximum auto-scroll speed (px/frame). @defaultValue 15 */
+  autoScrollMaxSpeed?: number;
+  /** Dwell time (ms) before a cross-row swap activates. @defaultValue 200 */
+  swapDwellMs?: number;
+  /** Dwell time (ms) before an auto-resize operation activates. @defaultValue 700 */
+  resizeDwellMs?: number;
+  /** Duration (ms) of the drop animation. @defaultValue 250 */
+  dropAnimationDuration?: number;
+}
+
+/**
  * Breakpoint widths (in pixels) for responsive column count.
  *
  * Defaults: `sm = 480`, `md = 768`, `lg = 1024`.
@@ -311,18 +412,57 @@ export type DashboardProviderProps = {
   keyboardShortcuts?: boolean;
   /** Custom drop validation. Return `false` to prevent a drop at the given `targetIndex`. */
   canDrop?: (sourceId: string, targetIndex: number, state: DashboardState) => boolean;
+  /** Override drag / interaction timing constants. All fields optional; defaults come from `constants.ts`. */
+  dragConfig?: DragConfig;
+  /** Override responsive column breakpoints. @see {@link getResponsiveColumns} */
+  responsiveBreakpoints?: ResponsiveBreakpoints;
+  /** Callback invoked when a validation error occurs. */
+  onError?: (error: DashboardError) => void;
+
+  // ── Drag lifecycle callbacks ────────────────────────────────────────────
+  /** Called when a drag interaction begins (pointer activation or keyboard pickup). */
+  onDragStart?: (event: { widgetId: string; phase: 'pointer' | 'keyboard' }) => void;
+  /** Called when a drag interaction ends (drop or cancel). */
+  onDragEnd?: (event: { widgetId: string; operation: CommittedOperation; cancelled: boolean }) => void;
+
+  // ── Widget mutation callbacks ───────────────────────────────────────────
+  /** Called after a widget is added. */
+  onWidgetAdd?: (event: { widget: WidgetState }) => void;
+  /** Called after a widget is removed. */
+  onWidgetRemove?: (event: { widgetId: string }) => void;
+  /** Called after a widget is resized. */
+  onWidgetResize?: (event: { widgetId: string; previousColSpan: number; newColSpan: number }) => void;
+  /** Called after widgets are reordered. */
+  onWidgetReorder?: (event: { widgetId: string; fromIndex: number; toIndex: number }) => void;
+  /** Called after a widget's config is updated. */
+  onWidgetConfigChange?: (event: { widgetId: string; config: Record<string, unknown> }) => void;
+
+  // ── State observation callback ──────────────────────────────────────────
+  /** Called after every state change in both controlled and uncontrolled modes. */
+  onChange?: (state: DashboardState) => void;
+
   children: ReactNode;
 } & (
   | {
-      /** Controlled mode: externally managed dashboard state. */
-      state: DashboardState;
-      /** Controlled mode: called on every state change. */
-      onStateChange: (state: DashboardState) => void;
-      initialWidgets?: never;
+      /**
+       * Controlled mode: externally managed dashboard state.
+       *
+       * Pass a {@link DashboardStateInput} (without `containerWidth`). The provider
+       * merges in the internally tracked `containerWidth` before using it.
+       */
+      state: DashboardStateInput;
+      /**
+       * Controlled mode: called on every state change.
+       *
+       * Receives a {@link DashboardStateInput} (without `containerWidth`), since
+       * `containerWidth` is transient and managed internally.
+       */
+      onStateChange: (state: DashboardStateInput) => void;
+      initialWidgets?: undefined;
     }
   | {
-      state?: never;
-      onStateChange?: never;
+      state?: undefined;
+      onStateChange?: undefined;
       /** Uncontrolled mode: seed widgets for the initial render. */
       initialWidgets?: WidgetState[];
     }

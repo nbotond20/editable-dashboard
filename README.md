@@ -24,6 +24,10 @@ Demo: https://nbotond20.github.io/editable-dashboard/
 - **Undo/redo** -- built-in history with `Ctrl+Z` / `Ctrl+Y` keyboard shortcuts
 - **Keyboard drag** -- full keyboard navigation with arrow keys, Space, and Escape
 - **Tree-shakeable** -- marked `sideEffects: false`; import only what you use
+- **Configurable drag behavior** -- tune activation thresholds, dwell times, scroll speed, and more via `dragConfig`
+- **Lifecycle callbacks** -- `onDragStart`, `onDragEnd`, `onWidgetAdd`, `onWidgetRemove`, and more
+- **Error handling** -- `onError` callback with typed error codes for validation failures
+- **Input validation** -- definitions, props, and serialized data are validated with descriptive errors
 
 ---
 
@@ -187,6 +191,17 @@ The root context provider. All hooks must be called within its subtree.
 | `maxUndoDepth` | `number` | `50` | Maximum number of undo states to retain. |
 | `keyboardShortcuts` | `boolean` | `true` | Enable `Ctrl+Z` / `Ctrl+Y` for undo/redo. |
 | `canDrop` | `(sourceId, targetIndex, state) => boolean` | -- | Custom drop validation. Return `false` to prevent a drop. |
+| `dragConfig` | `DragConfig` | -- | Fine-tune drag activation, dwell times, scroll speed, and animation duration. See [DragConfig](#dragconfig). |
+| `responsiveBreakpoints` | `ResponsiveBreakpoints` | -- | Customize breakpoints for `getResponsiveColumns()`. |
+| `onError` | `(error: DashboardError) => void` | -- | Called when a validation error occurs (invalid widget type, exceeded max widgets, etc.). See [Error Handling](#error-handling). |
+| `onDragStart` | `(event: { widgetId, phase }) => void` | -- | Called when a drag begins. `phase` is `'pointer'` or `'keyboard'`. |
+| `onDragEnd` | `(event: { widgetId, operation, cancelled }) => void` | -- | Called when a drag ends. Includes the committed operation and whether it was cancelled. |
+| `onWidgetAdd` | `(event: { widget }) => void` | -- | Called after a widget is added. |
+| `onWidgetRemove` | `(event: { widgetId }) => void` | -- | Called after a widget is removed. |
+| `onWidgetResize` | `(event: { widgetId, previousColSpan, newColSpan }) => void` | -- | Called after a widget is resized. |
+| `onWidgetReorder` | `(event: { widgetId, fromIndex, toIndex }) => void` | -- | Called after widgets are reordered. |
+| `onWidgetConfigChange` | `(event: { widgetId, config }) => void` | -- | Called after a widget's config is updated. |
+| `onChange` | `(state: DashboardState) => void` | -- | Called on every state change in both controlled and uncontrolled modes. |
 | `children` | `ReactNode` | **(required)** | Child components. |
 
 **Uncontrolled mode** (default):
@@ -199,10 +214,12 @@ The root context provider. All hooks must be called within its subtree.
 
 | Prop | Type | Description |
 |------|------|-------------|
-| `state` | `DashboardState` | The full dashboard state managed externally. |
-| `onStateChange` | `(state: DashboardState) => void` | Called with the next state after every action. |
+| `state` | `DashboardStateInput` | The dashboard state managed externally (without transient `containerWidth`). |
+| `onStateChange` | `(state: DashboardStateInput) => void` | Called with the next state after every action. Does not include `containerWidth`. |
 
 The two modes are mutually exclusive. In controlled mode, do not pass `initialWidgets`. In uncontrolled mode, do not pass `state` or `onStateChange`.
+
+> **Note:** Controlled mode uses `DashboardStateInput` (without `containerWidth`) rather than `DashboardState`. The provider manages `containerWidth` internally since it's a transient measurement value.
 
 ---
 
@@ -281,6 +298,8 @@ Stable, memoized action dispatchers.
 | `setMaxColumns` | `(maxColumns: number) => void` | Change the column count. Widgets with a `colSpan` exceeding the new max are clamped. |
 | `batchUpdate` | `(widgets: WidgetState[]) => void` | Replace the entire widgets array. Used internally by the drag system for swaps and resizes. |
 | `updateWidgetConfig` | `(id: string, config: Record<string, unknown>) => void` | Shallow-merge into a widget's `config` object. |
+| `showWidget` | `(id: string) => void` | Make a hidden widget visible again. |
+| `hideWidget` | `(id: string) => void` | Soft-hide a widget (retained in state but removed from layout). |
 | `setWidgetLock` | `(id: string, lockType: LockType, locked: boolean) => void` | Set or clear a lock on a widget instance. |
 | `undo` | `() => void` | Undo the last undoable action. |
 | `redo` | `() => void` | Redo the last undone action. |
@@ -321,16 +340,44 @@ The current drag state. Use this to render drag previews and ghosts.
 ### Serialization
 
 ```ts
-import { serializeDashboard, deserializeDashboard } from "@nbotond20/editable-dashboard";
+import {
+  serializeDashboard,
+  deserializeDashboard,
+  validateSerializedDashboard,
+  CURRENT_SERIALIZATION_VERSION,
+} from "@nbotond20/editable-dashboard";
 ```
 
 #### `serializeDashboard(state: DashboardState): SerializedDashboard`
 
-Produces a JSON-safe snapshot of the dashboard state. Strips transient fields like `containerWidth`.
+Produces a compact JSON-safe snapshot. Strips transient `containerWidth` and omits optional fields that hold default values (e.g., `lockPosition: false` is omitted).
 
 #### `deserializeDashboard(data: SerializedDashboard, definitions: WidgetDefinition[]): DashboardState`
 
-Rebuilds a `DashboardState` from a serialized snapshot. Widgets whose `type` has no matching definition are silently dropped. Throws if the `version` field does not match the current schema version.
+Rebuilds a `DashboardState` from a snapshot with full validation:
+- Validates all required fields and throws descriptive errors for invalid input
+- Widgets whose `type` has no matching definition are silently dropped
+- Duplicate widget IDs are deduplicated (first occurrence wins)
+- `colSpan` values are clamped to `[1, maxColumns]`
+- Supports schema version 1 (migrates `locked` to `lockPosition`) and version 2
+
+#### `validateSerializedDashboard(data: unknown): { valid: boolean; errors: string[] }`
+
+Validates the structure of serialized data without throwing. Use this to guard untrusted input before deserializing:
+
+```ts
+const raw = JSON.parse(userInput);
+const { valid, errors } = validateSerializedDashboard(raw);
+if (!valid) {
+  console.error("Invalid dashboard data:", errors);
+  return;
+}
+const restored = deserializeDashboard(raw, definitions);
+```
+
+#### `CURRENT_SERIALIZATION_VERSION`
+
+The current schema version (currently `2`). Use for version checks or when building custom serialization.
 
 ```ts
 // Save
@@ -401,7 +448,7 @@ Represents a single widget instance on the dashboard.
 | `id` | `string` | Unique instance ID (typically a UUID). |
 | `type` | `string` | References a `WidgetDefinition.type`. |
 | `colSpan` | `number` | Current column span. |
-| `visible` | `boolean` | Whether the widget is visible on the grid. |
+| `visible` | `boolean` | Whether the widget is visible on the grid. Set to `false` for soft-hide (retained in state but excluded from layout). Toggle with `showWidget`/`hideWidget` actions. |
 | `order` | `number` | Sort order (lower values appear first). |
 | `columnStart` | `number?` | Column hint -- forces the widget to start at a specific column. Set by column-shift drags; cleared on reorder. |
 | `config` | `Record<string, unknown>?` | Arbitrary per-widget configuration. |
@@ -409,14 +456,26 @@ Represents a single widget instance on the dashboard.
 | `lockResize` | `boolean?` | Per-instance resize lock override. Takes precedence over definition. |
 | `lockRemove` | `boolean?` | Per-instance remove lock override. Takes precedence over definition. |
 
-### `DashboardState`
+### `DashboardStateInput`
+
+The externally-facing state type used in controlled mode. Does not include transient fields.
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `widgets` | `WidgetState[]` | All widget instances. |
 | `maxColumns` | `number` | Current column count. |
 | `gap` | `number` | Gap in pixels. |
-| `containerWidth` | `number` | Measured container width (transient, not serialized). |
+
+### `DashboardState`
+
+Extends `DashboardStateInput` with transient runtime data.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `widgets` | `WidgetState[]` | All widget instances. |
+| `maxColumns` | `number` | Current column count. |
+| `gap` | `number` | Gap in pixels. |
+| `containerWidth` | `number` | Measured container width (transient, managed internally, not serialized). |
 
 ### `ComputedLayout`
 
@@ -482,6 +541,47 @@ Props passed to widget slot render functions.
 | `resize` | `(colSpan: number) => void` | Resize this widget. |
 | `remove` | `() => void` | Remove this widget. |
 
+### `DashboardError`
+
+Typed error object passed to the `onError` callback.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `code` | `string` | Machine-readable error code. |
+| `message` | `string` | Human-readable description. |
+| `context` | `Record<string, unknown>?` | Optional debugging context. |
+
+**Error codes:**
+
+| Code | When |
+|------|------|
+| `INVALID_DEFINITIONS` | Empty definitions array. |
+| `DUPLICATE_DEFINITION_TYPE` | Two definitions share the same `type`. |
+| `INVALID_DEFAULT_COL_SPAN` | A definition's `defaultColSpan` is less than 1. |
+| `INVALID_MAX_COLUMNS` | `maxColumns` is 0 or negative. |
+| `INVALID_GAP` | `gap` is negative. |
+| `INVALID_MAX_UNDO_DEPTH` | `maxUndoDepth` is 0 or negative. |
+| `INVALID_WIDGET_TYPE` | Attempted to add a widget with an unknown type. |
+| `MAX_WIDGETS_REACHED` | Attempted to add a widget beyond `maxWidgets` limit. |
+| `INVALID_COL_SPAN` | `resizeWidget` called with a span outside the valid range (clamped automatically). |
+| `INVALID_REORDER_INDEX` | `reorderWidgets` called with out-of-bounds indices. |
+| `INVALID_SERIALIZED_DATA` | Deserialization input fails structural validation. |
+
+### `DragConfig`
+
+Fine-tune drag activation, dwell timing, and scroll behavior.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `activationThreshold` | `number?` | `5` | Min pointer movement (px) before drag activates. |
+| `touchActivationDelay` | `number?` | `200` | Touch long-press delay (ms). |
+| `touchMoveTolerance` | `number?` | `10` | Max pointer drift (px) during long-press. |
+| `autoScrollEdgeSize` | `number?` | `60` | Distance from viewport edge (px) to trigger auto-scroll. |
+| `autoScrollMaxSpeed` | `number?` | `15` | Max auto-scroll speed (px/frame). |
+| `swapDwellMs` | `number?` | `200` | Dwell time (ms) before cross-row swap activates. |
+| `resizeDwellMs` | `number?` | `700` | Dwell time (ms) before auto-resize activates. |
+| `dropAnimationDuration` | `number?` | `250` | Duration of the drop animation (ms). |
+
 ### `DashboardProviderProps`
 
 See [`<DashboardProvider>` Props](#props) above.
@@ -506,6 +606,8 @@ type DashboardAction =
   | { type: "UPDATE_WIDGET_CONFIG"; id: string; config: Record<string, unknown> }
   | { type: "SWAP_WIDGETS"; sourceId: string; targetId: string }
   | { type: "SET_WIDGET_LOCK"; id: string; lockType: LockType; locked: boolean }
+  | { type: "SHOW_WIDGET"; id: string }
+  | { type: "HIDE_WIDGET"; id: string }
   | { type: "UNDO" }
   | { type: "REDO" };
 ```
@@ -828,16 +930,15 @@ For full control over state (useful for undo/redo, persistence, or syncing with 
 import { useState } from "react";
 import {
   DashboardProvider,
-  type DashboardState,
+  type DashboardStateInput,
   type WidgetDefinition,
 } from "@nbotond20/editable-dashboard";
 
 function App() {
-  const [dashState, setDashState] = useState<DashboardState>({
+  const [dashState, setDashState] = useState<DashboardStateInput>({
     widgets: [],
     maxColumns: 2,
     gap: 16,
-    containerWidth: 0,
   });
 
   return (
@@ -852,7 +953,7 @@ function App() {
 }
 ```
 
-Every action dispatched inside the provider will call `onStateChange` with the next state instead of updating internal state.
+Every action dispatched inside the provider will call `onStateChange` with the next state (without `containerWidth`, which is managed internally) instead of updating internal state.
 
 ### Batch Updates
 
@@ -897,7 +998,19 @@ function ChartWidget({ widget }: { widget: WidgetState }) {
 
 ### Responsive Columns
 
-Adjust the column count based on viewport width:
+The library exports a `getResponsiveColumns()` utility that maps container width to a column count. You can customize the breakpoints via the `responsiveBreakpoints` prop:
+
+```tsx
+import { getResponsiveColumns } from "@nbotond20/editable-dashboard";
+
+// Default breakpoints: <480px = 1 col, <768px = 2 cols, <1024px = 3 cols, >=1024px = 4 cols
+const cols = getResponsiveColumns(containerWidth);
+
+// Custom breakpoints
+const cols = getResponsiveColumns(containerWidth, { sm: 400, md: 700, lg: 1200 });
+```
+
+Or wire it up with media queries for viewport-based responsiveness:
 
 ```tsx
 import { useEffect, useState } from "react";
@@ -1011,6 +1124,136 @@ function App() {
 
 ---
 
+## Error Handling
+
+The provider validates definitions, props, and actions at runtime. Invalid operations are either silently corrected (e.g., `colSpan` is clamped to valid range) or skipped (e.g., adding a widget with an unknown type). In both cases, the `onError` callback is fired with a typed `DashboardError`:
+
+```tsx
+<DashboardProvider
+  definitions={definitions}
+  onError={(err) => {
+    // err.code: 'INVALID_WIDGET_TYPE' | 'MAX_WIDGETS_REACHED' | ...
+    // err.message: human-readable description
+    // err.context: optional debugging data
+    console.error(`Dashboard error [${err.code}]:`, err.message);
+    sendToErrorTracking(err);
+  }}
+>
+  <MyGrid />
+</DashboardProvider>
+```
+
+In development (`process.env.NODE_ENV !== 'production'`), validation errors also emit `console.warn` for visibility during development.
+
+**What is validated:**
+- `definitions` array: non-empty, unique types, valid `defaultColSpan`
+- Provider props: `maxColumns > 0`, `gap >= 0`, `maxUndoDepth > 0`
+- `initialWidgets`: widgets referencing unknown types are filtered out
+- `addWidget`: widget type must exist in definitions; `maxWidgets` limit enforced
+- `resizeWidget`: `colSpan` clamped to definition's `[minColSpan, maxColSpan]` range
+- `reorderWidgets`: indices validated against visible widget count
+
+---
+
+## Lifecycle Callbacks
+
+The provider exposes optional callbacks for observing drag events and widget mutations. These fire *after* the state has been updated.
+
+### Drag Callbacks
+
+```tsx
+<DashboardProvider
+  definitions={definitions}
+  onDragStart={({ widgetId, phase }) => {
+    // phase: 'pointer' (mouse/touch) or 'keyboard'
+    analytics.track("drag_start", { widgetId, phase });
+  }}
+  onDragEnd={({ widgetId, operation, cancelled }) => {
+    // operation: the CommittedOperation (reorder, swap, auto-resize, etc.)
+    // cancelled: true if Escape was pressed or drag was aborted
+    if (!cancelled) saveToServer(state);
+  }}
+>
+```
+
+### Widget Mutation Callbacks
+
+```tsx
+<DashboardProvider
+  definitions={definitions}
+  onWidgetAdd={({ widget }) => console.log("Added:", widget.id)}
+  onWidgetRemove={({ widgetId }) => console.log("Removed:", widgetId)}
+  onWidgetResize={({ widgetId, previousColSpan, newColSpan }) => {
+    console.log(`Resized ${widgetId}: ${previousColSpan} → ${newColSpan}`);
+  }}
+  onWidgetReorder={({ widgetId, fromIndex, toIndex }) => {
+    console.log(`Reordered ${widgetId}: ${fromIndex} → ${toIndex}`);
+  }}
+  onWidgetConfigChange={({ widgetId, config }) => {
+    console.log(`Config changed for ${widgetId}:`, config);
+  }}
+>
+```
+
+### State Observation
+
+The `onChange` callback fires on every state change in **both** controlled and uncontrolled modes:
+
+```tsx
+<DashboardProvider
+  definitions={definitions}
+  onChange={(state) => {
+    // Fires after every action in either mode
+    localStorage.setItem("dashboard", JSON.stringify(serializeDashboard(state)));
+  }}
+>
+```
+
+> **Note:** In controlled mode, `onStateChange` emits `DashboardStateInput` (without `containerWidth`), while `onChange` emits the full `DashboardState` (with `containerWidth`).
+
+---
+
+## Widget Visibility
+
+Use `showWidget` and `hideWidget` to soft-hide widgets without removing them from state:
+
+```tsx
+const { actions } = useDashboard();
+
+// Hide a widget (removed from layout but retained in state)
+actions.hideWidget(widgetId);
+
+// Show it again
+actions.showWidget(widgetId);
+```
+
+Both actions participate in undo/redo. A hidden widget (`visible: false`) is excluded from the layout but remains in `state.widgets`. Use `removeWidget` to permanently delete a widget.
+
+---
+
+## Configuring Drag Behavior
+
+Pass a `dragConfig` prop to tune the drag system:
+
+```tsx
+<DashboardProvider
+  definitions={definitions}
+  dragConfig={{
+    activationThreshold: 8,     // Require 8px movement before drag (default: 5)
+    touchActivationDelay: 300,  // Longer touch hold for accessibility (default: 200)
+    swapDwellMs: 400,           // Slower swap activation (default: 200)
+    resizeDwellMs: 1000,        // Slower auto-resize (default: 700)
+    autoScrollEdgeSize: 80,     // Larger scroll trigger zone (default: 60)
+    autoScrollMaxSpeed: 20,     // Faster scroll (default: 15)
+    dropAnimationDuration: 400, // Slower drop animation (default: 250)
+  }}
+>
+```
+
+All fields are optional. Omitted fields use the defaults from the library's constants.
+
+---
+
 ## Advanced: Engine Subpath
 
 For power users who need access to the drag engine internals, undo history utilities, or internal hooks, use the `/engine` subpath:
@@ -1047,6 +1290,10 @@ import type {
   WidgetDefinition,
   WidgetState,
   DashboardState,
+  DashboardStateInput,
+  DashboardError,
+  DragConfig,
+  CommittedOperation,
   WidgetLayout,
   ComputedLayout,
   DragState,

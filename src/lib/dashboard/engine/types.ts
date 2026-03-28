@@ -5,13 +5,6 @@ export interface Point {
   readonly y: number;
 }
 
-export interface Rect {
-  readonly x: number;
-  readonly y: number;
-  readonly width: number;
-  readonly height: number;
-}
-
 export type PointerType = "mouse" | "touch" | "pen";
 
 export type DragEvent =
@@ -155,10 +148,6 @@ export function getVisibleSorted(widgets: readonly WidgetState[]): WidgetState[]
 
 export function distance(a: Point, b: Point): number {
   return Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2);
-}
-
-export function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
 }
 
 export function zonesEqual(a: DropZone | null, b: DropZone | null): boolean {

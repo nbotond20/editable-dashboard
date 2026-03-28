@@ -51,6 +51,8 @@ const UNDOABLE_ACTIONS = new Set<string>([
   "SWAP_WIDGETS",
   "BATCH_UPDATE",
   "SET_MAX_COLUMNS",
+  "SHOW_WIDGET",
+  "HIDE_WIDGET",
 ]);
 
 const MAX_UNDO_DEPTH = 50;
@@ -361,15 +363,6 @@ export class DragEngine {
     const sourceId = this.phase.sourceId;
     const intent = this.currentIntent;
 
-    // ── DEBUG: log intent and zone at drop time ──
-    console.log("[drag-debug] pointerUp", {
-      sourceId,
-      intentType: intent?.type,
-      intent: intent ? JSON.parse(JSON.stringify(intent)) : null,
-      zone: this.currentZone ? JSON.parse(JSON.stringify(this.currentZone)) : null,
-      pointerPos: this.phase.type === "dragging" ? { ...this.phase.pointerPos } : null,
-    });
-
     if (!intent || intent.type === "none") {
       this.phase = { type: "idle" };
       this.clearDragState();
@@ -378,9 +371,6 @@ export class DragEngine {
     }
 
     const committed = this.commitIntent(sourceId, intent);
-
-    // ── DEBUG: log committed operation ──
-    console.log("[drag-debug] committed", JSON.parse(JSON.stringify(committed)));
 
     if (committed.type === "reorder" && committed.fromIndex === committed.toIndex) {
       this.phase = { type: "idle" };
@@ -429,13 +419,6 @@ export class DragEngine {
       const preTgt = preWidgets.find(w => w.id === committed.targetId);
       const srcCol = preSrc?.columnStart;
       const tgtCol = preTgt?.columnStart;
-
-      // ── DEBUG: log auto-resize post-processing inputs ──
-      console.log("[drag-debug] auto-resize post-process", {
-        srcCol, tgtCol,
-        preOrderBefore: getVisibleSorted(preWidgets).map(w => `${w.id}(${w.order})`),
-        postOrderAfterApply: getVisibleSorted(newState.widgets).map(w => `${w.id}(${w.order},col=${w.columnStart})`),
-      });
 
       let needsSwap = false;
       if (srcCol != null) {
@@ -514,10 +497,6 @@ export class DragEngine {
           widgets: pinToGreedyColumns(newState.widgets, cfg.maxColumns),
         };
       }
-      // ── DEBUG: log final state after auto-resize post-processing ──
-      console.log("[drag-debug] auto-resize final", {
-        finalOrder: getVisibleSorted(newState.widgets).map(w => `${w.id}(${w.order},col=${w.columnStart})`),
-      });
     } else if (committed.type === "column-pin") {
       const maxSpanAtCol = Math.max(1, cfg.maxColumns - committed.column);
       newState = {
@@ -941,16 +920,6 @@ export class DragEngine {
     }
 
     if (!this.intentsEqual(newIntent, this.currentIntent)) {
-      // ── DEBUG: log intent transitions ──
-      console.log("[drag-debug] intent changed", {
-        from: this.currentIntent?.type,
-        to: newIntent.type,
-        newIntent: JSON.parse(JSON.stringify(newIntent)),
-        zone: this.currentZone ? JSON.parse(JSON.stringify(this.currentZone)) : null,
-        dwellMs: Math.round(dwellMs),
-        pointerX: this.phase.type === "dragging" ? Math.round(this.phase.pointerPos.x) : null,
-      });
-
       this.currentIntent = newIntent;
       this.previewLayout =
         newIntent.type !== "none"

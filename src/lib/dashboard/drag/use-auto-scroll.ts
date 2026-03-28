@@ -6,25 +6,29 @@ import {
 
 export function useAutoScroll(
   isDragging: boolean,
-  getPointerPosition: () => { x: number; y: number } | null
+  getPointerPosition: () => { x: number; y: number } | null,
+  edgeSize: number = AUTO_SCROLL_EDGE_SIZE,
+  maxSpeed: number = AUTO_SCROLL_MAX_SPEED,
 ) {
   const rafRef = useRef<number>(0);
+  const getPointerPositionRef = useRef(getPointerPosition);
+  useEffect(() => { getPointerPositionRef.current = getPointerPosition; });
 
   useEffect(() => {
     if (!isDragging) return;
 
     const tick = () => {
-      const pos = getPointerPosition();
+      const pos = getPointerPositionRef.current();
       if (pos) {
-        scrollViewport(pos);
-        scrollAncestors(pos);
+        scrollViewport(pos, edgeSize, maxSpeed);
+        scrollAncestors(pos, edgeSize, maxSpeed);
       }
       rafRef.current = requestAnimationFrame(tick);
     };
 
     rafRef.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafRef.current);
-  }, [isDragging, getPointerPosition]);
+  }, [isDragging, edgeSize, maxSpeed]);
 }
 
 function edgeDelta(
@@ -44,19 +48,19 @@ function edgeDelta(
   return 0;
 }
 
-function scrollViewport(pos: { x: number; y: number }) {
+function scrollViewport(pos: { x: number; y: number }, edgeSize: number, maxSpeed: number) {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
 
-  const dx = edgeDelta(pos.x, vw, AUTO_SCROLL_EDGE_SIZE, AUTO_SCROLL_MAX_SPEED);
-  const dy = edgeDelta(pos.y, vh, AUTO_SCROLL_EDGE_SIZE, AUTO_SCROLL_MAX_SPEED);
+  const dx = edgeDelta(pos.x, vw, edgeSize, maxSpeed);
+  const dy = edgeDelta(pos.y, vh, edgeSize, maxSpeed);
 
   if (dx !== 0 || dy !== 0) {
     window.scrollBy(dx, dy);
   }
 }
 
-function scrollAncestors(pos: { x: number; y: number }) {
+function scrollAncestors(pos: { x: number; y: number }, edgeSize: number, maxSpeed: number) {
   let el = document.elementFromPoint(pos.x, pos.y) as HTMLElement | null;
 
   while (el && el !== document.documentElement) {
@@ -65,8 +69,8 @@ function scrollAncestors(pos: { x: number; y: number }) {
       const localX = pos.x - rect.left;
       const localY = pos.y - rect.top;
 
-      const dx = edgeDelta(localX, rect.width, AUTO_SCROLL_EDGE_SIZE, AUTO_SCROLL_MAX_SPEED);
-      const dy = edgeDelta(localY, rect.height, AUTO_SCROLL_EDGE_SIZE, AUTO_SCROLL_MAX_SPEED);
+      const dx = edgeDelta(localX, rect.width, edgeSize, maxSpeed);
+      const dy = edgeDelta(localY, rect.height, edgeSize, maxSpeed);
 
       if (dx !== 0 || dy !== 0) {
         el.scrollBy(dx, dy);

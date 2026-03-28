@@ -1,5 +1,14 @@
 import type { DashboardAction, DashboardState, LockType, WidgetState } from "../types.ts";
 
+/**
+ * Normalize order values to be sequential (0, 1, 2, ...) to prevent drift.
+ * Visible widgets are ordered first (by their current order), followed by hidden widgets.
+ */
+function normalizeOrder(widgets: WidgetState[]): WidgetState[] {
+  const sorted = [...widgets].sort((a, b) => a.order - b.order);
+  return sorted.map((w, i) => (w.order === i ? w : { ...w, order: i }));
+}
+
 function lockField(lockType: LockType): "lockPosition" | "lockResize" | "lockRemove" {
   switch (lockType) {
     case "position": return "lockPosition";
@@ -83,7 +92,7 @@ export function dashboardReducer(
         return { ...w, order: nextOrder++ };
       });
 
-      return { ...state, widgets: reordered };
+      return { ...state, widgets: normalizeOrder(reordered) };
     }
 
     case "SET_CONTAINER_WIDTH":
@@ -100,7 +109,7 @@ export function dashboardReducer(
       };
 
     case "BATCH_UPDATE":
-      return { ...state, widgets: action.widgets };
+      return { ...state, widgets: normalizeOrder(action.widgets) };
 
     case "UPDATE_WIDGET_CONFIG":
       return {
@@ -123,6 +132,22 @@ export function dashboardReducer(
         ),
       };
     }
+
+    case "SHOW_WIDGET":
+      return {
+        ...state,
+        widgets: state.widgets.map((w) =>
+          w.id === action.id ? { ...w, visible: true } : w
+        ),
+      };
+
+    case "HIDE_WIDGET":
+      return {
+        ...state,
+        widgets: state.widgets.map((w) =>
+          w.id === action.id ? { ...w, visible: false } : w
+        ),
+      };
 
     default:
       return state;

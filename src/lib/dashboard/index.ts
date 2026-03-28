@@ -3,7 +3,9 @@ export type {
   LockType,
   WidgetDefinition,
   WidgetState,
+  DashboardError,
   DashboardState,
+  DashboardStateInput,
   WidgetLayout,
   ComputedLayout,
   DragState,
@@ -18,7 +20,12 @@ export type {
   DashboardContextValue,
   SerializedDashboard,
   ResponsiveBreakpoints,
+  DragConfig,
 } from "./types.ts";
+
+// Re-export CommittedOperation so consumers can type onDragEnd callbacks
+// without reaching into the engine-entry.
+export type { CommittedOperation } from "./engine/types.ts";
 
 // ── Constants ──────────────────────────────────────────────────────────────
 export {
@@ -41,4 +48,6 @@ export { getResponsiveColumns } from "./layout/responsive-columns.ts";
 export {
   serializeDashboard,
   deserializeDashboard,
+  validateSerializedDashboard,
+  CURRENT_SERIALIZATION_VERSION,
 } from "./persistence/serialize.ts";
