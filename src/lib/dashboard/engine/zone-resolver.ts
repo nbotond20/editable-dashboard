@@ -8,7 +8,8 @@ export function resolveZone(
   gap: number,
   maxColumns: number,
   containerWidth: number,
-  sourceId: string
+  sourceId: string,
+  currentWidgetSide?: "left" | "right",
 ): DropZone {
   const colWidth =
     maxColumns > 1
@@ -56,7 +57,18 @@ export function resolveZone(
         pointer.y < iy + ih
       ) {
         const centerX = r.x + r.width / 2;
-        const side = pointer.x < centerX ? "left" : "right";
+        // Hysteresis: once a side is committed, require the cursor to cross
+        // well past center before flipping. This prevents trackpad tremor
+        // near the center from flickering the side every frame.
+        const margin = colWidth * 0.1;
+        let side: "left" | "right";
+        if (currentWidgetSide === "left") {
+          side = pointer.x > centerX + margin ? "right" : "left";
+        } else if (currentWidgetSide === "right") {
+          side = pointer.x < centerX - margin ? "left" : "right";
+        } else {
+          side = pointer.x < centerX ? "left" : "right";
+        }
         return { type: "widget", targetId: r.id, side };
       }
     }
