@@ -2,9 +2,8 @@
 
 A headless, zero-dependency React library for building fully customizable dashboard layouts with drag-and-drop reordering, dynamic resizing, and smart bin-packing.
 
-<!-- badges -->
-<!-- [![npm](https://img.shields.io/npm/v/editable-dashboard)](https://www.npmjs.com/package/editable-dashboard) -->
-<!-- [![bundle size](https://img.shields.io/bundlephobia/minzip/editable-dashboard)](https://bundlephobia.com/package/editable-dashboard) -->
+[![npm](https://img.shields.io/npm/v/@nbotond20/editable-dashboard)](https://www.npmjs.com/package/@nbotond20/editable-dashboard)
+[![bundle size](https://img.shields.io/bundlephobia/minzip/@nbotond20/editable-dashboard)](https://bundlephobia.com/package/@nbotond20/editable-dashboard)
 
 Demo: https://nbotond20.github.io/editable-dashboard/
 
@@ -21,6 +20,10 @@ Demo: https://nbotond20.github.io/editable-dashboard/
 - **Auto-measuring heights** -- widgets are measured via `ResizeObserver`; no fixed heights required
 - **Configurable columns** -- 1, 2, or 3 column layouts with adjustable gaps
 - **Fully typed** -- written in TypeScript with every type exported
+- **Widget locking** -- lock position, resize, or removal at the definition or per-instance level
+- **Undo/redo** -- built-in history with `Ctrl+Z` / `Ctrl+Y` keyboard shortcuts
+- **Keyboard drag** -- full keyboard navigation with arrow keys, Space, and Escape
+- **Tree-shakeable** -- marked `sideEffects: false`; import only what you use
 
 ---
 
@@ -29,14 +32,14 @@ Demo: https://nbotond20.github.io/editable-dashboard/
 ### Installation
 
 ```bash
-npm install editable-dashboard react react-dom
+npm install @nbotond20/editable-dashboard
 # or
-yarn add editable-dashboard react react-dom
+yarn add @nbotond20/editable-dashboard
 # or
-pnpm add editable-dashboard react react-dom
+pnpm add @nbotond20/editable-dashboard
 ```
 
-> **Peer dependencies:** React 18+ and ReactDOM 18+.
+> **Peer dependencies:** React 18+ (including React 19) and ReactDOM 18+.
 
 ### Minimal Example
 
@@ -46,7 +49,7 @@ import {
   useDashboard,
   type WidgetDefinition,
   type WidgetState,
-} from "editable-dashboard";
+} from "@nbotond20/editable-dashboard";
 
 // 1. Define your widget types
 const definitions: WidgetDefinition[] = [
@@ -178,8 +181,12 @@ The root context provider. All hooks must be called within its subtree.
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
 | `definitions` | `WidgetDefinition[]` | **(required)** | Catalog of available widget types. |
-| `maxColumns` | `number` | `2` | Number of grid columns (1, 2, or 3). |
+| `maxColumns` | `number` | `2` | Number of grid columns. |
 | `gap` | `number` | `16` | Gap in pixels between widgets. |
+| `maxWidgets` | `number` | -- | Maximum number of widgets allowed. |
+| `maxUndoDepth` | `number` | `50` | Maximum number of undo states to retain. |
+| `keyboardShortcuts` | `boolean` | `true` | Enable `Ctrl+Z` / `Ctrl+Y` for undo/redo. |
+| `canDrop` | `(sourceId, targetIndex, state) => boolean` | -- | Custom drop validation. Return `false` to prevent a drop. |
 | `children` | `ReactNode` | **(required)** | Child components. |
 
 **Uncontrolled mode** (default):
@@ -209,13 +216,20 @@ const {
   definitions,
   layout,
   actions,
+  canUndo,
+  canRedo,
+  phase,
   dragState,
+  getDragPosition,
   containerRef,
   measureRef,
   startDrag,
   updateDragPointer,
   endDrag,
-  getDragPosition,
+  getA11yProps,
+  handleKeyboardDrag,
+  isWidgetLockActive,
+  canAddWidget,
 } = useDashboard();
 ```
 
@@ -261,13 +275,15 @@ Stable, memoized action dispatchers.
 | Method | Signature | Description |
 |--------|-----------|-------------|
 | `addWidget` | `(widgetType: string, colSpan?: number, config?: Record<string, unknown>) => void` | Add a new widget. If `colSpan` is omitted, uses the definition's `defaultColSpan` (or 1). |
-| `removeWidget` | `(id: string) => void` | Remove a widget by ID. |
-| `toggleVisibility` | `(id: string) => void` | Toggle a widget between visible and hidden. |
-| `resizeWidget` | `(id: string, colSpan: number) => void` | Change a widget's column span. Clamped to `[1, maxColumns]`. |
+| `removeWidget` | `(id: string) => void` | Remove a widget by ID. Respects remove lock. |
+| `resizeWidget` | `(id: string, colSpan: number) => void` | Change a widget's column span. Clamped to `[1, maxColumns]`. Respects resize lock. |
 | `reorderWidgets` | `(fromIndex: number, toIndex: number) => void` | Move a widget from one position to another (indices into the visible, sorted list). Clears all `columnStart` hints. |
 | `setMaxColumns` | `(maxColumns: number) => void` | Change the column count. Widgets with a `colSpan` exceeding the new max are clamped. |
 | `batchUpdate` | `(widgets: WidgetState[]) => void` | Replace the entire widgets array. Used internally by the drag system for swaps and resizes. |
 | `updateWidgetConfig` | `(id: string, config: Record<string, unknown>) => void` | Shallow-merge into a widget's `config` object. |
+| `setWidgetLock` | `(id: string, lockType: LockType, locked: boolean) => void` | Set or clear a lock on a widget instance. |
+| `undo` | `() => void` | Undo the last undoable action. |
+| `redo` | `() => void` | Redo the last undone action. |
 
 #### `dragState: DragState`
 
@@ -279,24 +295,33 @@ The current drag state. Use this to render drag previews and ghosts.
 | `dropTargetIndex` | `number \| null` | The index where the widget would land if dropped now. |
 | `previewColSpan` | `number \| null` | If the drop would resize the dragged widget, this is the new span. |
 | `previewLayout` | `ComputedLayout \| null` | A full computed layout reflecting the tentative drop. Animate other widgets toward these positions for a live preview. |
+| `isLongPressing` | `boolean` | Whether a touch long-press is in progress (before drag activation). |
+| `longPressTargetId` | `string \| null` | Widget ID being long-pressed, or `null`. |
 
-#### Refs and Drag Functions
+#### Refs, Drag Functions, and Utilities
 
 | Name | Type | Description |
 |------|------|-------------|
-| `containerRef` | `RefObject<HTMLDivElement \| null>` | Attach to your grid container element. Used for width measurement and pointer coordinate mapping. |
+| `containerRef` | `Ref<HTMLDivElement>` | Attach to your grid container element. Used for width measurement and pointer coordinate mapping. |
 | `measureRef` | `(id: string) => (node: HTMLElement \| null) => void` | Returns a callback ref for a widget. Attach to each widget's DOM node to enable height measurement. |
-| `startDrag` | `(id: string, pointerId: number, initialPos: { x: number; y: number }, element: HTMLElement) => void` | Call from a `pointerdown` handler to begin a drag. |
+| `startDrag` | `(id, pointerId, initialPos, element, pointerType?) => void` | Call from a `pointerdown` handler to begin a drag. Respects position lock. |
 | `updateDragPointer` | `(pos: { x: number; y: number }) => void` | Manually update the pointer position (advanced use). |
-| `endDrag` | `() => void` | Programmatically end a drag without committing (the widget returns to its original position). |
-| `getDragPosition` | `() => { x: number; y: number } \| null` | Returns the dragged widget's current computed (x, y) position relative to the container, or `null` if not dragging. Useful for custom drag overlays. |
+| `endDrag` | `() => void` | Programmatically cancel an active drag. |
+| `getDragPosition` | `() => { x: number; y: number } \| null` | Returns the dragged widget's current position relative to the container, or `null` if not dragging. |
+| `getA11yProps` | `(widgetId: string) => DragHandleA11yProps` | Get ARIA accessibility attributes for a drag handle. |
+| `handleKeyboardDrag` | `(widgetId: string, e: React.KeyboardEvent) => void` | Handle keyboard events for keyboard-based dragging. Bind to the drag handle's `onKeyDown`. |
+| `isWidgetLockActive` | `(id: string, lockType: LockType) => boolean` | Check whether a specific lock is active for a widget (considering both instance and definition locks). |
+| `canAddWidget` | `() => boolean` | Check whether the maximum widget count has been reached. |
+| `canUndo` | `boolean` | Whether an undo operation is available. |
+| `canRedo` | `boolean` | Whether a redo operation is available. |
+| `phase` | `"idle" \| "pending" \| "dragging" \| "keyboard-dragging" \| "dropping"` | Current drag engine phase. |
 
 ---
 
 ### Serialization
 
 ```ts
-import { serializeDashboard, deserializeDashboard } from "editable-dashboard";
+import { serializeDashboard, deserializeDashboard } from "@nbotond20/editable-dashboard";
 ```
 
 #### `serializeDashboard(state: DashboardState): SerializedDashboard`
@@ -321,7 +346,7 @@ const restored = deserializeDashboard(raw, definitions);
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `version` | `number` | Schema version (currently `1`). |
+| `version` | `number` | Schema version (currently `2`). |
 | `widgets` | `WidgetState[]` | All widget instances. |
 | `maxColumns` | `number` | Column count. |
 | `gap` | `number` | Gap in pixels. |
@@ -331,7 +356,7 @@ const restored = deserializeDashboard(raw, definitions);
 ### Standalone Layout Function
 
 ```ts
-import { computeLayout } from "editable-dashboard";
+import { computeLayout } from "@nbotond20/editable-dashboard";
 ```
 
 #### `computeLayout(widgets, heights, containerWidth, maxColumns, gap): ComputedLayout`
@@ -350,16 +375,6 @@ Returns a `ComputedLayout` with `positions` and `totalHeight`.
 
 ---
 
-### `computeDropTarget`
-
-```ts
-import { computeDropTarget } from "editable-dashboard";
-```
-
-Low-level function that evaluates all possible drop positions for a dragged widget and returns the best candidate. Used internally by the drag system -- exposed for advanced use cases like custom drag implementations.
-
----
-
 ## Types
 
 ### `WidgetDefinition`
@@ -373,10 +388,9 @@ Describes a category/type of widget available in the catalog.
 | `defaultColSpan` | `number` | -- | Default column span when adding a new instance. |
 | `minColSpan` | `number?` | -- | Minimum allowed column span. |
 | `maxColSpan` | `number?` | -- | Maximum allowed column span. |
-| `locked` | `boolean?` | -- | Whether this widget type is locked (non-draggable) by default. |
-| `removable` | `boolean?` | -- | Whether this widget type can be removed. |
-| `hideable` | `boolean?` | -- | Whether this widget type can be hidden. |
-| `resizable` | `boolean?` | -- | Whether this widget type can be resized. |
+| `lockPosition` | `boolean?` | `false` | When `true`, all instances are locked from being dragged by default. Overridable per-instance. |
+| `lockResize` | `boolean?` | `false` | When `true`, all instances are locked from being resized by default. Overridable per-instance. |
+| `lockRemove` | `boolean?` | `false` | When `true`, all instances are locked from being removed by default. Overridable per-instance. |
 
 ### `WidgetState`
 
@@ -391,7 +405,9 @@ Represents a single widget instance on the dashboard.
 | `order` | `number` | Sort order (lower values appear first). |
 | `columnStart` | `number?` | Column hint -- forces the widget to start at a specific column. Set by column-shift drags; cleared on reorder. |
 | `config` | `Record<string, unknown>?` | Arbitrary per-widget configuration. |
-| `locked` | `boolean?` | Per-instance lock override. |
+| `lockPosition` | `boolean?` | Per-instance position lock override. Takes precedence over definition. |
+| `lockResize` | `boolean?` | Per-instance resize lock override. Takes precedence over definition. |
+| `lockRemove` | `boolean?` | Per-instance remove lock override. Takes precedence over definition. |
 
 ### `DashboardState`
 
@@ -465,7 +481,6 @@ Props passed to widget slot render functions.
 | `colSpan` | `number` | Current column span. |
 | `resize` | `(colSpan: number) => void` | Resize this widget. |
 | `remove` | `() => void` | Remove this widget. |
-| `toggleVisibility` | `() => void` | Toggle visibility. |
 
 ### `DashboardProviderProps`
 
@@ -483,13 +498,16 @@ The discriminated union of all reducer actions:
 type DashboardAction =
   | { type: "ADD_WIDGET"; widgetType: string; colSpan: number; config?: Record<string, unknown> }
   | { type: "REMOVE_WIDGET"; id: string }
-  | { type: "TOGGLE_VISIBILITY"; id: string }
   | { type: "RESIZE_WIDGET"; id: string; colSpan: number }
   | { type: "REORDER_WIDGETS"; fromIndex: number; toIndex: number }
   | { type: "SET_CONTAINER_WIDTH"; width: number }
   | { type: "SET_MAX_COLUMNS"; maxColumns: number }
   | { type: "BATCH_UPDATE"; widgets: WidgetState[] }
-  | { type: "UPDATE_WIDGET_CONFIG"; id: string; config: Record<string, unknown> };
+  | { type: "UPDATE_WIDGET_CONFIG"; id: string; config: Record<string, unknown> }
+  | { type: "SWAP_WIDGETS"; sourceId: string; targetId: string }
+  | { type: "SET_WIDGET_LOCK"; id: string; lockType: LockType; locked: boolean }
+  | { type: "UNDO" }
+  | { type: "REDO" };
 ```
 
 ### `DashboardActions`
@@ -614,7 +632,7 @@ Here is a step-by-step guide to building a custom animated grid using Framer Mot
 
 ```tsx
 import { motion, AnimatePresence, LayoutGroup } from "motion/react";
-import { useDashboard, type WidgetState } from "editable-dashboard";
+import { useDashboard, type WidgetState } from "@nbotond20/editable-dashboard";
 
 function DashboardGrid({ children }: {
   children: (widget: WidgetState, isDragging: boolean) => React.ReactNode;
@@ -689,7 +707,7 @@ function DashboardGrid({ children }: {
 ```tsx
 import { useCallback, useEffect, useRef } from "react";
 import { motion, useMotionValue, animate } from "motion/react";
-import { useDashboard, type WidgetState } from "editable-dashboard";
+import { useDashboard, type WidgetState } from "@nbotond20/editable-dashboard";
 
 const SPRING = { type: "spring" as const, stiffness: 300, damping: 30, mass: 0.8 };
 
@@ -812,7 +830,7 @@ import {
   DashboardProvider,
   type DashboardState,
   type WidgetDefinition,
-} from "editable-dashboard";
+} from "@nbotond20/editable-dashboard";
 
 function App() {
   const [dashState, setDashState] = useState<DashboardState>({
@@ -929,7 +947,7 @@ import {
   deserializeDashboard,
   useDashboard,
   type DashboardState,
-} from "editable-dashboard";
+} from "@nbotond20/editable-dashboard";
 
 function usePersistence() {
   const { state } = useDashboard();
@@ -993,12 +1011,39 @@ function App() {
 
 ---
 
+## Advanced: Engine Subpath
+
+For power users who need access to the drag engine internals, undo history utilities, or internal hooks, use the `/engine` subpath:
+
+```ts
+import {
+  DragEngine,
+  useAutoScroll,
+  useDragAnnouncements,
+  createUndoHistory,
+  pushState,
+  undo,
+  redo,
+  canUndo,
+  canRedo,
+  type EngineDragEvent,
+  type DragPhase,
+  type DragEngineConfig,
+  type UndoHistory,
+} from "@nbotond20/editable-dashboard/engine";
+```
+
+This subpath re-exports everything from the main entry plus the advanced APIs. Use this when building custom React integrations, non-React wrappers, or for direct engine control.
+
+---
+
 ## TypeScript
 
 The library is written in TypeScript and exports all types. Key types to import:
 
 ```ts
 import type {
+  LockType,
   WidgetDefinition,
   WidgetState,
   DashboardState,
@@ -1008,12 +1053,14 @@ import type {
   DropTarget,
   DashboardAction,
   DashboardActions,
+  DragHandleA11yProps,
   DragHandleProps,
   WidgetSlotRenderProps,
   DashboardProviderProps,
   DashboardContextValue,
   SerializedDashboard,
-} from "editable-dashboard";
+  ResponsiveBreakpoints,
+} from "@nbotond20/editable-dashboard";
 ```
 
 All action dispatchers, refs, and the hook return type are fully typed. No `any` types are used.

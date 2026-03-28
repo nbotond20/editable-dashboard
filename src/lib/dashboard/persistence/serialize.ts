@@ -7,6 +7,15 @@ import type {
 
 const CURRENT_VERSION = 2;
 
+/**
+ * Convert a {@link DashboardState} into a JSON-serializable snapshot.
+ *
+ * Strips the transient `containerWidth` field and stamps the current schema version.
+ * The result can be stored in localStorage, a database, or sent over the network.
+ *
+ * @param state - The dashboard state to serialize.
+ * @returns A {@link SerializedDashboard} safe for `JSON.stringify`.
+ */
 export function serializeDashboard(
   state: DashboardState
 ): SerializedDashboard {
@@ -18,6 +27,18 @@ export function serializeDashboard(
   };
 }
 
+/**
+ * Restore a {@link DashboardState} from a serialized snapshot.
+ *
+ * - Widgets whose `type` has no matching definition are silently dropped.
+ * - Supports schema version 1 (migrates `locked` → `lockPosition`) and version 2.
+ * - Throws if the `version` field is unsupported.
+ *
+ * @param data - A previously serialized dashboard snapshot.
+ * @param definitions - Current widget definitions to validate against.
+ * @returns A fully hydrated {@link DashboardState} with `containerWidth` set to 0.
+ * @throws {Error} If `data.version` is neither 1 nor 2.
+ */
 export function deserializeDashboard(
   data: SerializedDashboard,
   definitions: WidgetDefinition[]

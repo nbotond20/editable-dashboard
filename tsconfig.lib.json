@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "useDefineForClassFields": true,
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "declarationDir": "./dist/lib",
+    "jsx": "react-jsx",
+    "strict": true,
+    "erasableSyntaxOnly": true
+  },
+  "include": ["src/lib/dashboard/**/*"],
+  "exclude": ["src/lib/dashboard/**/__tests__/**"]
+}

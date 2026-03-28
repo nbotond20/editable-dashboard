@@ -94,13 +94,11 @@ export function findColumnPinInsertionIndex(
   targetColumn: number,
   pointerY: number | undefined,
   maxColumns: number,
-  containerWidth: number,
   gap: number,
   heights: ReadonlyMap<string, number>,
 ): number {
   if (pointerY == null) return remainingWidgets.length;
 
-  const colWidth = (containerWidth - gap * (maxColumns - 1)) / maxColumns;
   const columnHeights = new Array(maxColumns).fill(0);
 
   for (let i = 0; i < remainingWidgets.length; i++) {
@@ -385,7 +383,7 @@ export function solvePreviewLayout(
       };
       const insertIdx = findColumnPinInsertionIndex(
         visibleSorted, intent.column, intent.pointerY,
-        config.maxColumns, containerWidth, config.gap, heights,
+        config.maxColumns, config.gap, heights,
       );
       const reordered = [...visibleSorted];
       reordered.splice(insertIdx, 0, pinnedSource);

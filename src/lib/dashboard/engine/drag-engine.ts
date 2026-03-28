@@ -949,7 +949,7 @@ export class DragEngine {
         const cfg = this.layoutConfig();
         const insertIdx = findColumnPinInsertionIndex(
           remaining, intent.column, intent.pointerY,
-          cfg.maxColumns, this.containerWidth, cfg.gap, this.heights,
+          cfg.maxColumns, cfg.gap, this.heights,
         );
         return {
           type: "column-pin",

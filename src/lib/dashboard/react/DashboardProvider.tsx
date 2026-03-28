@@ -18,7 +18,18 @@ import { useMeasurementBridge } from "./use-measurement-bridge.ts";
 import { useAutoScroll } from "../drag/use-auto-scroll.ts";
 import { useDragAnnouncements } from "../drag/use-drag-announcements.ts";
 
-export function DashboardProviderV2(props: DashboardProviderProps) {
+/**
+ * Root provider component for the dashboard.
+ *
+ * Manages the drag engine, pointer/keyboard adapters, widget measurement,
+ * undo/redo history, auto-scroll, and accessibility announcements.
+ *
+ * Wrap your grid UI in this provider, then use {@link useDashboard} to access
+ * state, layout, and actions from any descendant component.
+ *
+ * @see {@link DashboardProviderProps} for configuration options.
+ */
+export function DashboardProvider(props: DashboardProviderProps) {
   const {
     definitions,
     maxColumns = DEFAULT_MAX_COLUMNS,

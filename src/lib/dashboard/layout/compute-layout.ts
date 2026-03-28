@@ -2,6 +2,24 @@ import type { WidgetState, ComputedLayout, WidgetLayout } from "../types.ts";
 import type { LayoutOptions } from "../engine/types.ts";
 import { DEFAULT_WIDGET_HEIGHT } from "../constants.ts";
 
+/**
+ * Run the bin-packing layout algorithm to compute widget positions.
+ *
+ * Iterates over visible widgets (sorted by `order`) and greedily places each
+ * one in the column with the lowest current height, producing a masonry-style
+ * layout. Widgets with a `columnStart` hint are pinned to that column.
+ *
+ * Can be used outside of React for server-side rendering, testing, or
+ * generating preview thumbnails.
+ *
+ * @param widgets - Widget instances to lay out.
+ * @param heights - Known heights for each widget ID. Missing entries use `DEFAULT_WIDGET_HEIGHT` (200px).
+ * @param containerWidth - Container width in pixels.
+ * @param maxColumns - Number of grid columns.
+ * @param gap - Gap between widgets in pixels.
+ * @param options - Advanced options for phantom elements and exclusions (used internally by the drag engine).
+ * @returns A {@link ComputedLayout} with `positions` and `totalHeight`.
+ */
 export function computeLayout(
   widgets: WidgetState[],
   heights: Map<string, number>,

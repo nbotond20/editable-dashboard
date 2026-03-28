@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { applyOperation } from "../operation-applier.ts";
-import type { WidgetState } from "../../types.ts";
+import type { DashboardState, WidgetState } from "../../types.ts";
 
 function createState(
   widgets: Array<{
