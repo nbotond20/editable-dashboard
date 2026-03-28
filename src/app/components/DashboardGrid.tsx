@@ -12,7 +12,6 @@ interface WidgetSlotCallbackProps {
   colSpan: number;
   resize: (colSpan: number) => void;
   remove: () => void;
-  toggleVisibility: () => void;
 }
 
 interface DashboardGridProps {
@@ -26,7 +25,7 @@ interface DashboardGridProps {
 }
 
 export function DashboardGrid({ className, style, ghostClassName, children }: DashboardGridProps) {
-  const { state, layout, dragState, containerRef } = useDashboard();
+  const { state, layout, dragState, containerRef, phase } = useDashboard();
 
   const visibleWidgets = useMemo(
     () =>
@@ -48,6 +47,11 @@ export function DashboardGrid({ className, style, ghostClassName, children }: Da
       <div
         ref={containerRef}
         className={className}
+        data-testid="dashboard-grid"
+        data-phase={phase}
+        data-max-columns={state.maxColumns}
+        data-gap={state.gap}
+        data-widget-count={visibleWidgets.length}
         style={{
           position: "relative",
           height: containerHeight > 0 ? containerHeight : "auto",
@@ -60,6 +64,11 @@ export function DashboardGrid({ className, style, ghostClassName, children }: Da
             <motion.div
               key="drop-ghost"
               className={ghostClassName ?? "dashboard-drop-ghost"}
+              data-testid="drop-ghost"
+              data-ghost-x={ghostPos.x}
+              data-ghost-y={ghostPos.y}
+              data-ghost-width={ghostPos.width}
+              data-ghost-height={ghostPos.height}
               initial={{ opacity: 0 }}
               animate={{
                 opacity: 1,

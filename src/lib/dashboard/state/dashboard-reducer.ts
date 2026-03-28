@@ -1,4 +1,12 @@
-import type { DashboardAction, DashboardState, WidgetState } from "../types.ts";
+import type { DashboardAction, DashboardState, LockType, WidgetState } from "../types.ts";
+
+function lockField(lockType: LockType): "lockPosition" | "lockResize" | "lockRemove" {
+  switch (lockType) {
+    case "position": return "lockPosition";
+    case "resize": return "lockResize";
+    case "remove": return "lockRemove";
+  }
+}
 
 export function dashboardReducer(
   state: DashboardState,
@@ -27,23 +35,29 @@ export function dashboardReducer(
         widgets: state.widgets.filter((w) => w.id !== action.id),
       };
 
-    case "TOGGLE_VISIBILITY":
-      return {
-        ...state,
-        widgets: state.widgets.map((w) =>
-          w.id === action.id ? { ...w, visible: !w.visible } : w
-        ),
-      };
-
     case "RESIZE_WIDGET":
       return {
         ...state,
         widgets: state.widgets.map((w) =>
           w.id === action.id
-            ? { ...w, colSpan: Math.max(1, Math.min(action.colSpan, state.maxColumns)) }
+            ? { ...w, colSpan: Math.max(1, Math.min(action.colSpan, state.maxColumns)), columnStart: undefined }
             : w
         ),
       };
+
+    case "SWAP_WIDGETS": {
+      const sourceWidget = state.widgets.find(w => w.id === action.sourceId);
+      const targetWidget = state.widgets.find(w => w.id === action.targetId);
+      if (!sourceWidget || !targetWidget) return state;
+      return {
+        ...state,
+        widgets: state.widgets.map(w => {
+          if (w.id === action.sourceId) return { ...w, order: targetWidget.order, columnStart: undefined };
+          if (w.id === action.targetId) return { ...w, order: sourceWidget.order, columnStart: undefined };
+          return w;
+        }),
+      };
+    }
 
     case "REORDER_WIDGETS": {
       const sorted = [...state.widgets].sort((a, b) => a.order - b.order);
@@ -59,9 +73,14 @@ export function dashboardReducer(
       let nextOrder = visible.length;
       const reordered = state.widgets.map((w) => {
         if (orderMap.has(w.id)) {
-          return { ...w, order: orderMap.get(w.id)!, columnStart: undefined };
+          const isMovedWidget = w.id === movedWidget.id;
+          return {
+            ...w,
+            order: orderMap.get(w.id)!,
+            ...(isMovedWidget ? { columnStart: undefined } : {}),
+          };
         }
-        return { ...w, order: nextOrder++, columnStart: undefined };
+        return { ...w, order: nextOrder++ };
       });
 
       return { ...state, widgets: reordered };
@@ -93,21 +112,17 @@ export function dashboardReducer(
         ),
       };
 
-    case "LOCK_WIDGET":
+    case "SET_WIDGET_LOCK": {
+      const field = lockField(action.lockType);
       return {
         ...state,
         widgets: state.widgets.map((w) =>
-          w.id === action.id ? { ...w, locked: true } : w
+          w.id === action.id
+            ? { ...w, [field]: action.locked || undefined }
+            : w
         ),
       };
-
-    case "UNLOCK_WIDGET":
-      return {
-        ...state,
-        widgets: state.widgets.map((w) =>
-          w.id === action.id ? { ...w, locked: undefined } : w
-        ),
-      };
+    }
 
     default:
       return state;

@@ -13,13 +13,11 @@ import {
 
 const DEFAULT_MAX_UNDO_DEPTH = 50;
 
-/** Action types that represent user intent and should be recorded in undo history. */
 const UNDOABLE_ACTIONS: ReadonlySet<DashboardAction["type"]> = new Set([
   "ADD_WIDGET",
   "REMOVE_WIDGET",
   "REORDER_WIDGETS",
   "RESIZE_WIDGET",
-  "TOGGLE_VISIBILITY",
   "BATCH_UPDATE",
   "SET_MAX_COLUMNS",
 ]);

@@ -4,12 +4,30 @@ import type {
   DashboardActions,
   DashboardState,
   WidgetDefinition,
+  LockType,
 } from "../types.ts";
 
 export const DashboardContext = createContext<DashboardContextValue | null>(
   null
 );
 
+/**
+ * Access the full dashboard context.
+ *
+ * Must be called inside a `<DashboardProvider>`. Returns state, layout,
+ * actions, drag state, refs, and interaction handlers.
+ *
+ * @returns The {@link DashboardContextValue} for the nearest provider.
+ * @throws {Error} If called outside of a `<DashboardProvider>`.
+ *
+ * @example
+ * ```tsx
+ * function MyGrid() {
+ *   const { state, layout, actions, containerRef, measureRef } = useDashboard();
+ *   // ...
+ * }
+ * ```
+ */
 export function useDashboard() {
   const ctx = useContext(DashboardContext);
   if (!ctx)
@@ -17,30 +35,26 @@ export function useDashboard() {
   return ctx;
 }
 
-/** Resolve whether a widget is locked by checking runtime state then definition. */
-function isLocked(
-  id: string,
-  state: DashboardState,
-  definitions: WidgetDefinition[]
-): boolean {
-  const widget = state.widgets.find((w) => w.id === id);
-  if (widget?.locked != null) return widget.locked;
-  if (!widget) return false;
-  const def = definitions.find((d) => d.type === widget.type);
-  return def?.locked === true;
+function lockField(lockType: LockType): "lockPosition" | "lockResize" | "lockRemove" {
+  switch (lockType) {
+    case "position": return "lockPosition";
+    case "resize": return "lockResize";
+    case "remove": return "lockRemove";
+  }
 }
 
-/** Look up a definition-level constraint for a widget. */
-function getDefConstraint(
+export function isLockActive(
   id: string,
-  field: "removable" | "hideable" | "resizable",
+  lockType: LockType,
   state: DashboardState,
   definitions: WidgetDefinition[]
 ): boolean {
   const widget = state.widgets.find((w) => w.id === id);
-  if (!widget) return true;
+  if (!widget) return false;
+  const field = lockField(lockType);
+  if (widget[field] != null) return widget[field]!;
   const def = definitions.find((d) => d.type === widget.type);
-  return def?.[field] !== false;
+  return def?.[field] === true;
 }
 
 export interface UseActionsOptions {
@@ -65,23 +79,15 @@ export function useActions(opts: UseActionsOptions): DashboardActions {
 
   const removeWidget = useCallback(
     (id: string) => {
-      if (!getDefConstraint(id, "removable", getState(), definitions)) return;
+      if (isLockActive(id, "remove", getState(), definitions)) return;
       dispatch({ type: "REMOVE_WIDGET", id });
-    },
-    [dispatch, definitions, getState]
-  );
-
-  const toggleVisibility = useCallback(
-    (id: string) => {
-      if (!getDefConstraint(id, "hideable", getState(), definitions)) return;
-      dispatch({ type: "TOGGLE_VISIBILITY", id });
     },
     [dispatch, definitions, getState]
   );
 
   const resizeWidget = useCallback(
     (id: string, colSpan: number) => {
-      if (!getDefConstraint(id, "resizable", getState(), definitions)) return;
+      if (isLockActive(id, "resize", getState(), definitions)) return;
       dispatch({ type: "RESIZE_WIDGET", id, colSpan });
     },
     [dispatch, definitions, getState]
@@ -95,8 +101,8 @@ export function useActions(opts: UseActionsOptions): DashboardActions {
         .sort((a, b) => a.order - b.order);
       const source = visible[fromIndex];
       const target = visible[toIndex];
-      if (source && isLocked(source.id, state, definitions)) return;
-      if (target && isLocked(target.id, state, definitions)) return;
+      if (source && isLockActive(source.id, "position", state, definitions)) return;
+      if (target && isLockActive(target.id, "position", state, definitions)) return;
       dispatch({ type: "REORDER_WIDGETS", fromIndex, toIndex });
     },
     [dispatch, definitions, getState]
@@ -119,13 +125,9 @@ export function useActions(opts: UseActionsOptions): DashboardActions {
     [dispatch]
   );
 
-  const lockWidget = useCallback(
-    (id: string) => dispatch({ type: "LOCK_WIDGET", id }),
-    [dispatch]
-  );
-
-  const unlockWidget = useCallback(
-    (id: string) => dispatch({ type: "UNLOCK_WIDGET", id }),
+  const setWidgetLock = useCallback(
+    (id: string, lockType: LockType, locked: boolean) =>
+      dispatch({ type: "SET_WIDGET_LOCK", id, lockType, locked }),
     [dispatch]
   );
 
@@ -137,17 +139,15 @@ export function useActions(opts: UseActionsOptions): DashboardActions {
     () => ({
       addWidget,
       removeWidget,
-      toggleVisibility,
       resizeWidget,
       reorderWidgets,
       setMaxColumns,
       batchUpdate,
       updateWidgetConfig,
-      lockWidget,
-      unlockWidget,
+      setWidgetLock,
       undo,
       redo,
     }),
-    [addWidget, removeWidget, toggleVisibility, resizeWidget, reorderWidgets, setMaxColumns, batchUpdate, updateWidgetConfig, lockWidget, unlockWidget, undo, redo]
+    [addWidget, removeWidget, resizeWidget, reorderWidgets, setMaxColumns, batchUpdate, updateWidgetConfig, setWidgetLock, undo, redo]
   );
 }
