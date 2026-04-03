@@ -89,6 +89,8 @@ export class DragEngine {
   private pendingZone: DropZone | null = null;
   private pendingZoneFrames = 0;
   private lastZonePointerPos: Point | null = null;
+  private sideCollapsed = false;
+  private intentGraceStart: number | null = null;
 
   private baseLayout: ComputedLayout = { positions: new Map(), totalHeight: 0 };
   private dragLayout: ComputedLayout | null = null;
@@ -833,6 +835,8 @@ export class DragEngine {
           this.lastZonePointerPos = null;
           this.pendingZone = null;
           this.pendingZoneFrames = 0;
+          this.sideCollapsed = false;
+          this.intentGraceStart = null;
         }
       } else {
         this.pendingZone = computedZone;
@@ -846,6 +850,8 @@ export class DragEngine {
           this.lastZonePointerPos = null;
           this.pendingZone = null;
           this.pendingZoneFrames = 0;
+          this.sideCollapsed = false;
+          this.intentGraceStart = null;
         }
       }
     } else {
@@ -866,8 +872,6 @@ export class DragEngine {
     // We track the position where the cursor first "settled" in this zone.
     // If it drifts more than 20px from that spot, it's real movement (not
     // hand tremor) so we restart the dwell timer from the new position.
-    // This lets tremor (±5px jitter around one spot) accumulate dwell while
-    // a slow drag through a zone correctly resets it.
     const pointerPos = this.phase.type === "dragging" ? this.phase.pointerPos : null;
     if (pointerPos && this.lastZonePointerPos) {
       const drift = distance(pointerPos, this.lastZonePointerPos);
@@ -884,9 +888,12 @@ export class DragEngine {
     const source = state.widgets.find((w) => w.id === sourceId);
     if (!source) return;
 
-    // When the cursor is clearly on a side of the target widget (outer ~30%),
-    // the user intends auto-resize, not swap.  Collapse the resize dwell
-    // threshold down to swapDwellMs so the swap-only window is skipped.
+    // When the cursor is clearly on a side of the target widget, the user
+    // intends auto-resize, not swap.  Collapse the resize dwell threshold
+    // down to swapDwellMs so the swap-only window is skipped.
+    // Hysteresis: once the cursor enters the side region (sideStrength > 0.2),
+    // require it to drop below 0.1 before leaving side mode.  This prevents
+    // intent flickering when the cursor oscillates near the boundary.
     let effectiveResizeDwellMs = this.config.resizeDwellMs;
     if (
       this.currentZone.type === "widget" &&
@@ -900,7 +907,16 @@ export class DragEngine {
         const sideStrength = halfWidth > 0
           ? Math.abs(this.phase.pointerPos.x - centerX) / halfWidth
           : 0;
-        if (sideStrength > 0.2) {
+        if (this.sideCollapsed) {
+          if (sideStrength < 0.1) {
+            this.sideCollapsed = false;
+          }
+        } else {
+          if (sideStrength > 0.2) {
+            this.sideCollapsed = true;
+          }
+        }
+        if (this.sideCollapsed) {
           effectiveResizeDwellMs = this.config.swapDwellMs;
         }
       }
@@ -914,6 +930,25 @@ export class DragEngine {
       canDrop: this.config.canDrop,
       getWidgetConstraints: this.config.getWidgetConstraints,
     });
+
+    // Grace period: when intent reverts to "none" after being committed,
+    // keep the old preview briefly (100ms) to avoid flickering from
+    // drift-based dwell resets during small wiggles within a zone.
+    if (
+      newIntent.type === "none" &&
+      this.currentIntent != null &&
+      this.currentIntent.type !== "none"
+    ) {
+      if (this.intentGraceStart === null) {
+        this.intentGraceStart = timestamp;
+      }
+      if (timestamp - this.intentGraceStart < 100) {
+        return;
+      }
+      this.intentGraceStart = null;
+    } else {
+      this.intentGraceStart = null;
+    }
 
     if (newIntent.type === "column-pin" && this.phase.type === "dragging") {
       newIntent = { ...newIntent, pointerY: this.phase.pointerPos.y };
@@ -1032,6 +1067,8 @@ export class DragEngine {
     this.pendingZone = null;
     this.pendingZoneFrames = 0;
     this.lastZonePointerPos = null;
+    this.sideCollapsed = false;
+    this.intentGraceStart = null;
   }
 
   private recomputeBaseLayout(): void {

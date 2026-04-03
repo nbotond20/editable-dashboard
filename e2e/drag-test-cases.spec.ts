@@ -709,3 +709,11 @@ test("case 78: swap B↔C twice then auto-resize C →| A> (stale columnStart)",
   await dragByIdToSide(page, "c", "a", "right");
   await assertLayout(page, [["a", "c"], ["b"]]);
 });
+
+// ── 3-col: A A B / C D E — auto-resize (test 79) ──────────────
+
+test("case 79: E ->| A> (auto-resize right)", async ({ page }) => {
+  await setupDashboard(page, ["A A B", "C D E"]);
+  await dragByIdToSide(page, "e", "a", "right");
+  await assertLayout(page, [["a", "e", "b"], ["c", "d"]]);
+});

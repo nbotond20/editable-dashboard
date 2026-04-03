@@ -23,10 +23,10 @@ export const AUTO_SCROLL_EDGE_SIZE = 60;
 export const AUTO_SCROLL_MAX_SPEED = 15;
 
 /** Dwell time in milliseconds before a cross-row swap activates. */
-export const SWAP_DWELL_MS = 200;
+export const SWAP_DWELL_MS = 0;
 
 /** Dwell time in milliseconds before an auto-resize operation activates. */
-export const RESIZE_DWELL_MS = 700;
+export const RESIZE_DWELL_MS = 600;
 
 /** Duration of the drop animation in milliseconds. */
 export const DROP_ANIMATION_DURATION = 250;

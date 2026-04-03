@@ -271,3 +271,15 @@ Result:
 A C
 B D
 E
+
+### 19
+
+Start:
+A A B
+C D E
+
+E ->| A>
+
+Result:
+A E B
+C D
