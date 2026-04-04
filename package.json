@@ -37,7 +37,7 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:debug": "playwright test --debug",
-    "prepublishOnly": "pnpm run build:lib"
+    "prepublishOnly": "npm run build:lib"
   },
   "keywords": [
     "react",
