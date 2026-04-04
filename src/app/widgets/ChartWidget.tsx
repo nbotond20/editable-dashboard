@@ -1,3 +1,5 @@
+import { memo } from "react";
+
 const data = [
   { label: "Mon", value: 65 },
   { label: "Tue", value: 45 },
@@ -10,7 +12,7 @@ const data = [
 
 const maxValue = Math.max(...data.map((d) => d.value));
 
-export function ChartWidget() {
+export const ChartWidget = memo(function ChartWidget() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <span className="dash-label-emphasis">Weekly Activity</span>
@@ -29,4 +31,4 @@ export function ChartWidget() {
       </div>
     </div>
   );
-}
+});

@@ -1,4 +1,4 @@
-import type { DashboardAction, DashboardState, ComputedLayout } from "../types.ts";
+import type { DashboardAction, DashboardState, ComputedLayout, WidgetState } from "../types.ts";
 import type {
   DragEvent,
   DragPhase,
@@ -111,6 +111,10 @@ export class DragEngine {
   private cachedSnapshot: DragEngineSnapshot | null = null;
 
   private lastTimestamp = 0;
+
+  private widgetById = new Map<string, WidgetState>();
+  private visibleSortedCache: WidgetState[] = [];
+  private lastProcessedPointerPos: Point | null = null;
 
   constructor(
     initialState: DashboardState,
@@ -284,6 +288,10 @@ export class DragEngine {
     return this.history.present;
   }
 
+  getWidgetById = (id: string): WidgetState | undefined => {
+    return this.widgetById.get(id);
+  }
+
   updateConfig(partial: Partial<DragEngineConfig>): void {
     this.config = { ...this.config, ...partial };
     this.cachedSnapshot = null;
@@ -414,7 +422,7 @@ export class DragEngine {
     if (this.phase.type !== "idle") return;
     if (this.config.isPositionLocked(event.id)) return;
 
-    const visible = getVisibleSorted(this.history.present.widgets);
+    const visible = this.visibleSortedCache;
     const idx = visible.findIndex((w) => w.id === event.id);
     if (idx === -1) return;
 
@@ -439,7 +447,7 @@ export class DragEngine {
     if (this.phase.type !== "keyboard-dragging") return;
     this.lastTimestamp = event.timestamp;
 
-    const visible = getVisibleSorted(this.history.present.widgets);
+    const visible = this.visibleSortedCache;
     const phase = this.phase;
 
     if (event.direction === "up" && phase.currentIndex > 0) {
@@ -487,7 +495,7 @@ export class DragEngine {
     if (this.phase.type !== "keyboard-dragging") return;
 
     const phase = this.phase;
-    const visible = getVisibleSorted(this.history.present.widgets);
+    const visible = this.visibleSortedCache;
 
     const hasReorder = phase.currentIndex !== phase.originalIndex;
     const hasResize = phase.currentColSpan !== phase.originalColSpan;
@@ -589,8 +597,7 @@ export class DragEngine {
     if (this.phase.type !== "idle") return;
     if (this.config.isResizeLocked(event.id)) return;
 
-    const state = this.history.present;
-    const widget = state.widgets.find((w) => w.id === event.id);
+    const widget = this.widgetById.get(event.id);
     if (!widget) return;
 
     const constraints = this.config.getWidgetConstraints(event.id);
@@ -612,6 +619,7 @@ export class DragEngine {
       newSpan,
     };
 
+    const state = this.history.present;
     let newState = applyOperation(state, committed);
     if (newState !== state) {
       const cfg = this.layoutConfig();
@@ -674,9 +682,8 @@ export class DragEngine {
     committed: Extract<CommittedOperation, { type: "swap" }>,
   ): DashboardState {
     const cfg = this.layoutConfig();
-    const preSwapWidgets = this.history.present.widgets;
-    const preSrc = preSwapWidgets.find(w => w.id === committed.sourceId);
-    const preTgt = preSwapWidgets.find(w => w.id === committed.targetId);
+    const preSrc = this.widgetById.get(committed.sourceId);
+    const preTgt = this.widgetById.get(committed.targetId);
     const srcCol = preSrc?.columnStart;
     const tgtCol = preTgt?.columnStart;
 
@@ -732,8 +739,8 @@ export class DragEngine {
   ): DashboardState {
     const cfg = this.layoutConfig();
     const preWidgets = this.history.present.widgets;
-    const preSrc = preWidgets.find(w => w.id === committed.sourceId);
-    const preTgt = preWidgets.find(w => w.id === committed.targetId);
+    const preSrc = this.widgetById.get(committed.sourceId);
+    const preTgt = this.widgetById.get(committed.targetId);
     const srcCol = preSrc?.columnStart;
     const tgtCol = preTgt?.columnStart;
 
@@ -883,79 +890,90 @@ export class DragEngine {
     if (this.phase.type !== "dragging") return;
 
     const state = this.history.present;
-    const visible = getVisibleSorted(state.widgets);
+    const visible = this.visibleSortedCache;
     const layout = this.dragLayout ?? this.baseLayout;
 
-    const currentWidgetSide =
-      this.currentZone?.type === "widget" ? this.currentZone.side : undefined;
+    const pointerPos = this.phase.pointerPos;
+    const pointerMoved =
+      !this.lastProcessedPointerPos ||
+      pointerPos.x !== this.lastProcessedPointerPos.x ||
+      pointerPos.y !== this.lastProcessedPointerPos.y;
 
-    const computedZone = resolveZone(
-      this.phase.pointerPos,
-      layout,
-      state.widgets,
-      state.gap,
-      state.maxColumns,
-      this.containerWidth,
-      this.phase.sourceId,
-      currentWidgetSide,
-    );
+    if (pointerMoved || this.pendingZone !== null) {
+      if (pointerMoved) {
+        this.lastProcessedPointerPos = { x: pointerPos.x, y: pointerPos.y };
+      }
 
-    if (!zonesEqual(computedZone, this.currentZone)) {
-      if (zonesEqual(computedZone, this.pendingZone)) {
-        this.pendingZoneFrames++;
-        if (this.pendingZoneFrames >= 2) {
-          this.currentZone = computedZone;
-          this.zoneEnteredAt = timestamp;
-          this.lastZonePointerPos = null;
-          this.pendingZone = null;
-          this.pendingZoneFrames = 0;
-          this.sideCollapsed = false;
-          this.intentGraceStart = null;
+      const currentWidgetSide =
+        this.currentZone?.type === "widget" ? this.currentZone.side : undefined;
+
+      const computedZone = resolveZone(
+        pointerPos,
+        layout,
+        state.widgets,
+        state.gap,
+        state.maxColumns,
+        this.containerWidth,
+        this.phase.sourceId,
+        currentWidgetSide,
+      );
+
+      if (!zonesEqual(computedZone, this.currentZone)) {
+        if (zonesEqual(computedZone, this.pendingZone)) {
+          this.pendingZoneFrames++;
+          if (this.pendingZoneFrames >= 2) {
+            this.currentZone = computedZone;
+            this.zoneEnteredAt = timestamp;
+            this.lastZonePointerPos = null;
+            this.pendingZone = null;
+            this.pendingZoneFrames = 0;
+            this.sideCollapsed = false;
+            this.intentGraceStart = null;
+          }
+        } else {
+          this.pendingZone = computedZone;
+          this.pendingZoneFrames = 1;
+          if (
+            this.currentZone === null ||
+            computedZone.type === "outside"
+          ) {
+            this.currentZone = computedZone;
+            this.zoneEnteredAt = timestamp;
+            this.lastZonePointerPos = null;
+            this.pendingZone = null;
+            this.pendingZoneFrames = 0;
+            this.sideCollapsed = false;
+            this.intentGraceStart = null;
+          }
         }
       } else {
-        this.pendingZone = computedZone;
-        this.pendingZoneFrames = 1;
+        this.pendingZone = null;
+        this.pendingZoneFrames = 0;
         if (
-          this.currentZone === null ||
-          computedZone.type === "outside"
+          computedZone.type === "widget" &&
+          this.currentZone?.type === "widget" &&
+          computedZone.side !== this.currentZone.side
         ) {
           this.currentZone = computedZone;
-          this.zoneEnteredAt = timestamp;
-          this.lastZonePointerPos = null;
-          this.pendingZone = null;
-          this.pendingZoneFrames = 0;
-          this.sideCollapsed = false;
-          this.intentGraceStart = null;
         }
       }
-    } else {
-      this.pendingZone = null;
-      this.pendingZoneFrames = 0;
-      if (
-        computedZone.type === "widget" &&
-        this.currentZone?.type === "widget" &&
-        computedZone.side !== this.currentZone.side
-      ) {
-        this.currentZone = computedZone;
+
+      if (this.lastZonePointerPos) {
+        const drift = distance(pointerPos, this.lastZonePointerPos);
+        if (drift > 20) {
+          this.zoneEnteredAt = timestamp;
+          this.lastZonePointerPos = { x: pointerPos.x, y: pointerPos.y };
+        }
+      } else {
+        this.lastZonePointerPos = { x: pointerPos.x, y: pointerPos.y };
       }
     }
 
     if (!this.currentZone) return;
 
-    const pointerPos = this.phase.type === "dragging" ? this.phase.pointerPos : null;
-    if (pointerPos && this.lastZonePointerPos) {
-      const drift = distance(pointerPos, this.lastZonePointerPos);
-      if (drift > 20) {
-        this.zoneEnteredAt = timestamp;
-        this.lastZonePointerPos = { x: pointerPos.x, y: pointerPos.y };
-      }
-    } else if (pointerPos) {
-      this.lastZonePointerPos = { x: pointerPos.x, y: pointerPos.y };
-    }
-
     const dwellMs = timestamp - this.zoneEnteredAt;
     const sourceId = (this.phase as Extract<DragPhase, { type: "dragging" }>).sourceId;
-    const source = state.widgets.find((w) => w.id === sourceId);
+    const source = this.widgetById.get(sourceId);
     if (!source) return;
 
     let effectiveResizeDwellMs = this.config.resizeDwellMs;
@@ -983,7 +1001,7 @@ export class DragEngine {
           }
         }
         if (this.sideCollapsed) {
-          const target = state.widgets.find((w) => w.id === targetId);
+          const target = this.widgetById.get(targetId);
           const spansExceedMax = target
             ? source.colSpan + target.colSpan > state.maxColumns
             : false;
@@ -1084,7 +1102,7 @@ export class DragEngine {
     sourceId: string,
     intent: OperationIntent,
   ): CommittedOperation {
-    const visible = getVisibleSorted(this.history.present.widgets);
+    const visible = this.visibleSortedCache;
     const sourceIdx = visible.findIndex((w) => w.id === sourceId);
 
     switch (intent.type) {
@@ -1141,6 +1159,7 @@ export class DragEngine {
     this.pendingZone = null;
     this.pendingZoneFrames = 0;
     this.lastZonePointerPos = null;
+    this.lastProcessedPointerPos = null;
     this.sideCollapsed = false;
     this.intentGraceStart = null;
   }
@@ -1171,6 +1190,8 @@ export class DragEngine {
       autoFillMode: cfg.autoFillMode,
     };
 
+    this.rebuildWidgetCaches(widgets);
+
     this.baseLayout = solveBaseLayout(
       widgets,
       this.heights,
@@ -1193,6 +1214,14 @@ export class DragEngine {
     } else {
       this.dragLayout = null;
     }
+  }
+
+  private rebuildWidgetCaches(widgets: readonly WidgetState[]): void {
+    this.widgetById.clear();
+    for (const w of widgets) {
+      this.widgetById.set(w.id, w);
+    }
+    this.visibleSortedCache = getVisibleSorted(widgets);
   }
 
   private layoutConfig(): LayoutSolverConfig {

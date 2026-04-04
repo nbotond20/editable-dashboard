@@ -82,7 +82,8 @@ export function dashboardReducer(
             ...(isMovedWidget ? { columnStart: undefined } : {}),
           };
         }
-        return { ...w, order: nextOrder++ };
+        const newOrd = nextOrder++;
+        return w.order === newOrd ? w : { ...w, order: newOrd };
       });
 
       return { ...state, widgets: normalizeOrder(reordered) };

@@ -48,9 +48,8 @@ export function useMutationCallbacks(props: MutationCallbackProps) {
 
       switch (action.type) {
         case "ADD_WIDGET": {
-          const newWidget = nextState.widgets.find(
-            (w) => !prevState.widgets.some((pw) => pw.id === w.id),
-          );
+          const prevIds = new Set(prevState.widgets.map((w) => w.id));
+          const newWidget = nextState.widgets.find((w) => !prevIds.has(w.id));
           if (newWidget) {
             onWidgetAddRef.current?.({ widget: newWidget });
           }

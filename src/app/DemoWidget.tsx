@@ -1,5 +1,6 @@
+import { memo } from "react";
 import type { WidgetState, DragHandleProps } from "../lib/dashboard/index.ts";
-import { useDashboard } from "../lib/dashboard/index.ts";
+import { useDashboardStable } from "../lib/dashboard/index.ts";
 import { StatsWidget } from "./widgets/StatsWidget.tsx";
 import { ChartWidget } from "./widgets/ChartWidget.tsx";
 import { TableWidget } from "./widgets/TableWidget.tsx";
@@ -30,6 +31,7 @@ interface DemoWidgetProps {
   maxColumns: number;
   resize: (colSpan: number) => void;
   remove: () => void;
+  isLongPressing: boolean;
 }
 
 const GripIcon = () => (
@@ -48,7 +50,7 @@ const ColumnsIcon = ({ n }: { n: number }) => (
   </svg>
 );
 
-export function DemoWidget({
+export const DemoWidget = memo(function DemoWidget({
   widget,
   dragHandleProps,
   isDragging,
@@ -56,14 +58,14 @@ export function DemoWidget({
   maxColumns,
   resize,
   remove,
+  isLongPressing,
 }: DemoWidgetProps) {
-  const { actions, isWidgetLockActive, dragState } = useDashboard();
+  const { actions, isWidgetLockActive } = useDashboardStable();
   const Component = widgetComponents[widget.type];
   const label = widgetLabels[widget.type] ?? widget.type;
   const positionLocked = isWidgetLockActive(widget.id, "position");
   const resizeLocked = isWidgetLockActive(widget.id, "resize");
   const removeLocked = isWidgetLockActive(widget.id, "remove");
-  const isLongPressing = dragState.longPressTargetId === widget.id;
 
   const widgetClass = [
     "dash-widget",
@@ -149,4 +151,4 @@ export function DemoWidget({
       </div>
     </div>
   );
-}
+});

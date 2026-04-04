@@ -12,6 +12,7 @@ interface WidgetSlotCallbackProps {
   colSpan: number;
   resize: (colSpan: number) => void;
   remove: () => void;
+  isLongPressing: boolean;
 }
 
 interface DashboardGridProps {

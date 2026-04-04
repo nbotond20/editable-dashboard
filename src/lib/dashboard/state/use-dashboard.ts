@@ -1,13 +1,34 @@
-import { createContext, useContext } from "react";
-import type { DashboardContextValue } from "../types.ts";
+import { createContext, useContext, useMemo } from "react";
+import type { DashboardContextValue, DashboardStableContextValue, DashboardDragContextValue } from "../types.ts";
 
 export { isLockActive } from "../locks.ts";
 export { useActions } from "./use-actions.ts";
 export type { UseActionsOptions } from "./use-actions.ts";
 
-export const DashboardContext = createContext<DashboardContextValue | null>(
-  null
-);
+export const DashboardStableContext = createContext<DashboardStableContextValue | null>(null);
+export const DashboardDragContext = createContext<DashboardDragContextValue | null>(null);
+
+/**
+ * Access the stable (non-drag) portion of the dashboard context.
+ * This context does not change during drag operations, reducing re-renders.
+ */
+export function useDashboardStable(): DashboardStableContextValue {
+  const ctx = useContext(DashboardStableContext);
+  if (!ctx)
+    throw new Error("useDashboardStable must be used within DashboardProvider");
+  return ctx;
+}
+
+/**
+ * Access the volatile drag portion of the dashboard context.
+ * This context changes during drag operations (phase, dragState).
+ */
+export function useDashboardDrag(): DashboardDragContextValue {
+  const ctx = useContext(DashboardDragContext);
+  if (!ctx)
+    throw new Error("useDashboardDrag must be used within DashboardProvider");
+  return ctx;
+}
 
 /**
  * Access the full dashboard context.
@@ -26,9 +47,8 @@ export const DashboardContext = createContext<DashboardContextValue | null>(
  * }
  * ```
  */
-export function useDashboard() {
-  const ctx = useContext(DashboardContext);
-  if (!ctx)
-    throw new Error("useDashboard must be used within DashboardProvider");
-  return ctx;
+export function useDashboard(): DashboardContextValue {
+  const stable = useDashboardStable();
+  const drag = useDashboardDrag();
+  return useMemo(() => ({ ...stable, ...drag }), [stable, drag]);
 }

@@ -173,12 +173,12 @@ export function computeDwellProgress(
 }
 
 function computeTargetRowNeighborSpans(
-  widgets: WidgetState[],
+  visibleSorted: WidgetState[],
   sourceId: string,
   targetId: string,
   maxColumns: number,
 ): number {
-  const visible = widgets.filter(w => w.visible).sort((a, b) => a.order - b.order);
+  const visible = visibleSorted;
 
   const rowUsed = new Array(maxColumns).fill(0);
   const widgetRow = new Map<string, number>();

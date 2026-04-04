@@ -2,7 +2,14 @@ import { useState } from "react";
 import { DragEngine } from "../engine/drag-engine.ts";
 import type { DragEngineConfig } from "../engine/types.ts";
 import type { DashboardState, WidgetDefinition } from "../types.ts";
-import { isLockActive } from "../locks.ts";
+import { isLockActiveForWidget } from "../locks.ts";
+
+function lockCheck(engine: DragEngine, definitions: WidgetDefinition[], lockType: "position" | "resize") {
+  return (id: string) => {
+    const widget = engine.getWidgetById(id);
+    return widget ? isLockActiveForWidget(widget, lockType, definitions) : false;
+  };
+}
 
 export function useDragEngine(
   state: DashboardState,
@@ -12,16 +19,22 @@ export function useDragEngine(
   const [engine] = useState(() =>
     new DragEngine(state, {
       ...config,
-      isPositionLocked: (id) => isLockActive(id, "position", state, definitions),
-      isResizeLocked: (id) => isLockActive(id, "resize", state, definitions),
+      isPositionLocked: (id) => {
+        const widget = state.widgets.find((w) => w.id === id);
+        return widget ? isLockActiveForWidget(widget, "position", definitions) : false;
+      },
+      isResizeLocked: (id) => {
+        const widget = state.widgets.find((w) => w.id === id);
+        return widget ? isLockActiveForWidget(widget, "resize", definitions) : false;
+      },
       getWidgetConstraints: buildGetConstraints(config.getWidgetConstraints),
     }),
   );
 
   engine.updateConfig({
     ...config,
-    isPositionLocked: (id) => isLockActive(id, "position", engine.getState(), definitions),
-    isResizeLocked: (id) => isLockActive(id, "resize", engine.getState(), definitions),
+    isPositionLocked: lockCheck(engine, definitions, "position"),
+    isResizeLocked: lockCheck(engine, definitions, "resize"),
     getWidgetConstraints: buildGetConstraints(config.getWidgetConstraints),
   });
 

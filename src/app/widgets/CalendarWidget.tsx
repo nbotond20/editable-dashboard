@@ -1,3 +1,5 @@
+import { memo } from "react";
+
 const today = new Date();
 const year = today.getFullYear();
 const month = today.getMonth();
@@ -8,7 +10,7 @@ const monthName = today.toLocaleDateString("en-US", { month: "long", year: "nume
 const dayNames = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 const highlightedDays = [3, 7, 14, 21, 28];
 
-export function CalendarWidget() {
+export const CalendarWidget = memo(function CalendarWidget() {
   const cells: Array<{ day: number | null; isToday: boolean; hasEvent: boolean }> = [];
 
   for (let i = 0; i < firstDayOfWeek; i++) {
@@ -46,4 +48,4 @@ export function CalendarWidget() {
       </div>
     </div>
   );
-}
+});

@@ -27,7 +27,11 @@ export function useAutoScroll(
     };
 
     rafRef.current = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafRef.current);
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+      cachedScrollables = null;
+      lastElementAtPoint = null;
+    };
   }, [isDragging, edgeSize, maxSpeed]);
 }
 
@@ -60,24 +64,40 @@ function scrollViewport(pos: { x: number; y: number }, edgeSize: number, maxSpee
   }
 }
 
-function scrollAncestors(pos: { x: number; y: number }, edgeSize: number, maxSpeed: number) {
-  let el = document.elementFromPoint(pos.x, pos.y) as HTMLElement | null;
+let cachedScrollables: HTMLElement[] | null = null;
+let lastElementAtPoint: Element | null = null;
 
+function scrollAncestors(pos: { x: number; y: number }, edgeSize: number, maxSpeed: number) {
+  const el = document.elementFromPoint(pos.x, pos.y);
+
+  if (el !== lastElementAtPoint || !cachedScrollables) {
+    lastElementAtPoint = el;
+    cachedScrollables = findScrollableAncestors(el as HTMLElement | null);
+  }
+
+  for (const scrollable of cachedScrollables) {
+    const rect = scrollable.getBoundingClientRect();
+    const localX = pos.x - rect.left;
+    const localY = pos.y - rect.top;
+
+    const dx = edgeDelta(localX, rect.width, edgeSize, maxSpeed);
+    const dy = edgeDelta(localY, rect.height, edgeSize, maxSpeed);
+
+    if (dx !== 0 || dy !== 0) {
+      scrollable.scrollBy(dx, dy);
+    }
+  }
+}
+
+function findScrollableAncestors(el: HTMLElement | null): HTMLElement[] {
+  const result: HTMLElement[] = [];
   while (el && el !== document.documentElement) {
     if (isScrollable(el)) {
-      const rect = el.getBoundingClientRect();
-      const localX = pos.x - rect.left;
-      const localY = pos.y - rect.top;
-
-      const dx = edgeDelta(localX, rect.width, edgeSize, maxSpeed);
-      const dy = edgeDelta(localY, rect.height, edgeSize, maxSpeed);
-
-      if (dx !== 0 || dy !== 0) {
-        el.scrollBy(dx, dy);
-      }
+      result.push(el);
     }
     el = el.parentElement;
   }
+  return result;
 }
 
 function isScrollable(el: HTMLElement): boolean {

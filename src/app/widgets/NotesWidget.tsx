@@ -1,3 +1,5 @@
+import { memo } from "react";
+
 const notes = [
   "Review Q4 metrics dashboard before Thursday standup",
   "Update API documentation for v2 endpoints",
@@ -5,7 +7,7 @@ const notes = [
   "Prepare demo for stakeholder presentation",
 ];
 
-export function NotesWidget() {
+export const NotesWidget = memo(function NotesWidget() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <span className="dash-label-emphasis">Quick Notes</span>
@@ -19,4 +21,4 @@ export function NotesWidget() {
       </div>
     </div>
   );
-}
+});

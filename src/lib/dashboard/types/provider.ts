@@ -43,17 +43,15 @@ export type DashboardProviderProps = {
 );
 
 /**
- * The full context value returned by {@link useDashboard}.
+ * Stable context values that change only on user actions, not during drag.
  */
-export interface DashboardContextValue {
+export interface DashboardStableContextValue {
   state: DashboardState;
   definitions: WidgetDefinition[];
   layout: ComputedLayout;
   actions: DashboardActions;
   canUndo: boolean;
   canRedo: boolean;
-  phase: "idle" | "pending" | "dragging" | "keyboard-dragging" | "dropping";
-  dragState: DragState;
   getDragPosition: () => { x: number; y: number } | null;
   containerRef: React.Ref<HTMLDivElement>;
   measureRef: (id: string) => (node: HTMLElement | null) => void;
@@ -71,3 +69,16 @@ export interface DashboardContextValue {
   isWidgetLockActive: (id: string, lockType: LockType) => boolean;
   canAddWidget: () => boolean;
 }
+
+/**
+ * Volatile context values that change during drag operations.
+ */
+export interface DashboardDragContextValue {
+  phase: "idle" | "pending" | "dragging" | "keyboard-dragging" | "dropping";
+  dragState: DragState;
+}
+
+/**
+ * The full context value returned by {@link useDashboard}.
+ */
+export interface DashboardContextValue extends DashboardStableContextValue, DashboardDragContextValue {}

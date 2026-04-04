@@ -1,3 +1,5 @@
+import { memo } from "react";
+
 const rows = [
   { name: "Alice Johnson", email: "alice@example.com", role: "Admin", status: "Active" },
   { name: "Bob Smith", email: "bob@example.com", role: "Editor", status: "Active" },
@@ -19,7 +21,7 @@ const statusColor: Record<string, string> = {
   Pending: "var(--dash-color-warning)",
 };
 
-export function TableWidget() {
+export const TableWidget = memo(function TableWidget() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <span className="dash-label-emphasis">Team Members</span>
@@ -51,4 +53,4 @@ export function TableWidget() {
       </table>
     </div>
   );
-}
+});

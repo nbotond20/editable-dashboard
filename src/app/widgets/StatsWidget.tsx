@@ -1,3 +1,5 @@
+import { memo } from "react";
+
 const stats = [
   { label: "Users", value: "12,847", change: "+12.5%" },
   { label: "Revenue", value: "$48.2k", change: "+8.2%" },
@@ -5,7 +7,7 @@ const stats = [
   { label: "Growth", value: "24.5%", change: "+4.3%" },
 ];
 
-export function StatsWidget() {
+export const StatsWidget = memo(function StatsWidget() {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
       {stats.map((stat) => (
@@ -22,4 +24,4 @@ export function StatsWidget() {
       ))}
     </div>
   );
-}
+});

@@ -17,6 +17,8 @@ export type {
   WidgetSlotRenderProps,
   DashboardProviderProps,
   DashboardContextValue,
+  DashboardStableContextValue,
+  DashboardDragContextValue,
   SerializedDashboard,
   ResponsiveBreakpoints,
   DragConfig,
@@ -32,7 +34,7 @@ export {
 } from "./constants.ts";
 
 export { DashboardProvider } from "./react/DashboardProvider.tsx";
-export { useDashboard } from "./state/use-dashboard.ts";
+export { useDashboard, useDashboardStable, useDashboardDrag } from "./state/use-dashboard.ts";
 export type { UseActionsOptions } from "./state/use-dashboard.ts";
 
 export { computeLayout } from "./layout/compute-layout.ts";

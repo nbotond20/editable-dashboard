@@ -1,4 +1,4 @@
-import type { LockType, WidgetDefinition, DashboardState } from "./types.ts";
+import type { LockType, WidgetDefinition, WidgetState, DashboardState } from "./types.ts";
 
 export function lockFieldName(lockType: LockType): "lockPosition" | "lockResize" | "lockRemove" {
   switch (lockType) {
@@ -16,6 +16,14 @@ export function isLockActive(
 ): boolean {
   const widget = state.widgets.find((w) => w.id === id);
   if (!widget) return false;
+  return isLockActiveForWidget(widget, lockType, definitions);
+}
+
+export function isLockActiveForWidget(
+  widget: WidgetState,
+  lockType: LockType,
+  definitions: readonly WidgetDefinition[],
+): boolean {
   const field = lockFieldName(lockType);
   if (widget[field] != null) return widget[field]!;
   const def = definitions.find((d) => d.type === widget.type);

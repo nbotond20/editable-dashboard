@@ -1,7 +1,7 @@
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import {
   DashboardProvider,
-  useDashboard,
+  useDashboardStable,
   serializeDashboard,
   deserializeDashboard,
   type WidgetDefinition,
@@ -32,7 +32,7 @@ const initialWidgets: WidgetState[] = [
 ];
 
 function DashboardContent({ onStateChange }: { onStateChange?: (state: DashboardState) => void }) {
-  const { state, actions, definitions: defs, canUndo, canRedo } = useDashboard();
+  const { state, actions, definitions: defs, canUndo, canRedo } = useDashboardStable();
   const [catalogOpen, setCatalogOpen] = useState(false);
   const [animated, setAnimated] = useState(true);
   const Grid = animated ? DashboardGrid : DashboardGridStatic;
@@ -51,6 +51,24 @@ function DashboardContent({ onStateChange }: { onStateChange?: (state: Dashboard
       actions.addWidget(type);
     },
     [actions]
+  );
+
+  const closeCatalog = useCallback(() => setCatalogOpen(false), []);
+
+  const renderWidget = useCallback(
+    (widget: WidgetState, slotProps: { dragHandleProps: any; isDragging: boolean; colSpan: number; resize: (colSpan: number) => void; remove: () => void; isLongPressing: boolean }) => (
+      <DemoWidget
+        widget={widget}
+        dragHandleProps={slotProps.dragHandleProps}
+        isDragging={slotProps.isDragging}
+        colSpan={slotProps.colSpan}
+        maxColumns={state.maxColumns}
+        resize={slotProps.resize}
+        remove={slotProps.remove}
+        isLongPressing={slotProps.isLongPressing}
+      />
+    ),
+    [state.maxColumns]
   );
 
   return (
@@ -107,24 +125,14 @@ function DashboardContent({ onStateChange }: { onStateChange?: (state: Dashboard
 
       <main style={{ padding: 24, maxWidth: 1200, margin: "0 auto" }}>
         <Grid style={{ width: "100%" }}>
-          {(widget, slotProps) => (
-            <DemoWidget
-              widget={widget}
-              dragHandleProps={slotProps.dragHandleProps}
-              isDragging={slotProps.isDragging}
-              colSpan={slotProps.colSpan}
-              maxColumns={state.maxColumns}
-              resize={slotProps.resize}
-              remove={slotProps.remove}
-            />
-          )}
+          {renderWidget}
         </Grid>
 
       </main>
 
       <WidgetCatalog
         open={catalogOpen}
-        onClose={() => setCatalogOpen(false)}
+        onClose={closeCatalog}
         definitions={defs}
         activeTypes={activeTypes}
         onAdd={handleAdd}
@@ -147,12 +155,16 @@ function loadSavedState(): { widgets: WidgetState[]; maxColumns: number } | unde
 
 export default function App() {
   const [saved] = useState(() => loadSavedState());
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
   const handleStateChange = useCallback((state: DashboardState) => {
-    try {
-      const serialized = serializeDashboard(state);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(serialized));
-    } catch { /* ignore storage errors */ }
+    clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      try {
+        const serialized = serializeDashboard(state);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(serialized));
+      } catch { /* ignore storage errors */ }
+    }, 300);
   }, []);
 
   return (

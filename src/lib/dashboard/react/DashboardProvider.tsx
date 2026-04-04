@@ -7,14 +7,14 @@ import type {
   DragHandleA11yProps,
   LockType,
 } from "../types.ts";
-import { isLockActive } from "../locks.ts";
+import { isLockActiveForWidget } from "../locks.ts";
 import {
   DEFAULT_MAX_COLUMNS,
   DEFAULT_GAP,
   AUTO_SCROLL_EDGE_SIZE,
   AUTO_SCROLL_MAX_SPEED,
 } from "../constants.ts";
-import { DashboardContext, useActions } from "../state/use-dashboard.ts";
+import { DashboardStableContext, DashboardDragContext, useActions } from "../state/use-dashboard.ts";
 import { useDragEngine } from "./use-drag-engine.ts";
 import { usePointerAdapter } from "./use-pointer-adapter.ts";
 import { useKeyboardAdapter } from "./use-keyboard-adapter.ts";
@@ -194,7 +194,10 @@ export function DashboardProvider(props: DashboardProviderProps) {
   const actions = useActions({ dispatch, definitions, getState, maxWidgets, onError: emitError });
 
   const isWidgetLockActive = useCallback(
-    (id: string, lockType: LockType) => isLockActive(id, lockType, engine.getState(), definitions),
+    (id: string, lockType: LockType) => {
+      const widget = engine.getWidgetById(id);
+      return widget ? isLockActiveForWidget(widget, lockType, definitions) : false;
+    },
     [engine, definitions],
   );
   const canAddWidget = useCallback(
@@ -261,13 +264,13 @@ export function DashboardProvider(props: DashboardProviderProps) {
     [handleKeyDown],
   );
 
-  // ── Context value ───────────────────────────────────────────────────
+  // ── Context values ──────────────────────────────────────────────────
 
   const state = engine.getState();
   const layout = snapshot.layout;
   const phase = snapshot.phase.type;
 
-  const contextValue = useMemo(
+  const stableValue = useMemo(
     () => ({
       state,
       definitions,
@@ -275,8 +278,6 @@ export function DashboardProvider(props: DashboardProviderProps) {
       actions,
       canUndo: snapshot.canUndo,
       canRedo: snapshot.canRedo,
-      phase,
-      dragState,
       getDragPosition,
       containerRef: containerCallbackRef,
       measureRef,
@@ -288,7 +289,12 @@ export function DashboardProvider(props: DashboardProviderProps) {
       isWidgetLockActive,
       canAddWidget,
     }),
-    [state, definitions, layout, actions, snapshot.canUndo, snapshot.canRedo, phase, dragState, getDragPosition, containerCallbackRef, measureRef, constrainedStartDrag, getA11yProps, handleKeyboardDrag, isWidgetLockActive, canAddWidget],
+    [state, definitions, layout, actions, snapshot.canUndo, snapshot.canRedo, getDragPosition, containerCallbackRef, measureRef, constrainedStartDrag, getA11yProps, handleKeyboardDrag, isWidgetLockActive, canAddWidget],
+  );
+
+  const dragValue = useMemo(
+    () => ({ phase, dragState }),
+    [phase, dragState],
   );
 
   // ── onChange (skip first render) ────────────────────────────────────
@@ -306,9 +312,11 @@ export function DashboardProvider(props: DashboardProviderProps) {
   }, [state]);
 
   return (
-    <DashboardContext.Provider value={contextValue}>
-      {children}
-      <LiveRegion />
-    </DashboardContext.Provider>
+    <DashboardStableContext.Provider value={stableValue}>
+      <DashboardDragContext.Provider value={dragValue}>
+        {children}
+        <LiveRegion />
+      </DashboardDragContext.Provider>
+    </DashboardStableContext.Provider>
   );
 }

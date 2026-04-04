@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, type PointerEvent as ReactPointerEvent } from "react";
 import { useDashboard, type WidgetState, type DragHandleProps } from "../../lib/dashboard/index.ts";
 
 interface WidgetSlotStaticProps {
@@ -13,6 +13,7 @@ interface WidgetSlotStaticProps {
       colSpan: number;
       resize: (colSpan: number) => void;
       remove: () => void;
+      isLongPressing: boolean;
     }
   ) => React.ReactNode;
 }
@@ -45,14 +46,14 @@ export function WidgetSlotStatic({ widget, children }: WidgetSlotStaticProps) {
     [widget.id, handleKeyboardDrag, locked]
   );
 
-  const a11yProps = getA11yProps(widget.id);
+  const a11yProps = useMemo(() => getA11yProps(widget.id), [getA11yProps, widget.id]);
 
-  const dragHandleProps: DragHandleProps = {
+  const dragHandleProps: DragHandleProps = useMemo(() => ({
     ...a11yProps,
     onPointerDown: handlePointerDown,
     onKeyDown: handleKeyDown,
     style: { cursor: locked ? "default" : isDragging ? "grabbing" : "grab", touchAction: "none" },
-  };
+  }), [a11yProps, handlePointerDown, handleKeyDown, locked, isDragging]);
 
   const resize = useCallback(
     (colSpan: number) => actions.resizeWidget(widget.id, colSpan),
@@ -128,6 +129,7 @@ export function WidgetSlotStatic({ widget, children }: WidgetSlotStaticProps) {
         colSpan: widget.colSpan,
         resize,
         remove,
+        isLongPressing: dragState.longPressTargetId === widget.id,
       })}
     </div>
   );
