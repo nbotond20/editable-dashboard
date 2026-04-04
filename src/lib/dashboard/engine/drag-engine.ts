@@ -392,10 +392,6 @@ export class DragEngine {
       const tgtCol = preTgt?.columnStart;
 
       if (srcCol != null || tgtCol != null) {
-        // Swap columnStart values so each widget lands in the other's
-        // column.  When both share the same column, clear both instead
-        // — swapping identical values would pin both to the same column
-        // and cause them to stack.
         const samePinCol = srcCol != null && tgtCol != null && srcCol === tgtCol;
         newState = {
           ...newState,
@@ -414,8 +410,6 @@ export class DragEngine {
         };
       }
 
-      // For same-row swaps, stabilize uninvolved widgets so they preserve
-      // their row positions (greedy packing would otherwise compact them).
       const srcPos = this.baseLayout.positions.get(committed.sourceId);
       const tgtPos = this.baseLayout.positions.get(committed.targetId);
       if (srcPos && tgtPos && Math.abs(srcPos.y - tgtPos.y) < 1) {
@@ -477,9 +471,6 @@ export class DragEngine {
           const srcPostIdx = postVisible.findIndex(w => w.id === committed.sourceId);
           const tgtPostIdx = postVisible.findIndex(w => w.id === committed.targetId);
           const srcAfterTgt = srcPostIdx > tgtPostIdx;
-          // Strict inequality: when both share the same column, swapping
-          // their columnStart values would pin both to the same column,
-          // causing them to stack instead of sitting side-by-side.
           if (srcAfterTgt && srcCol < tgtCol) needsSwap = true;
           if (!srcAfterTgt && srcCol > tgtCol) needsSwap = true;
         }
@@ -524,8 +515,6 @@ export class DragEngine {
           widgets: pinToGreedyColumns(newState.widgets, cfg.maxColumns, pinned.size > 0 ? pinned : undefined),
         };
       } else {
-        // For same-row auto-resize, stabilize uninvolved widgets so they
-        // preserve their row positions instead of being compacted.
         const srcPos = this.baseLayout.positions.get(committed.sourceId);
         const tgtPos = this.baseLayout.positions.get(committed.targetId);
         if (srcPos && tgtPos && Math.abs(srcPos.y - tgtPos.y) < 1) {
@@ -925,10 +914,6 @@ export class DragEngine {
 
     if (!this.currentZone) return;
 
-    // Reset dwell timer while the pointer is actively moving.
-    // We track the position where the cursor first "settled" in this zone.
-    // If it drifts more than 20px from that spot, it's real movement (not
-    // hand tremor) so we restart the dwell timer from the new position.
     const pointerPos = this.phase.type === "dragging" ? this.phase.pointerPos : null;
     if (pointerPos && this.lastZonePointerPos) {
       const drift = distance(pointerPos, this.lastZonePointerPos);
@@ -945,17 +930,6 @@ export class DragEngine {
     const source = state.widgets.find((w) => w.id === sourceId);
     if (!source) return;
 
-    // When the cursor is clearly on a side of the target widget, the user
-    // intends auto-resize, not swap.  Collapse the resize dwell threshold
-    // down to swapDwellMs so the swap-only window is skipped.
-    // Hysteresis: once the cursor enters the side region (sideStrength > 0.2),
-    // require it to drop below 0.1 before leaving side mode.  This prevents
-    // intent flickering when the cursor oscillates near the boundary.
-    //
-    // When source + target spans exceed maxColumns, auto-resize requires
-    // shrinking a widget.  Collapse to a moderate threshold (400ms) instead
-    // of 0 so a quick drag stays as swap while a deliberate hold still
-    // triggers auto-resize.
     let effectiveResizeDwellMs = this.config.resizeDwellMs;
     if (
       this.currentZone.type === "widget" &&
@@ -986,11 +960,6 @@ export class DragEngine {
             ? source.colSpan + target.colSpan > state.maxColumns
             : false;
           if (spansExceedMax) {
-            // When the side-collapse just activated and the widgets don't
-            // fit side-by-side, restart the dwell timer.  This ensures the
-            // 400ms countdown starts from the moment the user commits to
-            // the side position, not from when the cursor first entered
-            // the zone during path traversal.
             if (!wasSideCollapsed) {
               this.zoneEnteredAt = timestamp;
             }
@@ -1011,9 +980,6 @@ export class DragEngine {
       getWidgetConstraints: this.config.getWidgetConstraints,
     });
 
-    // Grace period: when intent reverts to "none" after being committed,
-    // keep the old preview briefly (100ms) to avoid flickering from
-    // drift-based dwell resets during small wiggles within a zone.
     if (
       newIntent.type === "none" &&
       this.currentIntent != null &&

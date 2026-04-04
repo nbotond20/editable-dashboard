@@ -57,9 +57,7 @@ export function usePointerAdapter(
 
       try {
         element.setPointerCapture(pointerId);
-      } catch {
-        // Capture fails for synthetic events (e2e tests) — graceful fallback.
-      }
+      } catch { /* expected for synthetic events */ }
 
       function handlePointerMove(e: PointerEvent) {
         if (e.pointerId !== activePointerId) return;

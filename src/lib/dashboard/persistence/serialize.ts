@@ -17,10 +17,6 @@ import type {
  */
 export const CURRENT_SERIALIZATION_VERSION = 2;
 
-// ---------------------------------------------------------------------------
-// Validation
-// ---------------------------------------------------------------------------
-
 /**
  * Validate that `data` is a structurally valid {@link SerializedDashboard}.
  *
@@ -36,14 +32,12 @@ export function validateSerializedDashboard(
 ): { valid: boolean; errors: string[] } {
   const errors: string[] = [];
 
-  // Top-level shape
   if (data === null || typeof data !== "object" || Array.isArray(data)) {
     return { valid: false, errors: ["Input must be a non-null object"] };
   }
 
   const obj = data as Record<string, unknown>;
 
-  // Required top-level fields
   if (!("version" in obj) || typeof obj.version !== "number") {
     errors.push("Missing or invalid field: version (expected a number)");
   } else if (obj.version !== 1 && obj.version !== 2) {
@@ -65,7 +59,6 @@ export function validateSerializedDashboard(
     return { valid: false, errors };
   }
 
-  // Per-widget validation
   const widgets = obj.widgets as unknown[];
   for (let i = 0; i < widgets.length; i++) {
     const w = widgets[i];
@@ -101,10 +94,6 @@ export function validateSerializedDashboard(
 
   return { valid: errors.length === 0, errors };
 }
-
-// ---------------------------------------------------------------------------
-// Serialization
-// ---------------------------------------------------------------------------
 
 /**
  * Convert a {@link DashboardState} into a JSON-serializable snapshot.
@@ -145,10 +134,6 @@ export function serializeDashboard(
   };
 }
 
-// ---------------------------------------------------------------------------
-// Deserialization
-// ---------------------------------------------------------------------------
-
 /**
  * Restore a {@link DashboardState} from a serialized snapshot.
  *
@@ -168,7 +153,6 @@ export function deserializeDashboard(
   data: SerializedDashboard,
   definitions: WidgetDefinition[]
 ): DashboardState {
-  // ── Input validation ───────────────────────────────────────────────────
   if (data === null || typeof data !== "object" || Array.isArray(data)) {
     throw new Error("deserializeDashboard: input must be a non-null object");
   }
@@ -203,7 +187,6 @@ export function deserializeDashboard(
     );
   }
 
-  // Validate individual widgets
   for (let i = 0; i < data.widgets.length; i++) {
     const w = data.widgets[i];
     if (w === null || typeof w !== "object" || Array.isArray(w)) {
@@ -233,22 +216,18 @@ export function deserializeDashboard(
     }
   }
 
-  // ── Build hydrated state ───────────────────────────────────────────────
   const knownTypes = new Set(definitions.map((d) => d.type));
   const maxCols = data.maxColumns;
   const seenIds = new Set<string>();
 
   const widgets: WidgetState[] = data.widgets
     .filter((w) => {
-      // Drop widgets with unknown types
       if (!knownTypes.has(w.type)) return false;
-      // Deduplicate by id — first occurrence wins
       if (seenIds.has(w.id)) return false;
       seenIds.add(w.id);
       return true;
     })
     .map((w) => {
-      // Clamp colSpan to [1, maxColumns]
       const clampedColSpan = Math.min(Math.max(1, w.colSpan), maxCols);
 
       const base: WidgetState = {
@@ -261,7 +240,6 @@ export function deserializeDashboard(
         ...(w.config !== undefined ? { config: w.config } : {}),
       };
 
-      // v1 -> v2 migration: `locked` becomes `lockPosition`
       if (data.version === 1) {
         if ("locked" in w && w.locked) base.lockPosition = true;
       } else {

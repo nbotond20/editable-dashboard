@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# Removes single-line comments (// ...) and multi-line comments (/* ... */)
+# Removes single-line comments (// ...) and non-JSDoc block comments (/* ... */)
 # from all .ts, .tsx, and .css files under src/.
 #
 # Preserves:
+#   - JSDoc comments (/** ... */)
+#   - Lint directives (eslint-disable, tslint:disable, @ts-ignore, etc.)
 #   - URLs containing :// (e.g. https://...)
 #   - Strings containing // or /* (basic heuristic: skips lines where // is inside quotes)
 #
@@ -29,12 +31,12 @@ while IFS= read -r -d '' file; do
 
   # Use perl for reliable multi-line comment removal
   perl -0777 -pe '
-    # Remove multi-line block comments (/* ... */)
-    s{/\*.*?\*/}{}gs;
-    # Remove full-line // comments (line is only whitespace + //)
-    s{^[ \t]*//[^\n]*\n}{}gm;
-    # Remove trailing // comments but not ://  (look-behind ensures no colon before //)
-    s{(?<!:)[ \t]*//[^\n]*}{}gm;
+    # Remove block comments that are NOT JSDoc (/* but not /**)
+    s{/\*(?!\*[\s*]).*?\*/}{}gs;
+    # Remove full-line // comments (skip JSDoc blocks and lint directives)
+    s{^(?![ \t]*\*)(?![ \t]*//[ \t]*(?:eslint|tslint|@ts-|istanbul|c8))[ \t]*//[^\n]*\n}{}gm;
+    # Remove trailing // comments but not ://  (skip JSDoc blocks and lint directives)
+    s{^(?![ \t]*\*)(.*?)(?<!:)[ \t]*//[ \t]*(?!eslint|tslint|@ts-|istanbul|c8)[^\n]*}{$1}gm;
     # Collapse runs of blank lines into a single blank line
     s{\n{3,}}{\n\n}g;
     # Remove leading blank lines

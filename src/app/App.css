@@ -416,8 +416,6 @@
   opacity: 0.12;
 }
 
-/* ── Long-press feedback ──────────────────────────────────────────── */
-
 .dash-widget--long-pressing {
   outline: 2px solid var(--dash-color-accent);
   outline-offset: -2px;
@@ -425,15 +423,11 @@
   transition: transform 150ms ease, outline 100ms ease;
 }
 
-/* ── Drag-active body lock (pull-to-refresh & text selection) ───── */
-
 body.dash-dragging {
   overscroll-behavior-y: contain;
   -webkit-user-select: none;
   user-select: none;
 }
-
-/* ── Touch-optimised targets ──────────────────────────────────────── */
 
 @media (pointer: coarse) {
   .dash-widget__drag-handle {

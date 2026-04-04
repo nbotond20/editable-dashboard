@@ -2,17 +2,23 @@
 
 ## How It Works
 
-The drag system is **simulation-based**: for every possible drop position, it runs the real layout algorithm and picks the result closest to the pointer. The distance metric weights vertical distance 1.5x heavier than horizontal, so crossing rows requires more deliberate movement.
+The drag system uses a **zone-to-intent state machine**. On every animation frame:
 
-Five candidate families are generated on every frame:
+1. **Zone resolution** determines what the pointer is hovering over (a widget, a gap between widgets, empty space, or outside the grid).
+2. **Intent resolution** converts the zone into an operation based on dwell time: immediate operations (reorder, swap) happen right away, while auto-resize requires the pointer to dwell on a target for a configurable duration.
+3. **Layout solving** computes a preview layout for the resolved intent, which is displayed as a live preview.
 
-| Family | What it does | When it activates |
-|--------|-------------|-------------------|
-| **Stack** | Insert at a new position (shift others) | Always (2+ widgets) |
-| **Side-drop** | Resize one peer + dragged to share a row | `peer.colSpan + dragged.colSpan > maxColumns` |
-| **Swap** | Exchange positions of two widgets | Dragged and target are in different rows |
-| **Row squeeze** | Resize all widgets in a row to fit | Multiple peers in row, combined span overflows |
-| **Column placement** | Slide widget to a different column | Always (keeps same order) |
+A 2-frame hysteresis filter prevents the zone from flickering when the pointer oscillates near boundaries.
+
+Five operation types are supported:
+
+| Operation | What it does | When it activates |
+|-----------|-------------|-------------------|
+| **Reorder (Insert)** | Insert at a new position (shift others) | Pointer enters a gap zone between widgets |
+| **Swap** | Exchange positions of two widgets | Pointer dwells on a widget in a different row (`swapDwellMs`) |
+| **Auto-resize (Side-drop)** | Resize one peer + dragged to share a row | Pointer dwells on a widget longer (`resizeDwellMs`) and combined spans exceed `maxColumns` |
+| **Auto-resize (Row squeeze)** | Resize all widgets in a row to fit | Same as side-drop but multiple peers are in the target row |
+| **Column pin** | Slide widget to a different column | Pointer enters empty space in the grid |
 
 ---
 
@@ -452,7 +458,7 @@ A's columnStart is cleared in the batch (prevents stale hints).
 ## 9. Decision Flowchart
 
 ```
-User drags widget W to position P
+User drags widget W
           │
           ▼
    ┌─────────────┐
@@ -462,42 +468,44 @@ User drags widget W to position P
           │ Yes
           ▼
   ┌──────────────────┐
-  │ Generate all      │
-  │ candidates:       │
-  │  • Stack (insert) │
-  │  • Side-drop      │
-  │  • Swap           │
-  │  • Row squeeze    │
-  │  • Column place   │
+  │ resolveZone():    │
+  │ Where is pointer? │
   └────────┬─────────┘
+           │
+     ┌─────┴─────────┬───────────┬──────────┐
+     ▼               ▼           ▼          ▼
+  ┌──────┐     ┌─────────┐  ┌───────┐  ┌────────┐
+  │ gap  │     │ widget  │  │ empty │  │outside │
+  └──┬───┘     └────┬────┘  └───┬───┘  └────┬───┘
+     │              │            │           │
+     ▼              ▼            ▼           ▼
+  reorder     ┌──────────┐   column-pin   none
+              │ Dwell    │
+              │ timer    │
+              └────┬─────┘
+                   │
+           ┌───────┴────────┐
+           ▼                ▼
+     < resizeDwellMs   ≥ resizeDwellMs
+           │                │
+           ▼                ▼
+         swap          auto-resize
+                    (side-drop or
+                     row squeeze)
            │
            ▼
   ┌──────────────────┐
-  │ For each candidate│
-  │ run full layout   │
-  │ & measure distance│
-  │ to pointer        │
+  │ Stable for 2+    │──No──→ Keep current zone
+  │ frames?          │        (hysteresis)
   └────────┬─────────┘
-           │
-           ▼
-  ┌──────────────────┐
-  │ Pick closest      │
-  │ (prefer swap on   │
-  │  distance tie)    │
-  └────────┬─────────┘
-           │
-           ▼
-  ┌──────────────────┐
-  │ Same position as  │──Yes──→ No change (no-op)
-  │ current layout?   │
-  └────────┬─────────┘
-           │ No
-           ▼
-  ┌──────────────────┐
-  │ Stable for 2+     │──No──→ Keep current target
-  │ frames?            │        (hysteresis)
-  └────────┬──────────┘
            │ Yes
+           ▼
+  ┌──────────────────┐
+  │ solvePreview():   │
+  │ Compute layout   │
+  │ for this intent  │
+  └────────┬─────────┘
+           │
            ▼
     ┌──────────────┐
     │ Show preview: │
@@ -541,9 +549,16 @@ User drags widget W to position P
 
 | Setting | Default | Effect |
 |---------|---------|--------|
-| `maxColumns` | 2 | 1, 2, or 3 columns. Affects layout and all candidates. |
+| `maxColumns` | 2 | 1, 2, or 3 columns. Affects layout and all operations. |
 | `gap` | 16px | Space between widgets. |
-| `DRAG_ACTIVATION_THRESHOLD` | 5px | Minimum pointer movement to start a drag. |
-| `LAYOUT_SPRING` | stiffness:300, damping:30, mass:0.8 | Animation feel for widget transitions. |
-| Vertical weight | 1.5x | Vertical distance penalized 1.5x in candidate scoring. |
-| Hysteresis | 2 frames | New target must be stable for 2 frames before switching. |
+| `activationThreshold` | 5px | Minimum pointer movement to start a drag. |
+| `touchActivationDelay` | 200ms | Touch long-press delay before drag activates. |
+| `touchMoveTolerance` | 10px | Maximum pointer drift during a touch long-press. |
+| `swapDwellMs` | 0ms | Dwell time before cross-row swap activates (immediate by default). |
+| `resizeDwellMs` | 600ms | Dwell time before auto-resize (side-drop/row squeeze) activates. |
+| `autoScrollEdgeSize` | 60px | Distance from viewport edge that triggers auto-scroll. |
+| `autoScrollMaxSpeed` | 15px/frame | Maximum auto-scroll speed. |
+| `dropAnimationDuration` | 250ms | Duration of the drop animation. |
+| Zone hysteresis | 2 frames | New zone must be stable for 2 frames before the engine switches to it. |
+| Intent grace period | 100ms | Prevents intent from flipping away immediately after it resolves. |
+| Drift reset | 20px | Large pointer movement resets the dwell timer. |

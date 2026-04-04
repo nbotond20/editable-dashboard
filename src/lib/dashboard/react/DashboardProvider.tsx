@@ -64,7 +64,6 @@ export function DashboardProvider(props: DashboardProviderProps) {
     children,
   } = props;
 
-  // ── Error handling refs ─────────────────────────────────────────────────
   const onErrorRef = useRef(onError);
   useEffect(() => { onErrorRef.current = onError; });
 
@@ -72,7 +71,6 @@ export function DashboardProvider(props: DashboardProviderProps) {
     onErrorRef.current?.(error);
   }, []);
 
-  // --- Input validation (runs once on mount and when deps change) ---
   useEffect(() => {
     for (const err of validateDefinitions(definitions)) {
       emitError(err);
@@ -85,7 +83,6 @@ export function DashboardProvider(props: DashboardProviderProps) {
     }
   }, [maxColumns, gap, maxUndoDepth, emitError]);
 
-  // ── Lifecycle callback refs (avoid stale closures & re-renders) ──────
   const onDragStartRef = useRef(onDragStart);
   useEffect(() => { onDragStartRef.current = onDragStart; });
   const onDragEndRef = useRef(onDragEnd);
@@ -115,7 +112,6 @@ export function DashboardProvider(props: DashboardProviderProps) {
     ? (props as { onStateChange: (s: DashboardStateInput) => void }).onStateChange
     : undefined;
 
-  // Validate and filter initialWidgets (graceful degradation: skip unknown types)
   const { validWidgets: initialWidgets } = useMemo(
     () => {
       const result = validateInitialWidgets(rawInitialWidgets, definitions);
@@ -128,8 +124,6 @@ export function DashboardProvider(props: DashboardProviderProps) {
     [],
   );
 
-  // In controlled mode, merge the externally provided state with the
-  // internally tracked containerWidth. Consumers never manage containerWidth.
   const initialState: DashboardState = controlledStateInput
     ? { ...controlledStateInput, containerWidth: 0 }
     : {
@@ -185,21 +179,18 @@ export function DashboardProvider(props: DashboardProviderProps) {
     }
   }, [snapshot.announcement, announce]);
 
-  // ── Drag lifecycle callbacks ────────────────────────────────────────────
   const prevPhaseRef = useRef(snapshot.phase);
   useEffect(() => {
     const prev = prevPhaseRef.current;
     const curr = snapshot.phase;
     prevPhaseRef.current = curr;
 
-    // Detect drag start: idle/pending -> dragging or idle -> keyboard-dragging
     if (curr.type === "dragging" && prev.type !== "dragging") {
       onDragStartRef.current?.({ widgetId: curr.sourceId, phase: "pointer" });
     } else if (curr.type === "keyboard-dragging" && prev.type !== "keyboard-dragging") {
       onDragStartRef.current?.({ widgetId: curr.sourceId, phase: "keyboard" });
     }
 
-    // Detect drag end: dropping -> idle (pointer drag completed animation)
     if (curr.type === "idle" && prev.type === "dropping") {
       onDragEndRef.current?.({
         widgetId: prev.sourceId,
@@ -208,7 +199,6 @@ export function DashboardProvider(props: DashboardProviderProps) {
       });
     }
 
-    // Detect drag end: dragging -> idle (pointer drag cancelled, no dropping phase)
     if (curr.type === "idle" && prev.type === "dragging") {
       const cancelledOp: CommittedOperation = { type: "cancelled" };
       onDragEndRef.current?.({
@@ -218,7 +208,6 @@ export function DashboardProvider(props: DashboardProviderProps) {
       });
     }
 
-    // Detect drag end: keyboard-dragging -> idle (keyboard drop or cancel)
     if (curr.type === "idle" && prev.type === "keyboard-dragging") {
       const wasCancelled = prev.currentIndex === prev.originalIndex && prev.currentColSpan === prev.originalColSpan;
       const operation: CommittedOperation = wasCancelled
@@ -232,7 +221,6 @@ export function DashboardProvider(props: DashboardProviderProps) {
     }
   }, [snapshot.phase]);
 
-  // ── Auto-scroll (uses raw viewport pointer position from the pointer adapter) ──
   const getClientPointerForScroll = useCallback(() => clientPosRef.current, [clientPosRef]);
   const autoScrollEdgeSize = dragConfig?.autoScrollEdgeSize ?? AUTO_SCROLL_EDGE_SIZE;
   const autoScrollMaxSpeed = dragConfig?.autoScrollMaxSpeed ?? AUTO_SCROLL_MAX_SPEED;
@@ -243,10 +231,9 @@ export function DashboardProvider(props: DashboardProviderProps) {
     autoScrollMaxSpeed,
   );
 
-  // ── Widget mutation callback helper ──────────────────────────────────────
   const fireMutationCallbacks = useCallback(
     (action: DashboardAction, prevState: DashboardState, nextState: DashboardState) => {
-      if (nextState === prevState) return; // no-op, state didn't change
+      if (nextState === prevState) return;
 
       switch (action.type) {
         case "ADD_WIDGET": {
@@ -305,7 +292,6 @@ export function DashboardProvider(props: DashboardProviderProps) {
 
       if (onStateChangeRef.current) {
         const nextState = dashboardReducer(prevState, action);
-        // Strip transient containerWidth before emitting to controlled consumers
         onStateChangeRef.current({
           widgets: nextState.widgets,
           maxColumns: nextState.maxColumns,
@@ -477,7 +463,6 @@ export function DashboardProvider(props: DashboardProviderProps) {
     [state, definitions, layout, actions, snapshot.canUndo, snapshot.canRedo, phase, dragState, getDragPosition, containerCallbackRef, measureRef, constrainedStartDrag, getA11yProps, handleKeyboardDrag, isWidgetLockActive, canAddWidget],
   );
 
-  // ── onChange callback (fires in both controlled and uncontrolled modes) ─
   const isFirstRenderRef = useRef(true);
   useEffect(() => {
     if (isFirstRenderRef.current) {

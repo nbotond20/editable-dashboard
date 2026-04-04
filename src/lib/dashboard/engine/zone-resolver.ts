@@ -57,9 +57,6 @@ export function resolveZone(
         pointer.y < iy + ih
       ) {
         const centerX = r.x + r.width / 2;
-        // Hysteresis: once a side is committed, require the cursor to cross
-        // well past center before flipping. This prevents trackpad tremor
-        // near the center from flickering the side every frame.
         const margin = colWidth * 0.1;
         let side: "left" | "right";
         if (currentWidgetSide === "left") {
@@ -233,8 +230,6 @@ function isInGapBetween(
 
     const aRight = a.x + a.width;
     if (aRight < containerWidth) {
-      // When the next widget wraps to a new row starting at or before
-      // the current widget's column, the gap extends to the container edge.
       const gapRight = (b.x <= a.x) ? containerWidth : aRight + inset;
       if (
         pointer.x >= aInsetRight &&

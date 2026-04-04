@@ -254,8 +254,6 @@ export function solvePreviewLayout(
 
       const srcCol = sourceWidget.columnStart;
       const tgtCol = targetWidget.columnStart;
-      // When both share the same column, clear both instead of swapping
-      // identical values — that would pin both to the same column.
       const samePinCol = srcCol != null && tgtCol != null && srcCol === tgtCol;
 
       let swapped = widgets.map(w => {
@@ -271,8 +269,6 @@ export function solvePreviewLayout(
         return w;
       });
 
-      // For same-row swaps, stabilize uninvolved widgets so they preserve
-      // their row positions (greedy packing would otherwise compact them).
       if (baseLayout) {
         const srcPos = baseLayout.positions.get(sourceId);
         const tgtPos = baseLayout.positions.get(intent.targetId);
@@ -312,10 +308,6 @@ export function solvePreviewLayout(
       const [moved] = reordered.splice(sourceIdx, 1);
       reordered.splice(intent.targetIndex, 0, moved);
 
-      // Determine if source/target should swap column positions.
-      // Swap when: (a) target's row overflows, or (b) source columnStart
-      // is on the wrong side of target columnStart.
-      // Skip swap when source fits alongside target without displacing others.
       let needsSwap = false;
       if (srcCol != null) {
         const withoutSource = resized.filter(w => w.visible && w.id !== sourceId).sort((a, b) => a.order - b.order);
@@ -339,8 +331,6 @@ export function solvePreviewLayout(
 
         if (!needsSwap && tgtCol != null) {
           const srcAfterTgt = reordered.findIndex(w => w.id === sourceId) > reordered.findIndex(w => w.id === intent.targetId);
-          // Strict inequality: when both share the same column, swapping
-          // their columnStart values would pin both to the same column.
           if (srcAfterTgt && srcCol < tgtCol) needsSwap = true;
           if (!srcAfterTgt && srcCol > tgtCol) needsSwap = true;
         }
@@ -381,8 +371,6 @@ export function solvePreviewLayout(
         );
       }
 
-      // For same-row auto-resize, stabilize uninvolved widgets so they
-      // preserve their row positions instead of being compacted.
       if (baseLayout) {
         const srcPos = baseLayout.positions.get(sourceId);
         const tgtPos = baseLayout.positions.get(intent.targetId);

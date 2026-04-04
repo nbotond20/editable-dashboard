@@ -170,7 +170,7 @@ The layout engine uses a **first-fit bin-packing algorithm**:
 
 ### Drag-and-Drop System
 
-Drag is **simulation-based**: on every animation frame, the system generates candidate layouts for every possible drop position and picks the one whose computed center is closest to the pointer. A 2-frame hysteresis filter prevents flickering between positions. Five families of candidates are evaluated -- see [Drag Strategies](#drag-strategies) below.
+Drag uses a **zone-to-intent state machine**: on every animation frame, the system determines what the pointer is hovering over (a widget, a gap, empty space) and resolves an operation intent based on dwell time. A 2-frame hysteresis filter prevents flickering between zones. Five operation types are supported -- see [Drag Strategies](#drag-strategies) below.
 
 ---
 
@@ -324,8 +324,8 @@ The current drag state. Use this to render drag previews and ghosts.
 | `containerRef` | `Ref<HTMLDivElement>` | Attach to your grid container element. Used for width measurement and pointer coordinate mapping. |
 | `measureRef` | `(id: string) => (node: HTMLElement \| null) => void` | Returns a callback ref for a widget. Attach to each widget's DOM node to enable height measurement. |
 | `startDrag` | `(id, pointerId, initialPos, element, pointerType?) => void` | Call from a `pointerdown` handler to begin a drag. Respects position lock. |
-| `updateDragPointer` | `(pos: { x: number; y: number }) => void` | Manually update the pointer position (advanced use). |
-| `endDrag` | `() => void` | Programmatically cancel an active drag. |
+| `updateDragPointer` | `(pos: { x: number; y: number }) => void` | Reserved for future use. Currently a no-op; pointer updates are handled automatically by the pointer adapter. |
+| `endDrag` | `() => void` | Reserved for future use. Currently a no-op; drag cancellation is handled automatically (Escape key, pointer cancel, visibility change). |
 | `getDragPosition` | `() => { x: number; y: number } \| null` | Returns the dragged widget's current position relative to the container, or `null` if not dragging. |
 | `getA11yProps` | `(widgetId: string) => DragHandleA11yProps` | Get ARIA accessibility attributes for a drag handle. |
 | `handleKeyboardDrag` | `(widgetId: string, e: React.KeyboardEvent) => void` | Handle keyboard events for keyboard-based dragging. Bind to the drag handle's `onKeyDown`. |
@@ -419,6 +419,25 @@ Run the layout algorithm outside of React (useful for server-side rendering, tes
 | `gap` | `number` | Gap between widgets in pixels. |
 
 Returns a `ComputedLayout` with `positions` and `totalHeight`.
+
+---
+
+### Responsive Column Helper
+
+```ts
+import { getResponsiveColumns } from "@nbotond20/editable-dashboard";
+```
+
+#### `getResponsiveColumns(containerWidth, breakpoints?): number`
+
+Determine the appropriate column count for a given container width.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `containerWidth` | `number` | -- | Current container width in pixels. |
+| `breakpoints` | `ResponsiveBreakpoints?` | `{ sm: 480, md: 768, lg: 1024 }` | Custom breakpoint thresholds. |
+
+Returns 1 column below `sm`, 2 below `md`, 3 below `lg`, and 4 at or above `lg`.
 
 ---
 
@@ -527,6 +546,8 @@ Props to spread onto a drag handle element.
 | `tabIndex` | `0` | Makes the handle focusable. |
 | `aria-roledescription` | `'sortable'` | Accessibility description. |
 | `aria-label` | `string` | Accessible label for the drag handle. |
+| `aria-pressed` | `boolean?` | Present when the widget is in keyboard-drag mode. |
+| `aria-describedby` | `string?` | ID of the live-region element providing drag announcements. |
 
 ### `WidgetSlotRenderProps`
 
@@ -578,9 +599,19 @@ Fine-tune drag activation, dwell timing, and scroll behavior.
 | `touchMoveTolerance` | `number?` | `10` | Max pointer drift (px) during long-press. |
 | `autoScrollEdgeSize` | `number?` | `60` | Distance from viewport edge (px) to trigger auto-scroll. |
 | `autoScrollMaxSpeed` | `number?` | `15` | Max auto-scroll speed (px/frame). |
-| `swapDwellMs` | `number?` | `200` | Dwell time (ms) before cross-row swap activates. |
-| `resizeDwellMs` | `number?` | `700` | Dwell time (ms) before auto-resize activates. |
+| `swapDwellMs` | `number?` | `0` | Dwell time (ms) before cross-row swap activates. |
+| `resizeDwellMs` | `number?` | `600` | Dwell time (ms) before auto-resize activates. |
 | `dropAnimationDuration` | `number?` | `250` | Duration of the drop animation (ms). |
+
+### `ResponsiveBreakpoints`
+
+Breakpoint widths (in pixels) for responsive column count. Used by `getResponsiveColumns()` and the `responsiveBreakpoints` prop.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `sm` | `number?` | `480` | Below this width: 1 column. |
+| `md` | `number?` | `768` | Below this width: 2 columns. |
+| `lg` | `number?` | `1024` | Below this width: 3 columns; at or above: 4 columns. |
 
 ### `DashboardProviderProps`
 
@@ -710,17 +741,17 @@ Key points:
 
 ### Drag Strategies
 
-The drag system evaluates five families of drop candidates on every frame:
+The drag system resolves a zone (what the pointer is over) and maps it to an operation intent based on dwell time:
 
 | Strategy | What It Does | When It Activates |
 |----------|-------------|-------------------|
-| **Insert** | Moves the widget to a new position; others shift to fill the gap. | Always (2+ widgets). |
-| **Swap** | Exchanges positions of the dragged widget and a target in a different row. | Dragged and target are in different rows. |
-| **Side-drop** | Resizes one peer and the dragged widget so they share a row. | Combined spans of the two widgets exceed `maxColumns`. |
-| **Row squeeze** | Resizes all widgets in a row to make room for the dragged widget. | Multiple peers in the target row; combined spans overflow. |
-| **Column shift** | Slides the widget to a different column within the same row (sets `columnStart`). | Always (keeps current order). |
+| **Reorder (Insert)** | Moves the widget to a new position; others shift to fill the gap. | Pointer enters a gap zone between widgets. |
+| **Swap** | Exchanges positions of the dragged widget and a target in a different row. | Pointer dwells on a widget (`swapDwellMs`, default: immediate). |
+| **Side-drop** | Resizes one peer and the dragged widget so they share a row. | Pointer dwells on a widget longer (`resizeDwellMs`) and combined spans exceed `maxColumns`. |
+| **Row squeeze** | Resizes all widgets in a row to make room for the dragged widget. | Same as side-drop, but multiple peers are in the target row. |
+| **Column pin** | Slides the widget to a different column within the same row (sets `columnStart`). | Pointer enters empty space in the grid. |
 
-The closest candidate to the pointer wins. Vertical distance is weighted 1.5x heavier than horizontal, so crossing rows requires deliberate movement. A **2-frame hysteresis** prevents the preview from flickering between candidates.
+A **2-frame hysteresis** on zone changes prevents the preview from flickering when the pointer oscillates near boundaries.
 
 For detailed ASCII diagrams of every scenario, see [`docs/drag-behaviors.md`](./docs/drag-behaviors.md).
 
@@ -1241,8 +1272,8 @@ Pass a `dragConfig` prop to tune the drag system:
   dragConfig={{
     activationThreshold: 8,     // Require 8px movement before drag (default: 5)
     touchActivationDelay: 300,  // Longer touch hold for accessibility (default: 200)
-    swapDwellMs: 400,           // Slower swap activation (default: 200)
-    resizeDwellMs: 1000,        // Slower auto-resize (default: 700)
+    swapDwellMs: 400,           // Slower swap activation (default: 0)
+    resizeDwellMs: 1000,        // Slower auto-resize (default: 600)
     autoScrollEdgeSize: 80,     // Larger scroll trigger zone (default: 60)
     autoScrollMaxSpeed: 20,     // Faster scroll (default: 15)
     dropAnimationDuration: 400, // Slower drop animation (default: 250)

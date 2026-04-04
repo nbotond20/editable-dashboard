@@ -352,9 +352,9 @@ export interface DragConfig {
   autoScrollEdgeSize?: number;
   /** Maximum auto-scroll speed (px/frame). @defaultValue 15 */
   autoScrollMaxSpeed?: number;
-  /** Dwell time (ms) before a cross-row swap activates. @defaultValue 200 */
+  /** Dwell time (ms) before a cross-row swap activates. @defaultValue 0 */
   swapDwellMs?: number;
-  /** Dwell time (ms) before an auto-resize operation activates. @defaultValue 700 */
+  /** Dwell time (ms) before an auto-resize operation activates. @defaultValue 600 */
   resizeDwellMs?: number;
   /** Duration (ms) of the drop animation. @defaultValue 250 */
   dropAnimationDuration?: number;
@@ -419,13 +419,11 @@ export type DashboardProviderProps = {
   /** Callback invoked when a validation error occurs. */
   onError?: (error: DashboardError) => void;
 
-  // ── Drag lifecycle callbacks ────────────────────────────────────────────
   /** Called when a drag interaction begins (pointer activation or keyboard pickup). */
   onDragStart?: (event: { widgetId: string; phase: 'pointer' | 'keyboard' }) => void;
   /** Called when a drag interaction ends (drop or cancel). */
   onDragEnd?: (event: { widgetId: string; operation: CommittedOperation; cancelled: boolean }) => void;
 
-  // ── Widget mutation callbacks ───────────────────────────────────────────
   /** Called after a widget is added. */
   onWidgetAdd?: (event: { widget: WidgetState }) => void;
   /** Called after a widget is removed. */
@@ -437,7 +435,6 @@ export type DashboardProviderProps = {
   /** Called after a widget's config is updated. */
   onWidgetConfigChange?: (event: { widgetId: string; config: Record<string, unknown> }) => void;
 
-  // ── State observation callback ──────────────────────────────────────────
   /** Called after every state change in both controlled and uncontrolled modes. */
   onChange?: (state: DashboardState) => void;
 
