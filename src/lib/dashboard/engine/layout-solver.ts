@@ -254,8 +254,14 @@ export function solvePreviewLayout(
 
       const srcCol = sourceWidget.columnStart;
       const tgtCol = targetWidget.columnStart;
+      // When both share the same column, clear both instead of swapping
+      // identical values — that would pin both to the same column.
+      const samePinCol = srcCol != null && tgtCol != null && srcCol === tgtCol;
 
       let swapped = widgets.map(w => {
+        if (samePinCol && (w.id === sourceId || w.id === intent.targetId)) {
+          return { ...w, order: w.id === sourceId ? targetWidget.order : sourceWidget.order, columnStart: undefined };
+        }
         if (w.id === sourceId) {
           return { ...w, order: targetWidget.order, columnStart: tgtCol };
         }
@@ -333,8 +339,10 @@ export function solvePreviewLayout(
 
         if (!needsSwap && tgtCol != null) {
           const srcAfterTgt = reordered.findIndex(w => w.id === sourceId) > reordered.findIndex(w => w.id === intent.targetId);
-          if (srcAfterTgt && srcCol <= tgtCol) needsSwap = true;
-          if (!srcAfterTgt && srcCol >= tgtCol) needsSwap = true;
+          // Strict inequality: when both share the same column, swapping
+          // their columnStart values would pin both to the same column.
+          if (srcAfterTgt && srcCol < tgtCol) needsSwap = true;
+          if (!srcAfterTgt && srcCol > tgtCol) needsSwap = true;
         }
       }
 

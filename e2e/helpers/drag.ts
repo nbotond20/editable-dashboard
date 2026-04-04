@@ -62,8 +62,23 @@ async function performDrag(
     if (pt.pauseMs) await page.waitForTimeout(pt.pauseMs);
   }
 
-  // Dwell to allow zone resolution and intent computation
-  await page.waitForTimeout(dwellMs);
+  // Dwell with deterministic micro-jitter to simulate hand tremor.
+  // Real users generate continuous pointermove events even when
+  // "holding still" — the engine must handle this gracefully.
+  // Uses wall-clock time to control duration so Playwright IPC
+  // overhead doesn't inflate the actual dwell beyond dwellMs.
+  const startTime = Date.now();
+  let i = 0;
+  while (Date.now() - startTime < dwellMs - 20) {
+    const jx = Math.sin(i * 0.5) * 4;
+    const jy = Math.cos(i * 0.7) * 3;
+    await page.mouse.move(endX + jx, endY + jy);
+    await page.waitForTimeout(16);
+    i++;
+  }
+  // Return to exact target so preview captures the intended position.
+  await page.mouse.move(endX, endY);
+  await page.waitForTimeout(16);
 
   // Capture the preview grid before releasing — this is what the user sees
   const previewGrid = await capturePreviewGrid(page);
@@ -240,8 +255,24 @@ export async function performMultiZoneDrag(
     await page.waitForTimeout(wp.dwellMs);
   }
 
+  // Capture preview before releasing — must match final layout
+  const previewGrid = await capturePreviewGrid(page);
+
   await page.mouse.up();
   await page.waitForTimeout(350);
+
+  expect(
+    previewGrid,
+    "Drop ghost must be visible during multi-zone drag — no preview grid captured",
+  ).not.toBeNull();
+
+  const finalGrid = await getGridRepresentation(page);
+  expect(
+    finalGrid,
+    `Preview during multi-zone drag does not match layout after drop.\n` +
+    `Preview: ${JSON.stringify(previewGrid)}\n` +
+    `Final:   ${JSON.stringify(finalGrid)}`,
+  ).toEqual(previewGrid);
 }
 
 export async function getGapBeforeWidget(

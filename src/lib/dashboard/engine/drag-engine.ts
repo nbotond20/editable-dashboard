@@ -392,9 +392,17 @@ export class DragEngine {
       const tgtCol = preTgt?.columnStart;
 
       if (srcCol != null || tgtCol != null) {
+        // Swap columnStart values so each widget lands in the other's
+        // column.  When both share the same column, clear both instead
+        // — swapping identical values would pin both to the same column
+        // and cause them to stack.
+        const samePinCol = srcCol != null && tgtCol != null && srcCol === tgtCol;
         newState = {
           ...newState,
           widgets: newState.widgets.map(w => {
+            if (samePinCol && (w.id === committed.sourceId || w.id === committed.targetId)) {
+              return { ...w, columnStart: undefined };
+            }
             if (w.id === committed.sourceId && tgtCol != null) {
               return { ...w, columnStart: tgtCol };
             }
@@ -469,8 +477,11 @@ export class DragEngine {
           const srcPostIdx = postVisible.findIndex(w => w.id === committed.sourceId);
           const tgtPostIdx = postVisible.findIndex(w => w.id === committed.targetId);
           const srcAfterTgt = srcPostIdx > tgtPostIdx;
-          if (srcAfterTgt && srcCol <= tgtCol) needsSwap = true;
-          if (!srcAfterTgt && srcCol >= tgtCol) needsSwap = true;
+          // Strict inequality: when both share the same column, swapping
+          // their columnStart values would pin both to the same column,
+          // causing them to stack instead of sitting side-by-side.
+          if (srcAfterTgt && srcCol < tgtCol) needsSwap = true;
+          if (!srcAfterTgt && srcCol > tgtCol) needsSwap = true;
         }
       }
 
@@ -940,19 +951,26 @@ export class DragEngine {
     // Hysteresis: once the cursor enters the side region (sideStrength > 0.2),
     // require it to drop below 0.1 before leaving side mode.  This prevents
     // intent flickering when the cursor oscillates near the boundary.
+    //
+    // When source + target spans exceed maxColumns, auto-resize requires
+    // shrinking a widget.  Collapse to a moderate threshold (400ms) instead
+    // of 0 so a quick drag stays as swap while a deliberate hold still
+    // triggers auto-resize.
     let effectiveResizeDwellMs = this.config.resizeDwellMs;
     if (
       this.currentZone.type === "widget" &&
       this.phase.type === "dragging" &&
       layout
     ) {
-      const targetPos = layout.positions.get(this.currentZone.targetId);
+      const targetId = this.currentZone.targetId;
+      const targetPos = layout.positions.get(targetId);
       if (targetPos) {
         const centerX = targetPos.x + targetPos.width / 2;
         const halfWidth = targetPos.width / 2;
         const sideStrength = halfWidth > 0
           ? Math.abs(this.phase.pointerPos.x - centerX) / halfWidth
           : 0;
+        const wasSideCollapsed = this.sideCollapsed;
         if (this.sideCollapsed) {
           if (sideStrength < 0.1) {
             this.sideCollapsed = false;
@@ -963,7 +981,23 @@ export class DragEngine {
           }
         }
         if (this.sideCollapsed) {
-          effectiveResizeDwellMs = this.config.swapDwellMs;
+          const target = state.widgets.find((w) => w.id === targetId);
+          const spansExceedMax = target
+            ? source.colSpan + target.colSpan > state.maxColumns
+            : false;
+          if (spansExceedMax) {
+            // When the side-collapse just activated and the widgets don't
+            // fit side-by-side, restart the dwell timer.  This ensures the
+            // 400ms countdown starts from the moment the user commits to
+            // the side position, not from when the cursor first entered
+            // the zone during path traversal.
+            if (!wasSideCollapsed) {
+              this.zoneEnteredAt = timestamp;
+            }
+            effectiveResizeDwellMs = Math.min(this.config.resizeDwellMs, 400);
+          } else {
+            effectiveResizeDwellMs = this.config.swapDwellMs;
+          }
         }
       }
     }

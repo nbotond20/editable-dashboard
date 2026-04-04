@@ -325,3 +325,42 @@ Result:
 B A
 C
 D
+
+### 23
+
+Start:
+A
+B B
+C
+
+B -> <A
+
+Result:
+B B
+A
+C
+
+### 24
+
+Start:
+A
+B B
+C
+
+A -> <B
+
+Result:
+B B
+A
+C
+
+### 25
+
+Start:
+A A
+B
+
+B ->| <A
+
+Result:
+B A

@@ -739,3 +739,27 @@ test.describe("2-col: A B / C / D", () => {
     await assertLayout(page, [["b", "a"], ["c"], ["d"]]);
   });
 });
+
+// ── 2-col: A / B B / C (tests 83–84) ──────────────────────────────
+
+test.describe("2-col: A / B B / C", () => {
+  test("case 83: B -> <A (swap, no dwell)", async ({ page }) => {
+    await setupDashboard(page, ["A", "B B", "C"]);
+    await dragByIdToSide(page, "b", "a", "left", { dwellMs: 150 });
+    await assertLayout(page, [["b", "b"], ["a"], ["c"]]);
+  });
+
+  test("case 84: A -> <B (swap, no dwell)", async ({ page }) => {
+    await setupDashboard(page, ["A", "B B", "C"]);
+    await dragByIdToSide(page, "a", "b", "left", { dwellMs: 150 });
+    await assertLayout(page, [["b", "b"], ["a"], ["c"]]);
+  });
+});
+
+// ── 2-col: A A / B (test 85) ──────────────────────────────────────
+
+test("case 85: B ->| <A (auto-resize left)", async ({ page }) => {
+  await setupDashboard(page, ["A A", "B"]);
+  await dragByIdToSide(page, "b", "a", "left");
+  await assertLayout(page, [["b", "a"]]);
+});
