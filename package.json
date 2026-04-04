@@ -56,7 +56,7 @@
     "keyboard-navigation"
   ],
   "author": "nbotond20",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/nbotond20/editable-dashboard.git"
