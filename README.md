@@ -2,8 +2,8 @@
 
 A headless, zero-dependency React library for building fully customizable dashboard layouts with drag-and-drop reordering, dynamic resizing, and smart bin-packing.
 
-[![npm](https://img.shields.io/npm/v/@nbotond20/editable-dashboard)](https://www.npmjs.com/package/@nbotond20/editable-dashboard)
-[![bundle size](https://img.shields.io/bundlephobia/minzip/@nbotond20/editable-dashboard)](https://bundlephobia.com/package/@nbotond20/editable-dashboard)
+[![npm](https://img.shields.io/npm/v/editable-dashboard)](https://www.npmjs.com/package/editable-dashboard)
+[![bundle size](https://img.shields.io/bundlephobia/minzip/editable-dashboard)](https://bundlephobia.com/package/editable-dashboard)
 
 Demo: https://nbotond20.github.io/editable-dashboard/
 
