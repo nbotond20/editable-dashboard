@@ -176,38 +176,6 @@ function reorderVisible(
   return { reordered: ordered, hidden };
 }
 
-/**
- * Common tail shared by most preview cases:
- *   1. Optionally stabilize uninvolved widgets using baseLayout.
- *   2. Collect pinned IDs.
- *   3. Pin to greedy columns.
- *   4. Compute layout.
- */
-function computeStabilizedLayout(
-  previewWidgets: WidgetState[],
-  hiddenWidgets: WidgetState[],
-  heights: ReadonlyMap<string, number>,
-  containerWidth: number,
-  config: LayoutSolverConfig,
-  baseLayout: ComputedLayout | undefined,
-  involvedIds: ReadonlySet<string>,
-): ComputedLayout {
-  let widgets = baseLayout
-    ? stabilizeUninvolvedWidgets(previewWidgets, baseLayout, involvedIds, containerWidth, config.maxColumns, config.gap)
-    : previewWidgets;
-
-  const pinned = getPinnedIds(widgets);
-  widgets = pinToGreedyColumns(widgets, config.maxColumns, pinned);
-
-  return computeLayout(
-    [...widgets, ...hiddenWidgets],
-    heights as Map<string, number>,
-    containerWidth,
-    config.maxColumns,
-    config.gap,
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
