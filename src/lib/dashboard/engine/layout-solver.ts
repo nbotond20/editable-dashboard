@@ -2,6 +2,7 @@ import type { WidgetState, ComputedLayout } from "../types.ts";
 import type { OperationIntent } from "./types.ts";
 import { computeLayout } from "../layout/compute-layout.ts";
 import { DEFAULT_WIDGET_HEIGHT } from "../constants.ts";
+import { getPinnedIds } from "./utils.ts";
 
 export function pinToGreedyColumns(
   widgets: WidgetState[],
@@ -145,6 +146,72 @@ export interface LayoutSolverConfig {
   gap: number;
 }
 
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Splice the source widget out of the visible list and re-insert at
+ * `targetIndex`, then reassign sequential order values.
+ *
+ * Returns `null` when `sourceId` is not found among the visible widgets.
+ */
+function reorderVisible(
+  widgets: WidgetState[],
+  sourceId: string,
+  targetIndex: number,
+  overrides?: Partial<WidgetState>,
+): { reordered: WidgetState[]; hidden: WidgetState[] } | null {
+  const visible = widgets.filter(w => w.visible).sort((a, b) => a.order - b.order);
+  const sourceIdx = visible.findIndex(w => w.id === sourceId);
+  if (sourceIdx === -1) return null;
+
+  const reordered = [...visible];
+  const [moved] = reordered.splice(sourceIdx, 1);
+  const merged = overrides ? { ...moved, ...overrides } : moved;
+  reordered.splice(targetIndex, 0, merged);
+
+  const ordered = reordered.map((w, i) => ({ ...w, order: i }));
+  const hidden = widgets.filter(w => !w.visible);
+  return { reordered: ordered, hidden };
+}
+
+/**
+ * Common tail shared by most preview cases:
+ *   1. Optionally stabilize uninvolved widgets using baseLayout.
+ *   2. Collect pinned IDs.
+ *   3. Pin to greedy columns.
+ *   4. Compute layout.
+ */
+function computeStabilizedLayout(
+  previewWidgets: WidgetState[],
+  hiddenWidgets: WidgetState[],
+  heights: ReadonlyMap<string, number>,
+  containerWidth: number,
+  config: LayoutSolverConfig,
+  baseLayout: ComputedLayout | undefined,
+  involvedIds: ReadonlySet<string>,
+): ComputedLayout {
+  let widgets = baseLayout
+    ? stabilizeUninvolvedWidgets(previewWidgets, baseLayout, involvedIds, containerWidth, config.maxColumns, config.gap)
+    : previewWidgets;
+
+  const pinned = getPinnedIds(widgets);
+  widgets = pinToGreedyColumns(widgets, config.maxColumns, pinned);
+
+  return computeLayout(
+    [...widgets, ...hiddenWidgets],
+    heights as Map<string, number>,
+    containerWidth,
+    config.maxColumns,
+    config.gap,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
 export function solveBaseLayout(
   widgets: WidgetState[],
   heights: ReadonlyMap<string, number>,
@@ -215,42 +282,32 @@ export function solvePreviewLayout(
   sourceId: string,
   baseLayout?: ComputedLayout
 ): ComputedLayout {
-  const visible = widgets.filter(w => w.visible).sort((a, b) => a.order - b.order);
-
-  const stabilize = (ws: WidgetState[], involved: ReadonlySet<string>) =>
-    baseLayout
-      ? stabilizeUninvolvedWidgets(ws, baseLayout, involved, containerWidth, config.maxColumns, config.gap)
-      : ws;
+  const fallback = () => solveDragLayout(widgets, heights, containerWidth, config, sourceId);
 
   switch (intent.type) {
     case "none":
-      return solveDragLayout(widgets, heights, containerWidth, config, sourceId);
+      return fallback();
 
     case "reorder": {
-      const sourceIdx = visible.findIndex(w => w.id === sourceId);
-      if (sourceIdx === -1) return solveDragLayout(widgets, heights, containerWidth, config, sourceId);
-      const reordered = [...visible];
-      const [moved] = reordered.splice(sourceIdx, 1);
-      reordered.splice(intent.targetIndex, 0, moved);
-      const previewWidgets = reordered.map((w, i) => ({
-        ...w,
-        order: i,
-        ...(w.id === sourceId ? { columnStart: undefined } : {}),
-      }));
-      const hidden = widgets.filter(w => !w.visible);
+      const result = reorderVisible(widgets, sourceId, intent.targetIndex, { columnStart: undefined });
+      if (!result) return fallback();
+      const stabilized = baseLayout
+        ? stabilizeUninvolvedWidgets(result.reordered, baseLayout, new Set([sourceId]), containerWidth, config.maxColumns, config.gap)
+        : result.reordered;
       return computeLayout(
-        [...stabilize(previewWidgets, new Set([sourceId])), ...hidden],
+        [...stabilized, ...result.hidden],
         heights as Map<string, number>,
         containerWidth,
         config.maxColumns,
-        config.gap
+        config.gap,
       );
     }
 
     case "swap": {
+      const visible = widgets.filter(w => w.visible).sort((a, b) => a.order - b.order);
       const sourceWidget = visible.find(w => w.id === sourceId);
       const targetWidget = visible.find(w => w.id === intent.targetId);
-      if (!sourceWidget || !targetWidget) return solveDragLayout(widgets, heights, containerWidth, config, sourceId);
+      if (!sourceWidget || !targetWidget) return fallback();
 
       const srcCol = sourceWidget.columnStart;
       const tgtCol = targetWidget.columnStart;
@@ -273,20 +330,17 @@ export function solvePreviewLayout(
         const srcPos = baseLayout.positions.get(sourceId);
         const tgtPos = baseLayout.positions.get(intent.targetId);
         if (srcPos && tgtPos && Math.abs(srcPos.y - tgtPos.y) < 1) {
-          swapped = stabilize(swapped, new Set([sourceId, intent.targetId]));
+          swapped = stabilizeUninvolvedWidgets(swapped, baseLayout, new Set([sourceId, intent.targetId]), containerWidth, config.maxColumns, config.gap);
         }
       }
 
-      const pinned = new Set<string>();
-      for (const w of swapped) {
-        if (w.visible && w.columnStart != null) pinned.add(w.id);
-      }
+      const pinned = getPinnedIds(swapped);
       return computeLayout(
-        pinToGreedyColumns(swapped, config.maxColumns, pinned.size > 0 ? pinned : undefined),
+        pinToGreedyColumns(swapped, config.maxColumns, pinned),
         heights as Map<string, number>,
         containerWidth,
         config.maxColumns,
-        config.gap
+        config.gap,
       );
     }
 
@@ -303,7 +357,7 @@ export function solvePreviewLayout(
       });
       const resizedVisible = resized.filter(w => w.visible).sort((a, b) => a.order - b.order);
       const sourceIdx = resizedVisible.findIndex(w => w.id === sourceId);
-      if (sourceIdx === -1) return solveDragLayout(widgets, heights, containerWidth, config, sourceId);
+      if (sourceIdx === -1) return fallback();
       const reordered = [...resizedVisible];
       const [moved] = reordered.splice(sourceIdx, 1);
       reordered.splice(intent.targetIndex, 0, moved);
@@ -358,16 +412,13 @@ export function solvePreviewLayout(
       const hidden = widgets.filter(w => !w.visible);
 
       if (srcCol != null || tgtCol != null) {
-        const pinned = new Set<string>();
-        for (const pw of previewWidgets) {
-          if (pw.visible && pw.columnStart != null) pinned.add(pw.id);
-        }
+        const pinned = getPinnedIds(previewWidgets);
         return computeLayout(
-          [...pinToGreedyColumns(previewWidgets, config.maxColumns, pinned.size > 0 ? pinned : undefined), ...hidden],
+          [...pinToGreedyColumns(previewWidgets, config.maxColumns, pinned), ...hidden],
           heights as Map<string, number>,
           containerWidth,
           config.maxColumns,
-          config.gap
+          config.gap,
         );
       }
 
@@ -375,17 +426,16 @@ export function solvePreviewLayout(
         const srcPos = baseLayout.positions.get(sourceId);
         const tgtPos = baseLayout.positions.get(intent.targetId);
         if (srcPos && tgtPos && Math.abs(srcPos.y - tgtPos.y) < 1) {
+          const stabilize = (ws: WidgetState[], involved: ReadonlySet<string>) =>
+            stabilizeUninvolvedWidgets(ws, baseLayout, involved, containerWidth, config.maxColumns, config.gap);
           const stabilizedPreview = stabilize(previewWidgets, new Set([sourceId, intent.targetId]));
-          const pinned2 = new Set<string>();
-          for (const pw of stabilizedPreview) {
-            if (pw.visible && pw.columnStart != null) pinned2.add(pw.id);
-          }
+          const pinned = getPinnedIds(stabilizedPreview);
           return computeLayout(
-            [...pinToGreedyColumns(stabilizedPreview, config.maxColumns, pinned2.size > 0 ? pinned2 : undefined), ...hidden],
+            [...pinToGreedyColumns(stabilizedPreview, config.maxColumns, pinned), ...hidden],
             heights as Map<string, number>,
             containerWidth,
             config.maxColumns,
-            config.gap
+            config.gap,
           );
         }
       }
@@ -395,14 +445,15 @@ export function solvePreviewLayout(
         heights as Map<string, number>,
         containerWidth,
         config.maxColumns,
-        config.gap
+        config.gap,
       );
     }
 
     case "column-pin": {
+      const visible = widgets.filter(w => w.visible).sort((a, b) => a.order - b.order);
       const visibleSorted = visible.filter(w => w.id !== sourceId);
       const source = visible.find(w => w.id === sourceId);
-      if (!source) return solveDragLayout(widgets, heights, containerWidth, config, sourceId);
+      if (!source) return fallback();
       const maxSpanAtCol = Math.max(1, config.maxColumns - intent.column);
       const pinnedSource = {
         ...source,
@@ -422,7 +473,7 @@ export function solvePreviewLayout(
         heights as Map<string, number>,
         containerWidth,
         config.maxColumns,
-        config.gap
+        config.gap,
       );
     }
   }

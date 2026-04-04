@@ -4,32 +4,33 @@ import type {
   DashboardState,
   DashboardStateInput,
   DashboardError,
-  DashboardAction,
   DragHandleA11yProps,
-  DragState,
-  WidgetDefinition,
   LockType,
 } from "../types.ts";
-import type { CommittedOperation } from "../engine/types.ts";
+import { isLockActive } from "../locks.ts";
 import {
   DEFAULT_MAX_COLUMNS,
   DEFAULT_GAP,
   AUTO_SCROLL_EDGE_SIZE,
   AUTO_SCROLL_MAX_SPEED,
 } from "../constants.ts";
-import { dashboardReducer } from "../state/dashboard-reducer.ts";
 import { DashboardContext, useActions } from "../state/use-dashboard.ts";
 import { useDragEngine } from "./use-drag-engine.ts";
 import { usePointerAdapter } from "./use-pointer-adapter.ts";
 import { useKeyboardAdapter } from "./use-keyboard-adapter.ts";
 import { useMeasurementBridge } from "./use-measurement-bridge.ts";
-import { useAutoScroll } from "../drag/use-auto-scroll.ts";
-import { useDragAnnouncements } from "../drag/use-drag-announcements.ts";
+import { useAutoScroll } from "./use-auto-scroll.ts";
+import { useDragAnnouncements } from "./use-drag-announcements.ts";
 import {
   validateDefinitions,
   validateProviderProps,
   validateInitialWidgets,
 } from "../validation.ts";
+import { useMutationCallbacks } from "./use-mutation-callbacks.ts";
+import { usePhaseCallbacks } from "./use-phase-callbacks.ts";
+import { useDispatch } from "./use-dispatch.ts";
+import { useUndoRedoShortcuts } from "./use-undo-redo-shortcuts.ts";
+import { buildDragState, buildEngineConfig } from "./build-context-helpers.ts";
 
 /**
  * Root provider component for the dashboard.
@@ -64,6 +65,8 @@ export function DashboardProvider(props: DashboardProviderProps) {
     children,
   } = props;
 
+  // ── Error handling ──────────────────────────────────────────────────
+
   const onErrorRef = useRef(onError);
   useEffect(() => { onErrorRef.current = onError; });
 
@@ -83,22 +86,7 @@ export function DashboardProvider(props: DashboardProviderProps) {
     }
   }, [maxColumns, gap, maxUndoDepth, emitError]);
 
-  const onDragStartRef = useRef(onDragStart);
-  useEffect(() => { onDragStartRef.current = onDragStart; });
-  const onDragEndRef = useRef(onDragEnd);
-  useEffect(() => { onDragEndRef.current = onDragEnd; });
-  const onWidgetAddRef = useRef(onWidgetAdd);
-  useEffect(() => { onWidgetAddRef.current = onWidgetAdd; });
-  const onWidgetRemoveRef = useRef(onWidgetRemove);
-  useEffect(() => { onWidgetRemoveRef.current = onWidgetRemove; });
-  const onWidgetResizeRef = useRef(onWidgetResize);
-  useEffect(() => { onWidgetResizeRef.current = onWidgetResize; });
-  const onWidgetReorderRef = useRef(onWidgetReorder);
-  useEffect(() => { onWidgetReorderRef.current = onWidgetReorder; });
-  const onWidgetConfigChangeRef = useRef(onWidgetConfigChange);
-  useEffect(() => { onWidgetConfigChangeRef.current = onWidgetConfigChange; });
-  const onChangeRef = useRef(onChange);
-  useEffect(() => { onChangeRef.current = onChange; });
+  // ── Controlled / uncontrolled state resolution ──────────────────────
 
   const isControlled = "state" in props && props.state !== undefined;
   const rawInitialWidgets =
@@ -133,28 +121,24 @@ export function DashboardProvider(props: DashboardProviderProps) {
         containerWidth: 0,
       };
 
+  // ── Engine, adapters, measurement ───────────────────────────────────
+
   const canDropRef = useRef(canDrop);
   useEffect(() => { canDropRef.current = canDrop; });
 
-  const engineConfig = useMemo(() => ({
-    maxColumns,
-    gap,
-    ...(dragConfig?.activationThreshold != null && { activationThreshold: dragConfig.activationThreshold }),
-    ...(dragConfig?.touchActivationDelay != null && { touchActivationDelay: dragConfig.touchActivationDelay }),
-    ...(dragConfig?.touchMoveTolerance != null && { touchMoveTolerance: dragConfig.touchMoveTolerance }),
-    ...(dragConfig?.swapDwellMs != null && { swapDwellMs: dragConfig.swapDwellMs }),
-    ...(dragConfig?.resizeDwellMs != null && { resizeDwellMs: dragConfig.resizeDwellMs }),
-    ...(dragConfig?.dropAnimationDuration != null && { dropAnimationDuration: dragConfig.dropAnimationDuration }),
-  }), [
-    maxColumns,
-    gap,
-    dragConfig?.activationThreshold,
-    dragConfig?.touchActivationDelay,
-    dragConfig?.touchMoveTolerance,
-    dragConfig?.swapDwellMs,
-    dragConfig?.resizeDwellMs,
-    dragConfig?.dropAnimationDuration,
-  ]);
+  const engineConfig = useMemo(
+    () => buildEngineConfig(maxColumns, gap, dragConfig),
+    [
+      maxColumns,
+      gap,
+      dragConfig?.activationThreshold,
+      dragConfig?.touchActivationDelay,
+      dragConfig?.touchMoveTolerance,
+      dragConfig?.swapDwellMs,
+      dragConfig?.resizeDwellMs,
+      dragConfig?.dropAnimationDuration,
+    ],
+  );
 
   const engine = useDragEngine(initialState, definitions, engineConfig);
 
@@ -169,8 +153,7 @@ export function DashboardProvider(props: DashboardProviderProps) {
     engine.getSnapshot,
   );
 
-  const onStateChangeRef = useRef(onStateChange);
-  useEffect(() => { onStateChangeRef.current = onStateChange; });
+  // ── Announcements ───────────────────────────────────────────────────
 
   const { announce, LiveRegion } = useDragAnnouncements();
   useEffect(() => {
@@ -179,47 +162,9 @@ export function DashboardProvider(props: DashboardProviderProps) {
     }
   }, [snapshot.announcement, announce]);
 
-  const prevPhaseRef = useRef(snapshot.phase);
-  useEffect(() => {
-    const prev = prevPhaseRef.current;
-    const curr = snapshot.phase;
-    prevPhaseRef.current = curr;
+  // ── Extracted hooks ─────────────────────────────────────────────────
 
-    if (curr.type === "dragging" && prev.type !== "dragging") {
-      onDragStartRef.current?.({ widgetId: curr.sourceId, phase: "pointer" });
-    } else if (curr.type === "keyboard-dragging" && prev.type !== "keyboard-dragging") {
-      onDragStartRef.current?.({ widgetId: curr.sourceId, phase: "keyboard" });
-    }
-
-    if (curr.type === "idle" && prev.type === "dropping") {
-      onDragEndRef.current?.({
-        widgetId: prev.sourceId,
-        operation: prev.operation,
-        cancelled: prev.operation.type === "cancelled",
-      });
-    }
-
-    if (curr.type === "idle" && prev.type === "dragging") {
-      const cancelledOp: CommittedOperation = { type: "cancelled" };
-      onDragEndRef.current?.({
-        widgetId: prev.sourceId,
-        operation: cancelledOp,
-        cancelled: true,
-      });
-    }
-
-    if (curr.type === "idle" && prev.type === "keyboard-dragging") {
-      const wasCancelled = prev.currentIndex === prev.originalIndex && prev.currentColSpan === prev.originalColSpan;
-      const operation: CommittedOperation = wasCancelled
-        ? { type: "cancelled" }
-        : { type: "reorder", fromIndex: prev.originalIndex, toIndex: prev.currentIndex };
-      onDragEndRef.current?.({
-        widgetId: prev.sourceId,
-        operation,
-        cancelled: wasCancelled,
-      });
-    }
-  }, [snapshot.phase]);
+  usePhaseCallbacks({ phase: snapshot.phase, onDragStart, onDragEnd });
 
   const getClientPointerForScroll = useCallback(() => clientPosRef.current, [clientPosRef]);
   const autoScrollEdgeSize = dragConfig?.autoScrollEdgeSize ?? AUTO_SCROLL_EDGE_SIZE;
@@ -231,87 +176,25 @@ export function DashboardProvider(props: DashboardProviderProps) {
     autoScrollMaxSpeed,
   );
 
-  const fireMutationCallbacks = useCallback(
-    (action: DashboardAction, prevState: DashboardState, nextState: DashboardState) => {
-      if (nextState === prevState) return;
+  const fireMutationCallbacks = useMutationCallbacks({
+    onWidgetAdd,
+    onWidgetRemove,
+    onWidgetResize,
+    onWidgetReorder,
+    onWidgetConfigChange,
+  });
 
-      switch (action.type) {
-        case "ADD_WIDGET": {
-          const newWidget = nextState.widgets.find(
-            (w) => !prevState.widgets.some((pw) => pw.id === w.id),
-          );
-          if (newWidget) {
-            onWidgetAddRef.current?.({ widget: newWidget });
-          }
-          break;
-        }
-        case "REMOVE_WIDGET":
-          onWidgetRemoveRef.current?.({ widgetId: action.id });
-          break;
-        case "RESIZE_WIDGET": {
-          const prevWidget = prevState.widgets.find((w) => w.id === action.id);
-          const nextWidget = nextState.widgets.find((w) => w.id === action.id);
-          if (prevWidget && nextWidget && prevWidget.colSpan !== nextWidget.colSpan) {
-            onWidgetResizeRef.current?.({
-              widgetId: action.id,
-              previousColSpan: prevWidget.colSpan,
-              newColSpan: nextWidget.colSpan,
-            });
-          }
-          break;
-        }
-        case "REORDER_WIDGETS":
-          if (action.fromIndex !== action.toIndex) {
-            const visible = [...prevState.widgets]
-              .filter((w) => w.visible)
-              .sort((a, b) => a.order - b.order);
-            const movedWidget = visible[action.fromIndex];
-            if (movedWidget) {
-              onWidgetReorderRef.current?.({
-                widgetId: movedWidget.id,
-                fromIndex: action.fromIndex,
-                toIndex: action.toIndex,
-              });
-            }
-          }
-          break;
-        case "UPDATE_WIDGET_CONFIG":
-          onWidgetConfigChangeRef.current?.({
-            widgetId: action.id,
-            config: action.config,
-          });
-          break;
-      }
-    },
-    [],
-  );
+  const dispatch = useDispatch(engine, onStateChange, fireMutationCallbacks);
 
-  const dispatch = useCallback(
-    (action: DashboardAction) => {
-      const prevState = engine.getState();
+  useUndoRedoShortcuts(keyboardShortcuts, containerRef, engine);
 
-      if (onStateChangeRef.current) {
-        const nextState = dashboardReducer(prevState, action);
-        onStateChangeRef.current({
-          widgets: nextState.widgets,
-          maxColumns: nextState.maxColumns,
-          gap: nextState.gap,
-        });
-        fireMutationCallbacks(action, prevState, nextState);
-      } else {
-        engine.dispatch(action);
-        const nextState = engine.getState();
-        fireMutationCallbacks(action, prevState, nextState);
-      }
-    },
-    [engine, fireMutationCallbacks],
-  );
+  // ── Actions & helpers ───────────────────────────────────────────────
 
   const getState = useCallback(() => engine.getState(), [engine]);
   const actions = useActions({ dispatch, definitions, getState, maxWidgets, onError: emitError });
 
   const isWidgetLockActive = useCallback(
-    (id: string, lockType: LockType) => resolveLock(id, lockType, engine.getState(), definitions),
+    (id: string, lockType: LockType) => isLockActive(id, lockType, engine.getState(), definitions),
     [engine, definitions],
   );
   const canAddWidget = useCallback(
@@ -319,47 +202,12 @@ export function DashboardProvider(props: DashboardProviderProps) {
     [engine, maxWidgets],
   );
 
-  const dragState: DragState = useMemo(() => {
-    const phase = snapshot.phase;
-    if (phase.type === "dragging") {
-      return {
-        activeId: phase.sourceId,
-        dropTargetIndex: snapshot.intent?.type === "reorder" ? snapshot.intent.targetIndex : null,
-        previewColSpan: snapshot.intent?.type === "auto-resize" ? snapshot.intent.sourceSpan : null,
-        previewLayout: snapshot.previewLayout,
-        isLongPressing: false,
-        longPressTargetId: null,
-      };
-    }
-    if (phase.type === "keyboard-dragging") {
-      return {
-        activeId: phase.sourceId,
-        dropTargetIndex: phase.currentIndex,
-        previewColSpan: null,
-        previewLayout: snapshot.previewLayout,
-        isLongPressing: false,
-        longPressTargetId: null,
-      };
-    }
-    if (phase.type === "pending") {
-      return {
-        activeId: null,
-        dropTargetIndex: null,
-        previewColSpan: null,
-        previewLayout: null,
-        isLongPressing: phase.pointerType === "touch",
-        longPressTargetId: phase.pointerType === "touch" ? phase.sourceId : null,
-      };
-    }
-    return {
-      activeId: null,
-      dropTargetIndex: null,
-      previewColSpan: null,
-      previewLayout: null,
-      isLongPressing: false,
-      longPressTargetId: null,
-    };
-  }, [snapshot.phase, snapshot.intent, snapshot.previewLayout]);
+  // ── Drag state & position ──────────────────────────────────────────
+
+  const dragState = useMemo(
+    () => buildDragState(snapshot),
+    [snapshot.phase, snapshot.intent, snapshot.previewLayout],
+  );
 
   const getDragPosition = useCallback(
     () => engine.getDragPosition(),
@@ -413,30 +261,10 @@ export function DashboardProvider(props: DashboardProviderProps) {
     [handleKeyDown],
   );
 
-  useEffect(() => {
-    if (!keyboardShortcuts) return;
-    const container = containerRef.current;
-    if (!container) return;
-
-    const handler = (e: KeyboardEvent) => {
-      const isUndoKey =
-        (e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === "z";
-      const isRedoKey =
-        (e.ctrlKey || e.metaKey) &&
-        ((e.shiftKey && e.key === "z") || (!e.shiftKey && e.key === "y"));
-
-      if (!isUndoKey && !isRedoKey) return;
-      e.preventDefault();
-      engine.dispatch({ type: isRedoKey ? "REDO" : "UNDO" });
-    };
-
-    container.addEventListener("keydown", handler);
-    return () => container.removeEventListener("keydown", handler);
-  }, [keyboardShortcuts, containerRef, engine]);
+  // ── Context value ───────────────────────────────────────────────────
 
   const state = engine.getState();
   const layout = snapshot.layout;
-
   const phase = snapshot.phase.type;
 
   const contextValue = useMemo(
@@ -463,6 +291,11 @@ export function DashboardProvider(props: DashboardProviderProps) {
     [state, definitions, layout, actions, snapshot.canUndo, snapshot.canRedo, phase, dragState, getDragPosition, containerCallbackRef, measureRef, constrainedStartDrag, getA11yProps, handleKeyboardDrag, isWidgetLockActive, canAddWidget],
   );
 
+  // ── onChange (skip first render) ────────────────────────────────────
+
+  const onChangeRef = useRef(onChange);
+  useEffect(() => { onChangeRef.current = onChange; });
+
   const isFirstRenderRef = useRef(true);
   useEffect(() => {
     if (isFirstRenderRef.current) {
@@ -478,26 +311,4 @@ export function DashboardProvider(props: DashboardProviderProps) {
       <LiveRegion />
     </DashboardContext.Provider>
   );
-}
-
-function lockFieldName(lockType: LockType): "lockPosition" | "lockResize" | "lockRemove" {
-  switch (lockType) {
-    case "position": return "lockPosition";
-    case "resize": return "lockResize";
-    case "remove": return "lockRemove";
-  }
-}
-
-function resolveLock(
-  id: string,
-  lockType: LockType,
-  state: DashboardState,
-  definitions: WidgetDefinition[],
-): boolean {
-  const widget = state.widgets.find((w) => w.id === id);
-  if (!widget) return false;
-  const field = lockFieldName(lockType);
-  if (widget[field] != null) return widget[field]!;
-  const def = definitions.find((d) => d.type === widget.type);
-  return def?.[field] === true;
 }

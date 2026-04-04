@@ -9,7 +9,7 @@ import type {
   DragEngineSnapshot,
   Point,
 } from "./types.ts";
-import { distance, getVisibleSorted, zonesEqual } from "./types.ts";
+import { distance, getVisibleSorted, zonesEqual, getPinnedIds } from "./utils.ts";
 import { resolveZone } from "./zone-resolver.ts";
 import { resolveIntent, computeDwellProgress } from "./intent-resolver.ts";
 import { applyOperation } from "./operation-applier.ts";
@@ -381,199 +381,7 @@ export class DragEngine {
       return;
     }
 
-    let newState = applyOperation(this.history.present, committed);
-
-    const cfg = this.layoutConfig();
-    if (committed.type === "swap") {
-      const preSwapWidgets = this.history.present.widgets;
-      const preSrc = preSwapWidgets.find(w => w.id === committed.sourceId);
-      const preTgt = preSwapWidgets.find(w => w.id === committed.targetId);
-      const srcCol = preSrc?.columnStart;
-      const tgtCol = preTgt?.columnStart;
-
-      if (srcCol != null || tgtCol != null) {
-        const samePinCol = srcCol != null && tgtCol != null && srcCol === tgtCol;
-        newState = {
-          ...newState,
-          widgets: newState.widgets.map(w => {
-            if (samePinCol && (w.id === committed.sourceId || w.id === committed.targetId)) {
-              return { ...w, columnStart: undefined };
-            }
-            if (w.id === committed.sourceId && tgtCol != null) {
-              return { ...w, columnStart: tgtCol };
-            }
-            if (w.id === committed.targetId && srcCol != null) {
-              return { ...w, columnStart: srcCol };
-            }
-            return w;
-          }),
-        };
-      }
-
-      const srcPos = this.baseLayout.positions.get(committed.sourceId);
-      const tgtPos = this.baseLayout.positions.get(committed.targetId);
-      if (srcPos && tgtPos && Math.abs(srcPos.y - tgtPos.y) < 1) {
-        const involvedIds = new Set([committed.sourceId, committed.targetId]);
-        newState = {
-          ...newState,
-          widgets: stabilizeUninvolvedWidgets(
-            newState.widgets,
-            this.baseLayout,
-            involvedIds,
-            this.containerWidth,
-            cfg.maxColumns,
-            cfg.gap,
-          ),
-        };
-      }
-
-      const pinned = new Set<string>();
-      for (const w of newState.widgets) {
-        if (w.visible && w.columnStart != null) pinned.add(w.id);
-      }
-
-      newState = {
-        ...newState,
-        widgets: pinToGreedyColumns(newState.widgets, cfg.maxColumns, pinned.size > 0 ? pinned : undefined),
-      };
-    } else if (committed.type === "auto-resize") {
-      const preWidgets = this.history.present.widgets;
-      const preSrc = preWidgets.find(w => w.id === committed.sourceId);
-      const preTgt = preWidgets.find(w => w.id === committed.targetId);
-      const srcCol = preSrc?.columnStart;
-      const tgtCol = preTgt?.columnStart;
-
-      let needsSwap = false;
-      if (srcCol != null) {
-        const withoutSource = preWidgets.filter(w => w.visible && w.id !== committed.sourceId)
-          .sort((a, b) => a.order - b.order)
-          .map(w => w.id === committed.targetId ? { ...w, colSpan: committed.targetSpan } : w);
-        const checkLayout = solveBaseLayout(
-          withoutSource.map((w, i) => ({ ...w, order: i })),
-          this.heights, this.containerWidth, cfg,
-        );
-        const tgtPos = checkLayout.positions.get(committed.targetId);
-        if (tgtPos) {
-          const colW = (this.containerWidth - cfg.gap * (cfg.maxColumns - 1)) / cfg.maxColumns;
-          let rowOcc = 0;
-          for (const [, p] of checkLayout.positions) {
-            if (Math.abs(p.y - tgtPos.y) < 1) {
-              rowOcc += Math.max(1, Math.round((p.width + cfg.gap) / (colW + cfg.gap)));
-            }
-          }
-          if (rowOcc + committed.sourceSpan > cfg.maxColumns) {
-            needsSwap = true;
-          }
-        }
-
-        if (!needsSwap && tgtCol != null) {
-          const postVisible = getVisibleSorted(newState.widgets);
-          const srcPostIdx = postVisible.findIndex(w => w.id === committed.sourceId);
-          const tgtPostIdx = postVisible.findIndex(w => w.id === committed.targetId);
-          const srcAfterTgt = srcPostIdx > tgtPostIdx;
-          if (srcAfterTgt && srcCol < tgtCol) needsSwap = true;
-          if (!srcAfterTgt && srcCol > tgtCol) needsSwap = true;
-        }
-      }
-
-      if (srcCol != null || tgtCol != null) {
-        if (needsSwap) {
-          const preVisible = getVisibleSorted(preWidgets);
-          const srcOrigIdx = preVisible.findIndex(w => w.id === committed.sourceId);
-          const postVisible = getVisibleSorted(newState.widgets);
-          const tgtCurIdx = postVisible.findIndex(w => w.id === committed.targetId);
-
-          if (srcCol != null && srcOrigIdx >= 0 && tgtCurIdx >= 0 && tgtCurIdx !== srcOrigIdx) {
-            newState = applyOperation(newState, {
-              type: "reorder",
-              fromIndex: tgtCurIdx,
-              toIndex: srcOrigIdx,
-            });
-          }
-
-          newState = {
-            ...newState,
-            widgets: newState.widgets.map(w => {
-              if (w.id === committed.sourceId && tgtCol != null) {
-                return { ...w, columnStart: tgtCol };
-              }
-              if (w.id === committed.targetId && srcCol != null) {
-                return { ...w, columnStart: srcCol };
-              }
-              return w;
-            }),
-          };
-        }
-
-        const pinned = new Set<string>();
-        for (const w of newState.widgets) {
-          if (w.visible && w.columnStart != null) pinned.add(w.id);
-        }
-
-        newState = {
-          ...newState,
-          widgets: pinToGreedyColumns(newState.widgets, cfg.maxColumns, pinned.size > 0 ? pinned : undefined),
-        };
-      } else {
-        const srcPos = this.baseLayout.positions.get(committed.sourceId);
-        const tgtPos = this.baseLayout.positions.get(committed.targetId);
-        if (srcPos && tgtPos && Math.abs(srcPos.y - tgtPos.y) < 1) {
-          const involvedIds = new Set([committed.sourceId, committed.targetId]);
-          newState = {
-            ...newState,
-            widgets: stabilizeUninvolvedWidgets(
-              newState.widgets,
-              this.baseLayout,
-              involvedIds,
-              this.containerWidth,
-              cfg.maxColumns,
-              cfg.gap,
-            ),
-          };
-          const pinned = new Set<string>();
-          for (const w of newState.widgets) {
-            if (w.visible && w.columnStart != null) pinned.add(w.id);
-          }
-          newState = {
-            ...newState,
-            widgets: pinToGreedyColumns(newState.widgets, cfg.maxColumns, pinned.size > 0 ? pinned : undefined),
-          };
-        } else {
-          newState = {
-            ...newState,
-            widgets: pinToGreedyColumns(newState.widgets, cfg.maxColumns),
-          };
-        }
-      }
-    } else if (committed.type === "column-pin") {
-      const maxSpanAtCol = Math.max(1, cfg.maxColumns - committed.column);
-      newState = {
-        ...newState,
-        widgets: newState.widgets.map(w =>
-          w.id === committed.sourceId && w.colSpan > maxSpanAtCol
-            ? { ...w, colSpan: maxSpanAtCol }
-            : w
-        ),
-      };
-    } else if (committed.type === "reorder" && this.baseLayout) {
-      const involvedIds = new Set([sourceId]);
-      newState = {
-        ...newState,
-        widgets: stabilizeUninvolvedWidgets(
-          newState.widgets,
-          this.baseLayout,
-          involvedIds,
-          this.containerWidth,
-          cfg.maxColumns,
-          cfg.gap,
-        ),
-      };
-    } else {
-      newState = {
-        ...newState,
-        widgets: pinToGreedyColumns(newState.widgets, cfg.maxColumns),
-      };
-    }
+    const newState = this.applyCommittedOperation(sourceId, committed);
 
     if (newState !== this.history.present) {
       this.history = pushState(this.history, newState, MAX_UNDO_DEPTH);
@@ -812,6 +620,226 @@ export class DragEngine {
       this.recomputeLayouts();
     }
   }
+
+  // ---------------------------------------------------------------------------
+  // Post-commit operation logic
+  // ---------------------------------------------------------------------------
+
+  private applyCommittedOperation(
+    sourceId: string,
+    committed: CommittedOperation,
+  ): DashboardState {
+    let newState = applyOperation(this.history.present, committed);
+    const cfg = this.layoutConfig();
+
+    if (committed.type === "swap") {
+      newState = this.applySwapPostCommit(newState, committed);
+    } else if (committed.type === "auto-resize") {
+      newState = this.applyAutoResizePostCommit(newState, committed);
+    } else if (committed.type === "column-pin") {
+      const maxSpanAtCol = Math.max(1, cfg.maxColumns - committed.column);
+      newState = {
+        ...newState,
+        widgets: newState.widgets.map(w =>
+          w.id === committed.sourceId && w.colSpan > maxSpanAtCol
+            ? { ...w, colSpan: maxSpanAtCol }
+            : w
+        ),
+      };
+    } else if (committed.type === "reorder" && this.baseLayout) {
+      const involvedIds = new Set([sourceId]);
+      newState = {
+        ...newState,
+        widgets: stabilizeUninvolvedWidgets(
+          newState.widgets,
+          this.baseLayout,
+          involvedIds,
+          this.containerWidth,
+          cfg.maxColumns,
+          cfg.gap,
+        ),
+      };
+    } else {
+      newState = {
+        ...newState,
+        widgets: pinToGreedyColumns(newState.widgets, cfg.maxColumns),
+      };
+    }
+
+    return newState;
+  }
+
+  private applySwapPostCommit(
+    newState: DashboardState,
+    committed: Extract<CommittedOperation, { type: "swap" }>,
+  ): DashboardState {
+    const cfg = this.layoutConfig();
+    const preSwapWidgets = this.history.present.widgets;
+    const preSrc = preSwapWidgets.find(w => w.id === committed.sourceId);
+    const preTgt = preSwapWidgets.find(w => w.id === committed.targetId);
+    const srcCol = preSrc?.columnStart;
+    const tgtCol = preTgt?.columnStart;
+
+    if (srcCol != null || tgtCol != null) {
+      const samePinCol = srcCol != null && tgtCol != null && srcCol === tgtCol;
+      newState = {
+        ...newState,
+        widgets: newState.widgets.map(w => {
+          if (samePinCol && (w.id === committed.sourceId || w.id === committed.targetId)) {
+            return { ...w, columnStart: undefined };
+          }
+          if (w.id === committed.sourceId && tgtCol != null) {
+            return { ...w, columnStart: tgtCol };
+          }
+          if (w.id === committed.targetId && srcCol != null) {
+            return { ...w, columnStart: srcCol };
+          }
+          return w;
+        }),
+      };
+    }
+
+    const srcPos = this.baseLayout.positions.get(committed.sourceId);
+    const tgtPos = this.baseLayout.positions.get(committed.targetId);
+    if (srcPos && tgtPos && Math.abs(srcPos.y - tgtPos.y) < 1) {
+      const involvedIds = new Set([committed.sourceId, committed.targetId]);
+      newState = {
+        ...newState,
+        widgets: stabilizeUninvolvedWidgets(
+          newState.widgets,
+          this.baseLayout,
+          involvedIds,
+          this.containerWidth,
+          cfg.maxColumns,
+          cfg.gap,
+        ),
+      };
+    }
+
+    const pinned = getPinnedIds(newState.widgets);
+
+    newState = {
+      ...newState,
+      widgets: pinToGreedyColumns(newState.widgets, cfg.maxColumns, pinned),
+    };
+
+    return newState;
+  }
+
+  private applyAutoResizePostCommit(
+    newState: DashboardState,
+    committed: Extract<CommittedOperation, { type: "auto-resize" }>,
+  ): DashboardState {
+    const cfg = this.layoutConfig();
+    const preWidgets = this.history.present.widgets;
+    const preSrc = preWidgets.find(w => w.id === committed.sourceId);
+    const preTgt = preWidgets.find(w => w.id === committed.targetId);
+    const srcCol = preSrc?.columnStart;
+    const tgtCol = preTgt?.columnStart;
+
+    let needsSwap = false;
+    if (srcCol != null) {
+      const withoutSource = preWidgets.filter(w => w.visible && w.id !== committed.sourceId)
+        .sort((a, b) => a.order - b.order)
+        .map(w => w.id === committed.targetId ? { ...w, colSpan: committed.targetSpan } : w);
+      const checkLayout = solveBaseLayout(
+        withoutSource.map((w, i) => ({ ...w, order: i })),
+        this.heights, this.containerWidth, cfg,
+      );
+      const tgtPos = checkLayout.positions.get(committed.targetId);
+      if (tgtPos) {
+        const colW = (this.containerWidth - cfg.gap * (cfg.maxColumns - 1)) / cfg.maxColumns;
+        let rowOcc = 0;
+        for (const [, p] of checkLayout.positions) {
+          if (Math.abs(p.y - tgtPos.y) < 1) {
+            rowOcc += Math.max(1, Math.round((p.width + cfg.gap) / (colW + cfg.gap)));
+          }
+        }
+        if (rowOcc + committed.sourceSpan > cfg.maxColumns) {
+          needsSwap = true;
+        }
+      }
+
+      if (!needsSwap && tgtCol != null) {
+        const postVisible = getVisibleSorted(newState.widgets);
+        const srcPostIdx = postVisible.findIndex(w => w.id === committed.sourceId);
+        const tgtPostIdx = postVisible.findIndex(w => w.id === committed.targetId);
+        const srcAfterTgt = srcPostIdx > tgtPostIdx;
+        if (srcAfterTgt && srcCol < tgtCol) needsSwap = true;
+        if (!srcAfterTgt && srcCol > tgtCol) needsSwap = true;
+      }
+    }
+
+    if (srcCol != null || tgtCol != null) {
+      if (needsSwap) {
+        const preVisible = getVisibleSorted(preWidgets);
+        const srcOrigIdx = preVisible.findIndex(w => w.id === committed.sourceId);
+        const postVisible = getVisibleSorted(newState.widgets);
+        const tgtCurIdx = postVisible.findIndex(w => w.id === committed.targetId);
+
+        if (srcCol != null && srcOrigIdx >= 0 && tgtCurIdx >= 0 && tgtCurIdx !== srcOrigIdx) {
+          newState = applyOperation(newState, {
+            type: "reorder",
+            fromIndex: tgtCurIdx,
+            toIndex: srcOrigIdx,
+          });
+        }
+
+        newState = {
+          ...newState,
+          widgets: newState.widgets.map(w => {
+            if (w.id === committed.sourceId && tgtCol != null) {
+              return { ...w, columnStart: tgtCol };
+            }
+            if (w.id === committed.targetId && srcCol != null) {
+              return { ...w, columnStart: srcCol };
+            }
+            return w;
+          }),
+        };
+      }
+
+      const pinned = getPinnedIds(newState.widgets);
+
+      newState = {
+        ...newState,
+        widgets: pinToGreedyColumns(newState.widgets, cfg.maxColumns, pinned),
+      };
+    } else {
+      const srcPos = this.baseLayout.positions.get(committed.sourceId);
+      const tgtPos = this.baseLayout.positions.get(committed.targetId);
+      if (srcPos && tgtPos && Math.abs(srcPos.y - tgtPos.y) < 1) {
+        const involvedIds = new Set([committed.sourceId, committed.targetId]);
+        newState = {
+          ...newState,
+          widgets: stabilizeUninvolvedWidgets(
+            newState.widgets,
+            this.baseLayout,
+            involvedIds,
+            this.containerWidth,
+            cfg.maxColumns,
+            cfg.gap,
+          ),
+        };
+        const pinned = getPinnedIds(newState.widgets);
+        newState = {
+          ...newState,
+          widgets: pinToGreedyColumns(newState.widgets, cfg.maxColumns, pinned),
+        };
+      } else {
+        newState = {
+          ...newState,
+          widgets: pinToGreedyColumns(newState.widgets, cfg.maxColumns),
+        };
+      }
+    }
+
+    return newState;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Drag lifecycle helpers
+  // ---------------------------------------------------------------------------
 
   private cancelDrag(recompute: boolean): void {
     this.phase = { type: "idle" };

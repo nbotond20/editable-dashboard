@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback } from "react";
 import type { DragEngine } from "../engine/drag-engine.ts";
-import { useMeasureCache } from "../layout/measure-cache.ts";
+import { useMeasureCache } from "./use-measure-cache.ts";
 
 export function useMeasurementBridge(engine: DragEngine) {
   const { heights, measureRef } = useMeasureCache();

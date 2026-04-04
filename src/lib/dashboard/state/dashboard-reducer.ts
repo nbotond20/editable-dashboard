@@ -1,4 +1,5 @@
-import type { DashboardAction, DashboardState, LockType, WidgetState } from "../types.ts";
+import type { DashboardAction, DashboardState, WidgetState } from "../types.ts";
+import { lockFieldName } from "../locks.ts";
 
 /**
  * Normalize order values to be sequential (0, 1, 2, ...) to prevent drift.
@@ -7,14 +8,6 @@ import type { DashboardAction, DashboardState, LockType, WidgetState } from "../
 function normalizeOrder(widgets: WidgetState[]): WidgetState[] {
   const sorted = [...widgets].sort((a, b) => a.order - b.order);
   return sorted.map((w, i) => (w.order === i ? w : { ...w, order: i }));
-}
-
-function lockField(lockType: LockType): "lockPosition" | "lockResize" | "lockRemove" {
-  switch (lockType) {
-    case "position": return "lockPosition";
-    case "resize": return "lockResize";
-    case "remove": return "lockRemove";
-  }
 }
 
 export function dashboardReducer(
@@ -122,7 +115,7 @@ export function dashboardReducer(
       };
 
     case "SET_WIDGET_LOCK": {
-      const field = lockField(action.lockType);
+      const field = lockFieldName(action.lockType);
       return {
         ...state,
         widgets: state.widgets.map((w) =>

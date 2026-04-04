@@ -22,7 +22,10 @@
       "mcp__playwright__browser_take_screenshot",
       "mcp__playwright__browser_close",
       "Bash(git stash:*)",
-      "mcp__playwright__browser_snapshot"
+      "mcp__playwright__browser_snapshot",
+      "Bash(npm run:*)",
+      "Bash(cp src/lib/dashboard/engine/drag-engine.ts /tmp/refactored-drag-engine.ts)",
+      "Bash(cp /tmp/original-drag-engine.ts src/lib/dashboard/engine/drag-engine.ts)"
     ]
   },
   "enableAllProjectMcpServers": true,

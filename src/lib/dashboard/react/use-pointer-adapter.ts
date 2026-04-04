@@ -2,6 +2,94 @@ import { useRef, useCallback, useEffect } from "react";
 import type { DragEngine } from "../engine/drag-engine.ts";
 import type { PointerType } from "../engine/types.ts";
 
+/**
+ * Creates an object that manages pointer event listeners for a drag session.
+ *
+ * - `attach()` adds the event listeners to the document.
+ * - `detach()` removes listeners and releases pointer capture (called on pointerUp).
+ * - `cleanup()` does full cleanup including RAF cancellation (called on pointerCancel or unmount).
+ */
+function createPointerListeners(
+  engine: DragEngine,
+  containerRef: React.RefObject<HTMLElement | null>,
+  element: HTMLElement,
+  clientPosRef: React.MutableRefObject<{ x: number; y: number } | null>,
+  pointerId: number,
+  rafRef: React.MutableRefObject<number>,
+  isDraggingRef: React.MutableRefObject<boolean>,
+  cleanupRef: React.MutableRefObject<(() => void) | null>,
+): { attach(): void; detach(): void; cleanup(): void } {
+  let activePointerId: number | null = pointerId;
+
+  function handlePointerMove(e: PointerEvent) {
+    if (e.pointerId !== activePointerId) return;
+    const c = containerRef.current;
+    if (!c) return;
+
+    clientPosRef.current = { x: e.clientX, y: e.clientY };
+
+    const r = c.getBoundingClientRect();
+    engine.send({
+      type: "POINTER_MOVE",
+      position: {
+        x: e.clientX - r.left + c.scrollLeft,
+        y: e.clientY - r.top + c.scrollTop,
+      },
+      timestamp: performance.now(),
+    });
+  }
+
+  function handlePointerUp(e: PointerEvent) {
+    if (e.pointerId !== activePointerId) return;
+    engine.send({ type: "POINTER_UP", timestamp: performance.now() });
+    detach();
+  }
+
+  function handlePointerCancel(e: PointerEvent) {
+    if (e.pointerId !== activePointerId) return;
+    engine.send({ type: "POINTER_CANCEL", timestamp: performance.now() });
+    cleanup();
+  }
+
+  function preventContextMenu(e: Event) { e.preventDefault(); }
+  function preventSelectStart(e: Event) { e.preventDefault(); }
+
+  function removeAllListeners() {
+    document.removeEventListener("pointermove", handlePointerMove);
+    document.removeEventListener("pointerup", handlePointerUp);
+    document.removeEventListener("pointercancel", handlePointerCancel);
+    document.removeEventListener("contextmenu", preventContextMenu);
+    document.removeEventListener("selectstart", preventSelectStart);
+    if (activePointerId != null) {
+      try { element.releasePointerCapture(activePointerId); } catch { /* already released */ }
+    }
+    clientPosRef.current = null;
+    activePointerId = null;
+  }
+
+  function attach() {
+    document.addEventListener("pointermove", handlePointerMove);
+    document.addEventListener("pointerup", handlePointerUp);
+    document.addEventListener("pointercancel", handlePointerCancel);
+    document.addEventListener("contextmenu", preventContextMenu);
+    document.addEventListener("selectstart", preventSelectStart);
+  }
+
+  function detach() {
+    removeAllListeners();
+    cleanupRef.current = cleanup;
+  }
+
+  function cleanup() {
+    removeAllListeners();
+    cancelAnimationFrame(rafRef.current);
+    isDraggingRef.current = false;
+    cleanupRef.current = null;
+  }
+
+  return { attach, detach, cleanup };
+}
+
 export function usePointerAdapter(
   engine: DragEngine,
   containerRef: React.RefObject<HTMLElement | null>,
@@ -32,8 +120,6 @@ export function usePointerAdapter(
 
       cleanupRef.current?.();
 
-      let activePointerId: number | null = pointerId;
-
       const rect = container.getBoundingClientRect();
       const position = {
         x: clientPos.x - rect.left + container.scrollLeft,
@@ -59,76 +145,12 @@ export function usePointerAdapter(
         element.setPointerCapture(pointerId);
       } catch { /* expected for synthetic events */ }
 
-      function handlePointerMove(e: PointerEvent) {
-        if (e.pointerId !== activePointerId) return;
-        const c = containerRef.current;
-        if (!c) return;
-
-        clientPosRef.current = { x: e.clientX, y: e.clientY };
-
-        const r = c.getBoundingClientRect();
-        engine.send({
-          type: "POINTER_MOVE",
-          position: {
-            x: e.clientX - r.left + c.scrollLeft,
-            y: e.clientY - r.top + c.scrollTop,
-          },
-          timestamp: performance.now(),
-        });
-      }
-
-      function handlePointerUp(e: PointerEvent) {
-        if (e.pointerId !== activePointerId) return;
-        engine.send({ type: "POINTER_UP", timestamp: performance.now() });
-        removePointerListeners();
-      }
-
-      function handlePointerCancel(e: PointerEvent) {
-        if (e.pointerId !== activePointerId) return;
-        engine.send({ type: "POINTER_CANCEL", timestamp: performance.now() });
-        cleanup();
-      }
-
-      function removePointerListeners() {
-        document.removeEventListener("pointermove", handlePointerMove);
-        document.removeEventListener("pointerup", handlePointerUp);
-        document.removeEventListener("pointercancel", handlePointerCancel);
-        document.removeEventListener("contextmenu", preventContextMenu);
-        document.removeEventListener("selectstart", preventSelectStart);
-        if (activePointerId != null) {
-          try { element.releasePointerCapture(activePointerId); } catch { /* already released */ }
-        }
-        clientPosRef.current = null;
-        activePointerId = null;
-        cleanupRef.current = cleanup;
-      }
-
-      function cleanup() {
-        document.removeEventListener("pointermove", handlePointerMove);
-        document.removeEventListener("pointerup", handlePointerUp);
-        document.removeEventListener("pointercancel", handlePointerCancel);
-        document.removeEventListener("contextmenu", preventContextMenu);
-        document.removeEventListener("selectstart", preventSelectStart);
-        if (activePointerId != null) {
-          try { element.releasePointerCapture(activePointerId); } catch { /* already released */ }
-        }
-        cancelAnimationFrame(rafRef.current);
-        isDraggingRef.current = false;
-        clientPosRef.current = null;
-        activePointerId = null;
-        cleanupRef.current = null;
-      }
-
-      cleanupRef.current = cleanup;
-
-      function preventContextMenu(e: Event) { e.preventDefault(); }
-      function preventSelectStart(e: Event) { e.preventDefault(); }
-
-      document.addEventListener("pointermove", handlePointerMove);
-      document.addEventListener("pointerup", handlePointerUp);
-      document.addEventListener("pointercancel", handlePointerCancel);
-      document.addEventListener("contextmenu", preventContextMenu);
-      document.addEventListener("selectstart", preventSelectStart);
+      const listeners = createPointerListeners(
+        engine, containerRef, element, clientPosRef,
+        pointerId, rafRef, isDraggingRef, cleanupRef,
+      );
+      cleanupRef.current = listeners.cleanup;
+      listeners.attach();
 
       isDraggingRef.current = true;
       const tick = () => {
