@@ -7,6 +7,7 @@ import {
   type WidgetDefinition,
   type WidgetState,
   type DashboardState,
+  type DragHandleProps,
 } from "../lib/dashboard/index.ts";
 import { DashboardGrid } from "./components/DashboardGrid.tsx";
 import { DashboardGridStatic } from "./components/DashboardGridStatic.tsx";
@@ -56,7 +57,7 @@ function DashboardContent({ onStateChange }: { onStateChange?: (state: Dashboard
   const closeCatalog = useCallback(() => setCatalogOpen(false), []);
 
   const renderWidget = useCallback(
-    (widget: WidgetState, slotProps: { dragHandleProps: any; isDragging: boolean; colSpan: number; resize: (colSpan: number) => void; remove: () => void; isLongPressing: boolean }) => (
+    (widget: WidgetState, slotProps: { dragHandleProps: DragHandleProps; isDragging: boolean; colSpan: number; resize: (colSpan: number) => void; remove: () => void; isLongPressing: boolean }) => (
       <DemoWidget
         widget={widget}
         dragHandleProps={slotProps.dragHandleProps}
@@ -155,7 +156,7 @@ function loadSavedState(): { widgets: WidgetState[]; maxColumns: number } | unde
 
 export default function App() {
   const [saved] = useState(() => loadSavedState());
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const handleStateChange = useCallback((state: DashboardState) => {
     clearTimeout(saveTimerRef.current);
