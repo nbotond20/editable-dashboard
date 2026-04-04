@@ -7,26 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-- Auto-scroll during drag near viewport edges with configurable edge size and max speed
-- Long-press visual feedback and body lock during touch drag
-- Same-row swap stabilization to prevent uninvolved widgets from shifting during swaps
-- Auto-resize fallback when side-drop produces a degenerate layout
-- `setupDashboardRaw` test utility for precise widget configuration and state reproduction
-- `dragConfig` prop for fine-tuning activation thresholds, dwell times, scroll speed, and animation duration
-
-### Changed
-
-- Drag engine now uses zone-to-intent state machine with dwell-based intent resolution
-- Improved intent resolver to fall back to swap when auto-resize is degenerate
-- WidgetSlot animation uses dynamic width with improved spring transitions
-
-### Fixed
-
-- Environment check for dashboard error logging now uses `import.meta.env.DEV`
-- Drag engine intent handling edge cases for auto-resize operations
-
+## [1.0.0] - 2026-04-04
 ## [0.1.0] - 2026-03-28
 
 ### Added
