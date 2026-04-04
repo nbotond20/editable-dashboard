@@ -118,6 +118,16 @@ export function resolveIntent(
           ? adjustedTargetIdx
           : adjustedTargetIdx + 1;
 
+      // When both spans are unchanged and the reorder is a no-op,
+      // the auto-resize is degenerate — fall back to swap.
+      if (
+        sourceSpan === sourceWidget.colSpan &&
+        targetSpan === targetWidget.colSpan &&
+        targetIndex === sourceIdx
+      ) {
+        return { type: "swap", targetId: zone.targetId };
+      }
+
       return {
         type: "auto-resize",
         targetId: zone.targetId,

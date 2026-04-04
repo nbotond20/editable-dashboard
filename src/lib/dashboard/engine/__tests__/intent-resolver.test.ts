@@ -121,7 +121,7 @@ describe("resolveIntent - widget zone", () => {
     ).toEqual({ type: "swap", targetId: "target" });
   });
 
-  it("produces auto-resize (with reorder) when dwell exceeds resize threshold and both fit", () => {
+  it("falls back to swap when auto-resize is a no-op (both fit, no reorder)", () => {
     const result = resolveIntent(
       widgetZone,
       1000,
@@ -130,11 +130,8 @@ describe("resolveIntent - widget zone", () => {
       defaultConfig(),
     );
     expect(result).toEqual({
-      type: "auto-resize",
+      type: "swap",
       targetId: "target",
-      sourceSpan: 1,
-      targetSpan: 1,
-      targetIndex: 0,
     });
   });
 
@@ -173,7 +170,7 @@ describe("resolveIntent - widget zone", () => {
 });
 
 describe("resolveIntent - auto-resize span computation", () => {
-  it("produces auto-resize when both already fit within maxColumns (no resize needed)", () => {
+  it("falls back to swap when both fit and reorder is a no-op (3-col)", () => {
     const zone: DropZone = { type: "widget", targetId: "target", side: "left" };
     const source = makeWidget("src", { colSpan: 1 });
     const widgets = makeWidgets(["src", { colSpan: 1 }], ["target", { colSpan: 1 }]);
@@ -181,15 +178,12 @@ describe("resolveIntent - auto-resize span computation", () => {
 
     const result = resolveIntent(zone, 1000, source, widgets, config);
     expect(result).toEqual({
-      type: "auto-resize",
+      type: "swap",
       targetId: "target",
-      sourceSpan: 1,
-      targetSpan: 1,
-      targetIndex: 0,
     });
   });
 
-  it("produces auto-resize when colSpans exactly equal maxColumns (no resize needed)", () => {
+  it("falls back to swap when colSpans equal maxColumns and reorder is a no-op", () => {
     const zone: DropZone = { type: "widget", targetId: "target", side: "left" };
     const source = makeWidget("src", { colSpan: 2 });
     const widgets = makeWidgets(
@@ -200,11 +194,8 @@ describe("resolveIntent - auto-resize span computation", () => {
 
     const result = resolveIntent(zone, 1000, source, widgets, config);
     expect(result).toEqual({
-      type: "auto-resize",
+      type: "swap",
       targetId: "target",
-      sourceSpan: 2,
-      targetSpan: 2,
-      targetIndex: 0,
     });
   });
 

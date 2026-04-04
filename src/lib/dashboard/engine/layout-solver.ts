@@ -255,7 +255,7 @@ export function solvePreviewLayout(
       const srcCol = sourceWidget.columnStart;
       const tgtCol = targetWidget.columnStart;
 
-      const swapped = widgets.map(w => {
+      let swapped = widgets.map(w => {
         if (w.id === sourceId) {
           return { ...w, order: targetWidget.order, columnStart: tgtCol };
         }
@@ -264,6 +264,17 @@ export function solvePreviewLayout(
         }
         return w;
       });
+
+      // For same-row swaps, stabilize uninvolved widgets so they preserve
+      // their row positions (greedy packing would otherwise compact them).
+      if (baseLayout) {
+        const srcPos = baseLayout.positions.get(sourceId);
+        const tgtPos = baseLayout.positions.get(intent.targetId);
+        if (srcPos && tgtPos && Math.abs(srcPos.y - tgtPos.y) < 1) {
+          swapped = stabilize(swapped, new Set([sourceId, intent.targetId]));
+        }
+      }
+
       const pinned = new Set<string>();
       for (const w of swapped) {
         if (w.visible && w.columnStart != null) pinned.add(w.id);
@@ -360,6 +371,27 @@ export function solvePreviewLayout(
           config.maxColumns,
           config.gap
         );
+      }
+
+      // For same-row auto-resize, stabilize uninvolved widgets so they
+      // preserve their row positions instead of being compacted.
+      if (baseLayout) {
+        const srcPos = baseLayout.positions.get(sourceId);
+        const tgtPos = baseLayout.positions.get(intent.targetId);
+        if (srcPos && tgtPos && Math.abs(srcPos.y - tgtPos.y) < 1) {
+          const stabilizedPreview = stabilize(previewWidgets, new Set([sourceId, intent.targetId]));
+          const pinned2 = new Set<string>();
+          for (const pw of stabilizedPreview) {
+            if (pw.visible && pw.columnStart != null) pinned2.add(pw.id);
+          }
+          return computeLayout(
+            [...pinToGreedyColumns(stabilizedPreview, config.maxColumns, pinned2.size > 0 ? pinned2 : undefined), ...hidden],
+            heights as Map<string, number>,
+            containerWidth,
+            config.maxColumns,
+            config.gap
+          );
+        }
       }
 
       return computeLayout(

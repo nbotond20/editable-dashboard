@@ -717,3 +717,25 @@ test("case 79: E ->| A> (auto-resize right)", async ({ page }) => {
   await dragByIdToSide(page, "e", "a", "right");
   await assertLayout(page, [["a", "e", "b"], ["c", "d"]]);
 });
+
+// ── 2-col: A B / C / D (tests 80–82) ────────────────────────────
+
+test.describe("2-col: A B / C / D", () => {
+  test("case 80: B -> A> (side right)", async ({ page }) => {
+    await setupDashboard(page, ["A B", "C", "D"]);
+    await dragByIdToSide(page, "b", "a", "right");
+    await assertLayout(page, [["b", "a"], ["c"], ["d"]]);
+  });
+
+  test("case 81: B -> <A (side left)", async ({ page }) => {
+    await setupDashboard(page, ["A B", "C", "D"]);
+    await dragByIdToSide(page, "b", "a", "left");
+    await assertLayout(page, [["b", "a"], ["c"], ["d"]]);
+  });
+
+  test("case 82: B -> A (swap)", async ({ page }) => {
+    await setupDashboard(page, ["A B", "C", "D"]);
+    await dragByIdToId(page, "b", "a");
+    await assertLayout(page, [["b", "a"], ["c"], ["d"]]);
+  });
+});

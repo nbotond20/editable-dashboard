@@ -283,3 +283,45 @@ E ->| A>
 Result:
 A E B
 C D
+
+### 20
+
+Start:
+A B
+C
+D
+
+B -> A>
+
+Result:
+B A
+C
+D
+
+### 21
+
+Start:
+A B
+C
+D
+
+B -> <A
+
+Result:
+B A
+C
+D
+
+### 22
+
+Start:
+A B
+C
+D
+
+B -> A
+
+Result:
+B A
+C
+D

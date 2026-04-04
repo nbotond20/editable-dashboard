@@ -53,6 +53,13 @@ export function parseNotation(lines: string[]): TestConfig {
     const hasEmpty = tokens.some((t) => t.toUpperCase() === "X");
     if (hasEmpty) needsColumnStart = true;
 
+    // Pin widgets on lines with a single widget that don't fill maxColumns,
+    // so each notation line maps to a distinct visual row.
+    const distinctWidgets = new Set(
+      tokens.filter((t) => t.toUpperCase() !== "X").map((t) => t.toUpperCase()),
+    );
+    const isSingleWidgetLine = distinctWidgets.size === 1 && tokens.length < maxColumns;
+
     let colPos = 0;
     let i = 0;
     while (i < tokens.length) {
@@ -72,7 +79,7 @@ export function parseNotation(lines: string[]): TestConfig {
       const id = token.toLowerCase();
       if (!seen.has(id)) {
         const entry: { colSpan: number; columnStart?: number } = { colSpan: span };
-        if (needsColumnStart) {
+        if (needsColumnStart || isSingleWidgetLine) {
           entry.columnStart = colPos;
         }
         seen.set(id, entry);

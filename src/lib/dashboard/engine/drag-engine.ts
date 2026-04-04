@@ -406,6 +406,25 @@ export class DragEngine {
         };
       }
 
+      // For same-row swaps, stabilize uninvolved widgets so they preserve
+      // their row positions (greedy packing would otherwise compact them).
+      const srcPos = this.baseLayout.positions.get(committed.sourceId);
+      const tgtPos = this.baseLayout.positions.get(committed.targetId);
+      if (srcPos && tgtPos && Math.abs(srcPos.y - tgtPos.y) < 1) {
+        const involvedIds = new Set([committed.sourceId, committed.targetId]);
+        newState = {
+          ...newState,
+          widgets: stabilizeUninvolvedWidgets(
+            newState.widgets,
+            this.baseLayout,
+            involvedIds,
+            this.containerWidth,
+            cfg.maxColumns,
+            cfg.gap,
+          ),
+        };
+      }
+
       const pinned = new Set<string>();
       for (const w of newState.widgets) {
         if (w.visible && w.columnStart != null) pinned.add(w.id);
@@ -494,10 +513,37 @@ export class DragEngine {
           widgets: pinToGreedyColumns(newState.widgets, cfg.maxColumns, pinned.size > 0 ? pinned : undefined),
         };
       } else {
-        newState = {
-          ...newState,
-          widgets: pinToGreedyColumns(newState.widgets, cfg.maxColumns),
-        };
+        // For same-row auto-resize, stabilize uninvolved widgets so they
+        // preserve their row positions instead of being compacted.
+        const srcPos = this.baseLayout.positions.get(committed.sourceId);
+        const tgtPos = this.baseLayout.positions.get(committed.targetId);
+        if (srcPos && tgtPos && Math.abs(srcPos.y - tgtPos.y) < 1) {
+          const involvedIds = new Set([committed.sourceId, committed.targetId]);
+          newState = {
+            ...newState,
+            widgets: stabilizeUninvolvedWidgets(
+              newState.widgets,
+              this.baseLayout,
+              involvedIds,
+              this.containerWidth,
+              cfg.maxColumns,
+              cfg.gap,
+            ),
+          };
+          const pinned = new Set<string>();
+          for (const w of newState.widgets) {
+            if (w.visible && w.columnStart != null) pinned.add(w.id);
+          }
+          newState = {
+            ...newState,
+            widgets: pinToGreedyColumns(newState.widgets, cfg.maxColumns, pinned.size > 0 ? pinned : undefined),
+          };
+        } else {
+          newState = {
+            ...newState,
+            widgets: pinToGreedyColumns(newState.widgets, cfg.maxColumns),
+          };
+        }
       }
     } else if (committed.type === "column-pin") {
       const maxSpanAtCol = Math.max(1, cfg.maxColumns - committed.column);
