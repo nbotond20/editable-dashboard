@@ -143,6 +143,40 @@ export function buildSeedState(config: TestConfig) {
  * Also:
  *   - Clicks the column button if maxColumns differs from the default (2).
  */
+/**
+ * Set up the dashboard with explicit widget configs.
+ *
+ * Use this instead of the notation-based setupDashboard when you need
+ * to control columnStart precisely (e.g. to reproduce state left behind
+ * by prior drag operations via pinToGreedyColumns).
+ */
+export async function setupDashboardRaw(
+  page: Page,
+  widgets: TestWidget[],
+  maxColumns: number,
+): Promise<TestConfig> {
+  const config: TestConfig = { widgets, maxColumns };
+  const state = buildSeedState(config);
+
+  await page.addInitScript(
+    ({ key, value }) => {
+      localStorage.setItem(key, JSON.stringify(value));
+    },
+    { key: STORAGE_KEY, value: state },
+  );
+
+  await page.goto("/");
+  await page.locator("[data-widget-id]").first().waitFor();
+
+  if (maxColumns !== 2) {
+    const colText = maxColumns === 1 ? "1 col" : `${maxColumns} cols`;
+    await page.locator(".dash-header").getByRole("button", { name: colText, exact: true }).click();
+  }
+
+  await page.waitForTimeout(500);
+  return config;
+}
+
 export async function setupDashboard(
   page: Page,
   lines: string[],

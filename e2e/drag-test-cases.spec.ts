@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { setupDashboard } from "./helpers/setup";
+import { setupDashboard, setupDashboardRaw } from "./helpers/setup";
 import { assertLayout, capturePreviewGrid, getGridRepresentation } from "./helpers/layout-utils";
 import {
   dragByIdToId,
@@ -742,24 +742,48 @@ test.describe("2-col: A B / C / D", () => {
 
 // ── 2-col: A / B B / C (tests 83–84) ──────────────────────────────
 
-test.describe("2-col: A / B B / C", () => {
+// ── 2-col: A / B B / C — with columnStart (tests 83–85) ───────────
+// Uses setupDashboardRaw with explicit columnStart on all widgets,
+// reproducing the state left behind by prior drag operations (which
+// run pinToGreedyColumns).  Without the same-column fixes in the
+// swap/auto-resize commit and preview paths, widgets pinned to the
+// same column end up stacked instead of side-by-side.
+
+test.describe("2-col: A / B B / C (with columnStart)", () => {
   test("case 83: B -> <A (swap, no dwell)", async ({ page }) => {
-    await setupDashboard(page, ["A", "B B", "C"]);
+    await setupDashboardRaw(page, [
+      { id: "a", colSpan: 1, order: 0, type: "stats", columnStart: 0 },
+      { id: "b", colSpan: 2, order: 1, type: "chart", columnStart: 0 },
+      { id: "c", colSpan: 1, order: 2, type: "notes", columnStart: 0 },
+    ], 2);
     await dragByIdToSide(page, "b", "a", "left", { dwellMs: 150 });
     await assertLayout(page, [["b", "b"], ["a"], ["c"]]);
   });
 
   test("case 84: A -> <B (swap, no dwell)", async ({ page }) => {
-    await setupDashboard(page, ["A", "B B", "C"]);
+    await setupDashboardRaw(page, [
+      { id: "a", colSpan: 1, order: 0, type: "stats", columnStart: 0 },
+      { id: "b", colSpan: 2, order: 1, type: "chart", columnStart: 0 },
+      { id: "c", colSpan: 1, order: 2, type: "notes", columnStart: 0 },
+    ], 2);
     await dragByIdToSide(page, "a", "b", "left", { dwellMs: 150 });
     await assertLayout(page, [["b", "b"], ["a"], ["c"]]);
   });
 });
 
-// ── 2-col: A A / B (test 85) ──────────────────────────────────────
+// ── 2-col: A A / B — after prior operations (test 85) ─────────────
+// A swap+swap-back triggers pinToGreedyColumns which sets columnStart
+// on all widgets — matching real usage.  The auto-resize preview and
+// commit must both handle the resulting same-column state correctly.
 
-test("case 85: B ->| <A (auto-resize left)", async ({ page }) => {
+test("case 85: B ->| <A (auto-resize left, after prior swap)", async ({ page }) => {
   await setupDashboard(page, ["A A", "B"]);
+  // Prior operations: swap then swap back → sets columnStart on both
+  await dragByIdToId(page, "b", "a");
+  await assertLayout(page, [["b"], ["a", "a"]]);
+  await dragByIdToId(page, "a", "b");
+  await assertLayout(page, [["a", "a"], ["b"]]);
+  // Now both have columnStart from pinToGreedyColumns — test the real drag
   await dragByIdToSide(page, "b", "a", "left");
   await assertLayout(page, [["b", "a"]]);
 });
