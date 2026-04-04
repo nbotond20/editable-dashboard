@@ -1357,13 +1357,6 @@ The repository includes a full demo app in `src/app/` that showcases:
 - Per-widget resize controls
 - Hide/show and remove actions
 
-Run it locally:
-
-```bash
-pnpm install
-pnpm dev
-```
-
 ---
 
 ## License

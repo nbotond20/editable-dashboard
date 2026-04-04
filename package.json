@@ -1,5 +1,5 @@
 {
-  "name": "@nbotond20/editable-dashboard",
+  "name": "editable-dashboard",
   "version": "0.1.0",
   "description": "Headless React library for dashboard layouts with drag-and-drop, bin-packing, undo/redo, and serialization",
   "type": "module",
