@@ -1,24 +1,122 @@
 name: Publish Package
 
 on:
-    push:
-        tags:
-            - "v*"
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: "Release type"
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+          - dev
 
 permissions:
-    id-token: write # Required for OIDC
-    contents: read
+  id-token: write
+  contents: write
 
 jobs:
-    publish:
-        runs-on: ubuntu-latest
-        steps:
-            - uses: actions/checkout@v6
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
-            - uses: actions/setup-node@v6
-              with:
-                  node-version: "24"
-                  registry-url: "https://registry.npmjs.org"
-            - run: npm ci
-            - run: npm run build:lib --if-present
-            - run: npm publish
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ inputs.release_type }}" = "dev" ]; then
+            CURRENT=$(node -p "require('./package.json').version")
+            BASE=$(echo "$CURRENT" | sed 's/-.*//')
+            SHORT_SHA=$(git rev-parse --short=7 HEAD)
+            VERSION="${BASE}-dev.${SHORT_SHA}"
+            npm version "$VERSION" --no-git-tag-version
+            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+            echo "is_dev=true" >> "$GITHUB_OUTPUT"
+          else
+            NEW=$(npm version "${{ inputs.release_type }}" --no-git-tag-version)
+            echo "version=${NEW#v}" >> "$GITHUB_OUTPUT"
+            echo "is_dev=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - run: npm ci
+      - run: npm run build:lib
+
+      - name: Extract and update changelog
+        if: steps.version.outputs.is_dev == 'false'
+        id: changelog
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          TODAY=$(date +%Y-%m-%d)
+
+          # Extract the Unreleased section content (between ## [Unreleased] and the next ## heading)
+          RELEASE_NOTES=$(awk '/^## \[Unreleased\]/{found=1; next} /^## \[/{found=0} found' CHANGELOG.md)
+
+          # Save release notes for the GitHub release step
+          echo "$RELEASE_NOTES" > "$RUNNER_TEMP/release-notes.md"
+
+          # Rewrite CHANGELOG.md: empty Unreleased + new version section with old content
+          awk -v ver="$VERSION" -v date="$TODAY" '
+            /^## \[Unreleased\]/ {
+              print "## [Unreleased]"
+              print ""
+              print "## [" ver "] - " date
+              skip=1
+              next
+            }
+            /^## \[/ { skip=0 }
+            !skip { print }
+          ' CHANGELOG.md > CHANGELOG.tmp && mv CHANGELOG.tmp CHANGELOG.md
+
+      - name: Commit, tag, and push
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+
+          if [ "${{ steps.version.outputs.is_dev }}" = "true" ]; then
+            git tag "v${VERSION}"
+            git push origin "v${VERSION}"
+          else
+            git add package.json CHANGELOG.md
+            git commit -m "release: v${VERSION}"
+            git tag "v${VERSION}"
+            git push origin HEAD "v${VERSION}"
+          fi
+
+      - name: Publish to npm
+        run: |
+          if [ "${{ steps.version.outputs.is_dev }}" = "true" ]; then
+            npm publish --access public --tag dev
+          else
+            npm publish --access public
+          fi
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+
+          if [ "${{ steps.version.outputs.is_dev }}" = "true" ]; then
+            gh release create "v${VERSION}" \
+              --title "v${VERSION}" \
+              --generate-notes \
+              --prerelease
+          else
+            gh release create "v${VERSION}" \
+              --title "v${VERSION}" \
+              --notes-file "$RUNNER_TEMP/release-notes.md" \
+              --latest
+          fi
