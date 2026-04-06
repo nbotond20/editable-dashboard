@@ -1,6 +1,6 @@
 {
   "name": "editable-dashboard",
-  "version": "3.0.1",
+  "version": "3.0.2",
   "description": "Headless React library for dashboard layouts with drag-and-drop, bin-packing, undo/redo, and serialization",
   "type": "module",
   "main": "./dist/lib/index.cjs",
