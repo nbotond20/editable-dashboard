@@ -16,6 +16,7 @@ export type DashboardProviderProps = {
   maxWidgets?: number;
   maxUndoDepth?: number;
   keyboardShortcuts?: boolean;
+  doubleClickToMaximize?: boolean;
   canDrop?: (sourceId: string, targetIndex: number, state: DashboardState) => boolean;
   dragConfig?: DragConfig;
   responsiveBreakpoints?: ResponsiveBreakpoints;
@@ -68,6 +69,7 @@ export interface DashboardStableContextValue {
   handleKeyboardDrag: (widgetId: string, e: React.KeyboardEvent) => void;
   isWidgetLockActive: (id: string, lockType: LockType) => boolean;
   canAddWidget: () => boolean;
+  doubleClickToMaximize: boolean;
 }
 
 /**

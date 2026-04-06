@@ -31,7 +31,7 @@ interface WidgetSlotProps {
 }
 
 export function WidgetSlot({ widget, children }: WidgetSlotProps) {
-  const { layout, actions, dragState, getDragPosition, measureRef, startDrag, getA11yProps, handleKeyboardDrag, isWidgetLockActive } = useDashboard();
+  const { layout, actions, dragState, getDragPosition, measureRef, startDrag, getA11yProps, handleKeyboardDrag, isWidgetLockActive, doubleClickToMaximize, state } = useDashboard();
 
   const isDragging = dragState.activeId === widget.id;
   const isAnyDragging = dragState.activeId !== null;
@@ -60,12 +60,31 @@ export function WidgetSlot({ widget, children }: WidgetSlotProps) {
 
   const a11yProps = useMemo(() => getA11yProps(widget.id), [getA11yProps, widget.id]);
 
+  const [preMaximizeColSpan, setPreMaximizeColSpan] = useState<number | null>(null);
+
+  const handleDoubleClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (locked) return;
+      e.preventDefault();
+      const maxColumns = state.maxColumns;
+      if (widget.colSpan >= maxColumns && preMaximizeColSpan !== null) {
+        actions.resizeWidget(widget.id, preMaximizeColSpan);
+        setPreMaximizeColSpan(null);
+      } else if (widget.colSpan < maxColumns) {
+        setPreMaximizeColSpan(widget.colSpan);
+        actions.resizeWidget(widget.id, maxColumns);
+      }
+    },
+    [locked, state.maxColumns, widget.colSpan, widget.id, preMaximizeColSpan, actions]
+  );
+
   const dragHandleProps: DragHandleProps = useMemo(() => ({
     ...a11yProps,
     onPointerDown: handlePointerDown,
     onKeyDown: handleKeyDown,
+    onDoubleClick: doubleClickToMaximize ? handleDoubleClick : undefined,
     style: { cursor: locked ? "default" : isDragging ? "grabbing" : "grab", touchAction: "none" },
-  }), [a11yProps, handlePointerDown, handleKeyDown, locked, isDragging]);
+  }), [a11yProps, handlePointerDown, handleKeyDown, handleDoubleClick, doubleClickToMaximize, locked, isDragging]);
 
   const resize = useCallback(
     (colSpan: number) => actions.resizeWidget(widget.id, colSpan),

@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `doubleClickToMaximize` prop on `DashboardProvider` (default: `true`) — double-clicking the drag handle toggles a widget between full width and its previous size
+- `onDoubleClick` optional handler on `DragHandleProps`
+
 ## [4.0.0] - 2026-04-06
 ## [3.0.2] - 2026-04-06
 ## [3.0.1] - 2026-04-04

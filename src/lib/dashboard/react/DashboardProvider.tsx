@@ -52,6 +52,7 @@ export function DashboardProvider(props: DashboardProviderProps) {
     maxWidgets,
     maxUndoDepth,
     keyboardShortcuts = true,
+    doubleClickToMaximize = true,
     canDrop,
     dragConfig,
     onError,
@@ -349,8 +350,9 @@ export function DashboardProvider(props: DashboardProviderProps) {
       handleKeyboardDrag,
       isWidgetLockActive,
       canAddWidget,
+      doubleClickToMaximize,
     }),
-    [state, definitions, layout, actions, snapshot.canUndo, snapshot.canRedo, getDragPosition, containerCallbackRef, measureRef, constrainedStartDrag, getA11yProps, handleKeyboardDrag, isWidgetLockActive, canAddWidget],
+    [state, definitions, layout, actions, snapshot.canUndo, snapshot.canRedo, getDragPosition, containerCallbackRef, measureRef, constrainedStartDrag, getA11yProps, handleKeyboardDrag, isWidgetLockActive, canAddWidget, doubleClickToMaximize],
   );
 
   const dragValue = useMemo(

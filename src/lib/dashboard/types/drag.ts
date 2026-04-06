@@ -39,6 +39,7 @@ export interface DragHandleA11yProps {
 export interface DragHandleProps extends DragHandleA11yProps {
   onPointerDown: (e: ReactPointerEvent) => void;
   onKeyDown: (e: React.KeyboardEvent) => void;
+  onDoubleClick?: (e: React.MouseEvent) => void;
   style: { cursor: string; touchAction: string };
 }
 
