@@ -292,6 +292,18 @@ export class DragEngine {
     return this.widgetById.get(id);
   }
 
+  replaceState(next: DashboardState): void {
+    if (this.history.present.widgets === next.widgets) return;
+
+    this.history = createUndoHistory({
+      ...next,
+      containerWidth: this.containerWidth,
+    });
+    this.cachedSnapshot = null;
+    this.recomputeLayouts();
+    this.notify();
+  }
+
   updateConfig(partial: Partial<DragEngineConfig>): void {
     this.config = { ...this.config, ...partial };
     this.cachedSnapshot = null;

@@ -15,6 +15,7 @@ export function useDragEngine(
   state: DashboardState,
   definitions: WidgetDefinition[],
   config: Partial<DragEngineConfig>,
+  isControlled: boolean,
 ): DragEngine {
   const [engine] = useState(() =>
     new DragEngine(state, {
@@ -37,6 +38,10 @@ export function useDragEngine(
     isResizeLocked: lockCheck(engine, definitions, "resize"),
     getWidgetConstraints: buildGetConstraints(config.getWidgetConstraints),
   });
+
+  if (isControlled) {
+    engine.replaceState(state);
+  }
 
   return engine;
 }

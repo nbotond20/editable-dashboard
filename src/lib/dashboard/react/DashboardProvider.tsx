@@ -131,16 +131,11 @@ export function DashboardProvider(props: DashboardProviderProps) {
     [
       maxColumns,
       gap,
-      dragConfig?.activationThreshold,
-      dragConfig?.touchActivationDelay,
-      dragConfig?.touchMoveTolerance,
-      dragConfig?.swapDwellMs,
-      dragConfig?.resizeDwellMs,
-      dragConfig?.dropAnimationDuration,
+      dragConfig
     ],
   );
 
-  const engine = useDragEngine(initialState, definitions, engineConfig);
+  const engine = useDragEngine(initialState, definitions, engineConfig, isControlled);
 
   const { measureRef, containerRef, containerCallbackRef } = useMeasurementBridge(engine);
 
@@ -209,7 +204,7 @@ export function DashboardProvider(props: DashboardProviderProps) {
 
   const dragState = useMemo(
     () => buildDragState(snapshot),
-    [snapshot.phase, snapshot.intent, snapshot.previewLayout],
+    [snapshot],
   );
 
   const getDragPosition = useCallback(
