@@ -2,11 +2,12 @@ import { useCallback, useRef, useMemo, useEffect, useSyncExternalStore } from "r
 import type {
   DashboardProviderProps,
   DashboardState,
-  DashboardStateInput,
   DashboardError,
   DragHandleA11yProps,
   LockType,
+  WidgetState,
 } from "../types.ts";
+import type { CommitSource } from "../engine/types.ts";
 import { isLockActiveForWidget } from "../locks.ts";
 import {
   DEFAULT_MAX_COLUMNS,
@@ -93,12 +94,25 @@ export function DashboardProvider(props: DashboardProviderProps) {
     !isControlled && "initialWidgets" in props && props.initialWidgets
       ? props.initialWidgets
       : [];
-  const controlledStateInput = isControlled
-    ? (props as { state: DashboardStateInput }).state
+  const controlledWidgets = isControlled
+    ? (props as { state: WidgetState[] }).state
     : undefined;
   const onStateChange = isControlled
-    ? (props as { onStateChange: (s: DashboardStateInput) => void }).onStateChange
+    ? (props as { onStateChange: (widgets: WidgetState[]) => void }).onStateChange
     : undefined;
+
+  // Dev-mode warning on mode switch
+  if (import.meta.env.DEV) {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    const wasControlledRef = useRef(isControlled);
+    if (wasControlledRef.current !== isControlled) {
+      console.warn(
+        "DashboardProvider: switching between controlled and uncontrolled mode is not supported. " +
+        "Decide between using `state` (controlled) or `initialWidgets` (uncontrolled) for the lifetime of the component.",
+      );
+    }
+    wasControlledRef.current = isControlled;
+  }
 
   const { validWidgets: initialWidgets } = useMemo(
     () => {
@@ -112,8 +126,13 @@ export function DashboardProvider(props: DashboardProviderProps) {
     [],
   );
 
-  const initialState: DashboardState = controlledStateInput
-    ? { ...controlledStateInput, containerWidth: 0 }
+  const initialState: DashboardState = controlledWidgets
+    ? {
+        widgets: controlledWidgets,
+        maxColumns: Math.max(1, maxColumns),
+        gap: Math.max(0, gap),
+        containerWidth: 0,
+      }
     : {
         widgets: initialWidgets,
         maxColumns: Math.max(1, maxColumns),
@@ -121,21 +140,76 @@ export function DashboardProvider(props: DashboardProviderProps) {
         containerWidth: 0,
       };
 
+  // ── Mutation callbacks ────────────────────────────────────────────
+
+  const { fireMutationCallbacks, fireDragCommitCallbacks } = useMutationCallbacks({
+    onWidgetAdd,
+    onWidgetRemove,
+    onWidgetResize,
+    onWidgetReorder,
+    onWidgetConfigChange,
+  });
+
+  // ── onCommit callback for the engine ──────────────────────────────
+
+  const onStateChangeRef = useRef(onStateChange);
+  useEffect(() => { onStateChangeRef.current = onStateChange; });
+
+  const fireDragCommitCallbacksRef = useRef(fireDragCommitCallbacks);
+  useEffect(() => { fireDragCommitCallbacksRef.current = fireDragCommitCallbacks; });
+
+  const onCommit = useCallback(
+    (nextState: DashboardState, prevState: DashboardState, source: CommitSource) => {
+      // Fire mutation callbacks for drag-committed operations (both modes)
+      fireDragCommitCallbacksRef.current(source, prevState, nextState);
+
+      // In controlled mode, notify the parent of the new widget state
+      onStateChangeRef.current?.(nextState.widgets);
+    },
+    [],
+  );
+
   // ── Engine, adapters, measurement ───────────────────────────────────
 
   const canDropRef = useRef(canDrop);
   useEffect(() => { canDropRef.current = canDrop; });
 
   const engineConfig = useMemo(
-    () => buildEngineConfig(maxColumns, gap, dragConfig),
+    () => ({
+      ...buildEngineConfig(maxColumns, gap, dragConfig),
+      ...(maxUndoDepth != null ? { maxUndoDepth } : {}),
+      onCommit,
+    }),
     [
       maxColumns,
       gap,
-      dragConfig
+      dragConfig,
+      maxUndoDepth,
+      onCommit,
     ],
   );
 
-  const engine = useDragEngine(initialState, definitions, engineConfig, isControlled);
+  const controlledState: DashboardState | undefined = controlledWidgets
+    ? {
+        widgets: controlledWidgets,
+        maxColumns: Math.max(1, maxColumns),
+        gap: Math.max(0, gap),
+        containerWidth: 0,
+      }
+    : undefined;
+
+  const engine = useDragEngine(
+    controlledState ?? initialState,
+    definitions,
+    engineConfig,
+    isControlled,
+  );
+
+  useEffect(() => {
+    return () => {
+      engine.destroy();
+    };
+  }, [engine]);
 
   const { measureRef, containerRef, containerCallbackRef } = useMeasurementBridge(engine);
 
@@ -171,17 +245,9 @@ export function DashboardProvider(props: DashboardProviderProps) {
     autoScrollMaxSpeed,
   );
 
-  const fireMutationCallbacks = useMutationCallbacks({
-    onWidgetAdd,
-    onWidgetRemove,
-    onWidgetResize,
-    onWidgetReorder,
-    onWidgetConfigChange,
-  });
+  const dispatch = useDispatch(engine, fireMutationCallbacks);
 
-  const dispatch = useDispatch(engine, onStateChange, fireMutationCallbacks);
-
-  useUndoRedoShortcuts(keyboardShortcuts, containerRef, engine);
+  useUndoRedoShortcuts(keyboardShortcuts, containerRef, dispatch);
 
   // ── Actions & helpers ───────────────────────────────────────────────
 

@@ -1,4 +1,4 @@
-import type { ComputedLayout, WidgetState } from "../types.ts";
+import type { ComputedLayout, DashboardAction, DashboardState, WidgetState } from "../types.ts";
 
 export interface Point {
   readonly x: number;
@@ -99,6 +99,15 @@ export type CommittedOperation =
   | { type: "resize-toggle"; id: string; newSpan: number }
   | { type: "cancelled" };
 
+/**
+ * Describes what caused a state commit inside the engine.
+ */
+export type CommitSource =
+  | { type: "action"; action: DashboardAction }
+  | { type: "drag-operation"; operation: CommittedOperation }
+  | { type: "undo" }
+  | { type: "redo" };
+
 export interface DragEngineConfig {
   activationThreshold: number;
   touchActivationDelay: number;
@@ -109,10 +118,12 @@ export interface DragEngineConfig {
   maxColumns: number;
   gap: number;
   dropAnimationDuration: number;
+  maxUndoDepth: number;
   isPositionLocked: (id: string) => boolean;
   isResizeLocked: (id: string) => boolean;
   canDrop: (sourceId: string, targetIndex: number) => boolean;
   getWidgetConstraints: (id: string) => { minSpan: number; maxSpan: number };
+  onCommit?: (nextState: DashboardState, prevState: DashboardState, source: CommitSource) => void;
 }
 
 export interface DragEngineSnapshot {

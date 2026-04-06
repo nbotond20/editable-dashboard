@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import type { CommittedOperation } from "../engine/types.ts";
 import type { LockType, WidgetDefinition, WidgetState } from "./widget.ts";
-import type { DashboardState, DashboardStateInput, DashboardActions } from "./state.ts";
+import type { DashboardState, DashboardActions } from "./state.ts";
 import type { ComputedLayout } from "./layout.ts";
 import type { DragState, DragHandleA11yProps } from "./drag.ts";
 import type { DashboardError, DragConfig, ResponsiveBreakpoints } from "./config.ts";
@@ -31,8 +31,8 @@ export type DashboardProviderProps = {
   children: ReactNode;
 } & (
   | {
-      state: DashboardStateInput;
-      onStateChange: (state: DashboardStateInput) => void;
+      state: WidgetState[];
+      onStateChange: (widgets: WidgetState[]) => void;
       initialWidgets?: undefined;
     }
   | {

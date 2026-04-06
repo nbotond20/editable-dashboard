@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useLayoutEffect } from "react";
 import { DragEngine } from "../engine/drag-engine.ts";
 import type { DragEngineConfig } from "../engine/types.ts";
 import type { DashboardState, WidgetDefinition } from "../types.ts";
@@ -39,9 +39,11 @@ export function useDragEngine(
     getWidgetConstraints: buildGetConstraints(config.getWidgetConstraints),
   });
 
-  if (isControlled) {
-    engine.replaceState(state);
-  }
+  useLayoutEffect(() => {
+    if (isControlled) {
+      engine.replaceState(state);
+    }
+  }, [isControlled, engine, state]);
 
   return engine;
 }

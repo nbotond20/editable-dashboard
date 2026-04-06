@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import type { DragEngine } from "../engine/drag-engine.ts";
+import { useEffect, useRef } from "react";
+import type { DashboardAction } from "../types.ts";
 
 /**
  * Registers a `keydown` listener on `containerRef` that dispatches UNDO/REDO
@@ -10,8 +10,11 @@ import type { DragEngine } from "../engine/drag-engine.ts";
 export function useUndoRedoShortcuts(
   enabled: boolean,
   containerRef: React.RefObject<HTMLDivElement | null>,
-  engine: DragEngine,
+  dispatch: (action: DashboardAction) => void,
 ): void {
+  const dispatchRef = useRef(dispatch);
+  useEffect(() => { dispatchRef.current = dispatch; });
+
   useEffect(() => {
     if (!enabled) return;
     const container = containerRef.current;
@@ -26,10 +29,10 @@ export function useUndoRedoShortcuts(
 
       if (!isUndoKey && !isRedoKey) return;
       e.preventDefault();
-      engine.dispatch({ type: isRedoKey ? "REDO" : "UNDO" });
+      dispatchRef.current({ type: isRedoKey ? "REDO" : "UNDO" });
     };
 
     container.addEventListener("keydown", handler);
     return () => container.removeEventListener("keydown", handler);
-  }, [enabled, containerRef, engine]);
+  }, [enabled, containerRef]);
 }

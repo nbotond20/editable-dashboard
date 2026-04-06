@@ -14,6 +14,9 @@ export function useAutoScroll(
   const getPointerPositionRef = useRef(getPointerPosition);
   useEffect(() => { getPointerPositionRef.current = getPointerPosition; });
 
+  const cachedScrollablesRef = useRef<HTMLElement[] | null>(null);
+  const lastElementAtPointRef = useRef<Element | null>(null);
+
   useEffect(() => {
     if (!isDragging) return;
 
@@ -21,7 +24,7 @@ export function useAutoScroll(
       const pos = getPointerPositionRef.current();
       if (pos) {
         scrollViewport(pos, edgeSize, maxSpeed);
-        scrollAncestors(pos, edgeSize, maxSpeed);
+        scrollAncestors(pos, edgeSize, maxSpeed, cachedScrollablesRef, lastElementAtPointRef);
       }
       rafRef.current = requestAnimationFrame(tick);
     };
@@ -29,8 +32,8 @@ export function useAutoScroll(
     rafRef.current = requestAnimationFrame(tick);
     return () => {
       cancelAnimationFrame(rafRef.current);
-      cachedScrollables = null;
-      lastElementAtPoint = null;
+      cachedScrollablesRef.current = null;
+      lastElementAtPointRef.current = null;
     };
   }, [isDragging, edgeSize, maxSpeed]);
 }
@@ -64,18 +67,21 @@ function scrollViewport(pos: { x: number; y: number }, edgeSize: number, maxSpee
   }
 }
 
-let cachedScrollables: HTMLElement[] | null = null;
-let lastElementAtPoint: Element | null = null;
-
-function scrollAncestors(pos: { x: number; y: number }, edgeSize: number, maxSpeed: number) {
+function scrollAncestors(
+  pos: { x: number; y: number },
+  edgeSize: number,
+  maxSpeed: number,
+  cachedScrollablesRef: React.RefObject<HTMLElement[] | null>,
+  lastElementAtPointRef: React.MutableRefObject<Element | null>,
+) {
   const el = document.elementFromPoint(pos.x, pos.y);
 
-  if (el !== lastElementAtPoint || !cachedScrollables) {
-    lastElementAtPoint = el;
-    cachedScrollables = findScrollableAncestors(el as HTMLElement | null);
+  if (el !== lastElementAtPointRef.current || !cachedScrollablesRef.current) {
+    lastElementAtPointRef.current = el;
+    cachedScrollablesRef.current = findScrollableAncestors(el as HTMLElement | null);
   }
 
-  for (const scrollable of cachedScrollables) {
+  for (const scrollable of cachedScrollablesRef.current) {
     const rect = scrollable.getBoundingClientRect();
     const localX = pos.x - rect.left;
     const localY = pos.y - rect.top;

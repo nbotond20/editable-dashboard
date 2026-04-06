@@ -1,7 +1,5 @@
-import { useCallback, useRef, useEffect, type ReactElement } from "react";
+import { useCallback, useRef, useEffect, useId, type ReactElement } from "react";
 import { createElement } from "react";
-
-const LIVE_REGION_ID = "dashboard-drag-live-region";
 
 const VISUALLY_HIDDEN_STYLE: React.CSSProperties = {
   position: "absolute",
@@ -16,6 +14,8 @@ const VISUALLY_HIDDEN_STYLE: React.CSSProperties = {
 };
 
 export function useDragAnnouncements() {
+  const instanceId = useId();
+  const liveRegionId = `dashboard-drag-live-region-${instanceId}`;
   const messageRef = useRef("");
   const nodeRef = useRef<HTMLDivElement | null>(null);
 
@@ -39,15 +39,15 @@ export function useDragAnnouncements() {
   const LiveRegion: () => ReactElement = useCallback(
     () =>
       createElement("div", {
-        id: LIVE_REGION_ID,
+        id: liveRegionId,
         ref: nodeRef,
         role: "status",
         "aria-live": "assertive",
         "aria-atomic": true,
         style: VISUALLY_HIDDEN_STYLE,
       }),
-    []
+    [liveRegionId]
   );
 
-  return { announce, LiveRegion, liveRegionId: LIVE_REGION_ID };
+  return { announce, LiveRegion, liveRegionId };
 }

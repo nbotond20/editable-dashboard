@@ -24,10 +24,8 @@
       "Bash(git stash:*)",
       "mcp__playwright__browser_snapshot",
       "Bash(npm run:*)",
-      "Bash(cp src/lib/dashboard/engine/drag-engine.ts /tmp/refactored-drag-engine.ts)",
-      "Bash(cp /tmp/original-drag-engine.ts src/lib/dashboard/engine/drag-engine.ts)",
-      "Bash(find /Users/nbotond/Desktop/projects/editable-dashboard -name *.spec.ts -not -path */node_modules/*)",
-      "Bash(npm test:*)"
+      "Bash(npm test:*)",
+      "Bash(find:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

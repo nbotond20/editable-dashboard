@@ -105,6 +105,8 @@ export function useActions(opts: UseActionsOptions): DashboardActions {
         return;
       }
 
+      if (fromIndex === toIndex) return;
+
       const source = visible[fromIndex];
       const target = visible[toIndex];
       if (source && isLockActive(source.id, "position", state, definitions)) return;

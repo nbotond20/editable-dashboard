@@ -6,8 +6,10 @@ import { lockFieldName } from "../locks.ts";
  * Visible widgets are ordered first (by their current order), followed by hidden widgets.
  */
 function normalizeOrder(widgets: WidgetState[]): WidgetState[] {
-  const sorted = [...widgets].sort((a, b) => a.order - b.order);
-  return sorted.map((w, i) => (w.order === i ? w : { ...w, order: i }));
+  const visible = widgets.filter((w) => w.visible).sort((a, b) => a.order - b.order);
+  const hidden = widgets.filter((w) => !w.visible).sort((a, b) => a.order - b.order);
+  const ordered = [...visible, ...hidden];
+  return ordered.map((w, i) => (w.order === i ? w : { ...w, order: i }));
 }
 
 export function dashboardReducer(
@@ -89,18 +91,21 @@ export function dashboardReducer(
       return { ...state, widgets: normalizeOrder(reordered) };
     }
 
-    case "SET_CONTAINER_WIDTH":
-      return { ...state, containerWidth: action.width };
-
-    case "SET_MAX_COLUMNS":
+    case "SET_MAX_COLUMNS": {
+      const mc = action.maxColumns;
       return {
         ...state,
-        maxColumns: action.maxColumns,
-        widgets: state.widgets.map((w) => ({
-          ...w,
-          colSpan: Math.min(w.colSpan, action.maxColumns),
-        })),
+        maxColumns: mc,
+        widgets: state.widgets.map((w) => {
+          const colSpan = Math.min(w.colSpan, mc);
+          const columnStart =
+            w.columnStart != null && w.columnStart + colSpan > mc
+              ? undefined
+              : w.columnStart;
+          return { ...w, colSpan, columnStart };
+        }),
       };
+    }
 
     case "BATCH_UPDATE":
       return { ...state, widgets: normalizeOrder(action.widgets) };

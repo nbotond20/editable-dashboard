@@ -32,15 +32,32 @@ const initialWidgets: WidgetState[] = [
   { id: crypto.randomUUID(), type: "calendar", colSpan: 1, visible: true, order: 3 },
 ];
 
-function DashboardContent({ onStateChange }: { onStateChange?: (state: DashboardState) => void }) {
+const DRAG_CONFIG = {
+  touchMoveTolerance: 20,
+  autoScrollEdgeSize: 80,
+} as const;
+
+// ---------------------------------------------------------------------------
+// Shared dashboard UI (used by both modes)
+// ---------------------------------------------------------------------------
+
+interface DashboardContentProps {
+  /**
+   * When provided, column selector is driven by the parent (controlled mode).
+   * When omitted, falls back to actions.setMaxColumns (uncontrolled mode).
+   */
+  maxColumns?: number;
+  onMaxColumnsChange?: (n: number) => void;
+}
+
+function DashboardContent({ maxColumns: controlledMaxColumns, onMaxColumnsChange }: DashboardContentProps) {
   const { state, actions, definitions: defs, canUndo, canRedo } = useDashboardStable();
   const [catalogOpen, setCatalogOpen] = useState(false);
   const [animated, setAnimated] = useState(true);
   const Grid = animated ? DashboardGrid : DashboardGridStatic;
 
-  useEffect(() => {
-    onStateChange?.(state);
-  }, [state, onStateChange]);
+  const maxColumns = controlledMaxColumns ?? state.maxColumns;
+  const setMaxColumns = onMaxColumnsChange ?? actions.setMaxColumns;
 
   const activeTypes = useMemo(
     () => new Set(state.widgets.filter((w) => w.visible).map((w) => w.type)),
@@ -63,13 +80,13 @@ function DashboardContent({ onStateChange }: { onStateChange?: (state: Dashboard
         dragHandleProps={slotProps.dragHandleProps}
         isDragging={slotProps.isDragging}
         colSpan={slotProps.colSpan}
-        maxColumns={state.maxColumns}
+        maxColumns={maxColumns}
         resize={slotProps.resize}
         remove={slotProps.remove}
         isLongPressing={slotProps.isLongPressing}
       />
     ),
-    [state.maxColumns]
+    [maxColumns]
   );
 
   return (
@@ -101,8 +118,8 @@ function DashboardContent({ onStateChange }: { onStateChange?: (state: Dashboard
             {[1, 2, 3, 4, 5].map((n) => (
               <button
                 key={n}
-                className={`dash-btn ${state.maxColumns === n ? "dash-btn--primary" : "dash-btn--outline"}`}
-                onClick={() => actions.setMaxColumns(n)}
+                className={`dash-btn ${maxColumns === n ? "dash-btn--primary" : "dash-btn--outline"}`}
+                onClick={() => setMaxColumns(n)}
               >
                 {n} col{n > 1 ? "s" : ""}
               </button>
@@ -142,6 +159,10 @@ function DashboardContent({ onStateChange }: { onStateChange?: (state: Dashboard
   );
 }
 
+// ---------------------------------------------------------------------------
+// Persistence helpers
+// ---------------------------------------------------------------------------
+
 function loadSavedState(): { widgets: WidgetState[]; maxColumns: number } | undefined {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -154,17 +175,24 @@ function loadSavedState(): { widgets: WidgetState[]; maxColumns: number } | unde
   }
 }
 
-export default function App() {
-  const [saved] = useState(() => loadSavedState());
+function saveState(widgets: WidgetState[], maxColumns: number, gap: number) {
+  try {
+    const serialized = serializeDashboard({ widgets, maxColumns, gap, containerWidth: 0 });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(serialized));
+  } catch { /* ignore storage errors */ }
+}
+
+// ---------------------------------------------------------------------------
+// Uncontrolled mode — provider owns state, we observe via onChange
+// ---------------------------------------------------------------------------
+
+function UncontrolledApp({ saved }: { saved: { widgets: WidgetState[]; maxColumns: number } | undefined }) {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  const handleStateChange = useCallback((state: DashboardState) => {
+  const handleChange = useCallback((state: DashboardState) => {
     clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
-      try {
-        const serialized = serializeDashboard(state);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(serialized));
-      } catch { /* ignore storage errors */ }
+      saveState(state.widgets, state.maxColumns, state.gap);
     }, 300);
   }, []);
 
@@ -174,12 +202,90 @@ export default function App() {
       initialWidgets={saved?.widgets ?? initialWidgets}
       maxColumns={saved?.maxColumns ?? 2}
       gap={16}
-      dragConfig={{
-        touchMoveTolerance: 20,
-        autoScrollEdgeSize: 80,
-      }}
+      dragConfig={DRAG_CONFIG}
+      onChange={handleChange}
     >
-      <DashboardContent onStateChange={handleStateChange} />
+      <DashboardContent />
     </DashboardProvider>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Controlled mode — parent owns ALL state, provider is a pure render engine
+// ---------------------------------------------------------------------------
+
+function ControlledApp({ saved }: { saved: { widgets: WidgetState[]; maxColumns: number } | undefined }) {
+  const [widgets, setWidgets] = useState<WidgetState[]>(saved?.widgets ?? initialWidgets);
+  const [maxColumns, setMaxColumns] = useState(saved?.maxColumns ?? 2);
+
+  // Parent owns persistence — save whenever our state changes
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => {
+    clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      saveState(widgets, maxColumns, 16);
+    }, 300);
+  }, [widgets, maxColumns]);
+
+  return (
+    <DashboardProvider
+      definitions={definitions}
+      state={widgets}
+      onStateChange={setWidgets}
+      maxColumns={maxColumns}
+      gap={16}
+      dragConfig={DRAG_CONFIG}
+    >
+      <DashboardContent
+        maxColumns={maxColumns}
+        onMaxColumnsChange={setMaxColumns}
+      />
+    </DashboardProvider>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Root — mode switcher
+// ---------------------------------------------------------------------------
+
+export default function App() {
+  const [mode, setMode] = useState<"uncontrolled" | "controlled">("uncontrolled");
+  const [saved] = useState(() => loadSavedState());
+
+  return (
+    <>
+      <div style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 8,
+        padding: "10px 24px",
+        background: mode === "controlled" ? "#fef3c7" : "#ecfdf5",
+        borderBottom: `1px solid ${mode === "controlled" ? "#fcd34d" : "#6ee7b7"}`,
+        fontSize: "0.8125rem",
+        fontWeight: 550,
+      }}>
+        <span style={{ color: mode === "controlled" ? "#92400e" : "#065f46" }}>
+          Mode: {mode === "controlled" ? "Controlled" : "Uncontrolled"}
+        </span>
+        <button
+          className="dash-btn dash-btn--outline"
+          style={{ padding: "3px 10px", fontSize: "0.75rem" }}
+          onClick={() => setMode((m) => m === "uncontrolled" ? "controlled" : "uncontrolled")}
+        >
+          Switch to {mode === "uncontrolled" ? "Controlled" : "Uncontrolled"}
+        </button>
+        <span style={{ color: mode === "controlled" ? "#92400e" : "#065f46", opacity: 0.7 }}>
+          {mode === "controlled"
+            ? "Parent owns ALL state (widgets + columns + persistence). Provider is a pure render engine."
+            : "Provider owns state internally. initialWidgets seeds on mount. onChange observes."}
+        </span>
+      </div>
+
+      {mode === "uncontrolled"
+        ? <UncontrolledApp key="uncontrolled" saved={saved} />
+        : <ControlledApp key="controlled" saved={saved} />
+      }
+    </>
   );
 }

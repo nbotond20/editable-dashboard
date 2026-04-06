@@ -5,6 +5,7 @@ import type {
   DropZone,
   OperationIntent,
   CommittedOperation,
+  CommitSource,
   DragEngineConfig,
   DragEngineSnapshot,
   Point,
@@ -53,6 +54,8 @@ const UNDOABLE_ACTIONS = new Set<string>([
   "SET_MAX_COLUMNS",
   "SHOW_WIDGET",
   "HIDE_WIDGET",
+  "UPDATE_WIDGET_CONFIG",
+  "SET_WIDGET_LOCK",
 ]);
 
 const MAX_UNDO_DEPTH = 50;
@@ -68,6 +71,7 @@ function defaultConfig(): DragEngineConfig {
     maxColumns: DEFAULT_MAX_COLUMNS,
     gap: DEFAULT_GAP,
     dropAnimationDuration: DROP_ANIMATION_DURATION,
+    maxUndoDepth: MAX_UNDO_DEPTH,
     isPositionLocked: () => false,
     isResizeLocked: () => false,
     canDrop: () => true,
@@ -242,13 +246,17 @@ export class DragEngine {
     this.cachedSnapshot = null;
 
     if (action.type === "UNDO") {
+      const prevState = this.history.present;
       this.history = undoHistory(this.history);
+      this.config.onCommit?.(this.history.present, prevState, { type: "undo" });
       this.recomputeLayouts();
       this.notify();
       return;
     }
     if (action.type === "REDO") {
+      const prevState = this.history.present;
       this.history = redoHistory(this.history);
+      this.config.onCommit?.(this.history.present, prevState, { type: "redo" });
       this.recomputeLayouts();
       this.notify();
       return;
@@ -266,11 +274,7 @@ export class DragEngine {
       newState = { ...newState, widgets: pinToGreedyColumns(newState.widgets, cfg.maxColumns) };
     }
 
-    if (UNDOABLE_ACTIONS.has(action.type)) {
-      this.history = pushState(this.history, newState, MAX_UNDO_DEPTH);
-    } else {
-      this.history = { ...this.history, present: newState };
-    }
+    this.commitState(newState, { type: "action", action }, UNDOABLE_ACTIONS.has(action.type));
 
     this.recomputeLayouts();
     this.notify();
@@ -295,13 +299,28 @@ export class DragEngine {
   replaceState(next: DashboardState): void {
     if (this.history.present.widgets === next.widgets) return;
 
-    this.history = createUndoHistory({
+    const nextWithWidth = {
       ...next,
       containerWidth: this.containerWidth,
-    });
+    };
+    this.history = { ...this.history, present: nextWithWidth };
     this.cachedSnapshot = null;
     this.recomputeLayouts();
     this.notify();
+  }
+
+  private commitState(
+    newState: DashboardState,
+    source: CommitSource,
+    undoable: boolean,
+  ): void {
+    const prevState = this.history.present;
+    if (undoable) {
+      this.history = pushState(this.history, newState, this.config.maxUndoDepth);
+    } else {
+      this.history = { ...this.history, present: newState };
+    }
+    this.config.onCommit?.(newState, prevState, source);
   }
 
   updateConfig(partial: Partial<DragEngineConfig>): void {
@@ -311,6 +330,9 @@ export class DragEngine {
   }
 
   destroy(): void {
+    if (this.phase.type !== "idle") {
+      this.handleCancel();
+    }
     this.listeners.clear();
   }
 
@@ -404,7 +426,7 @@ export class DragEngine {
     const newState = this.applyCommittedOperation(sourceId, committed);
 
     if (newState !== this.history.present) {
-      this.history = pushState(this.history, newState, MAX_UNDO_DEPTH);
+      this.commitState(newState, { type: "drag-operation", operation: committed }, true);
     }
 
     this.phase = {
@@ -517,20 +539,19 @@ export class DragEngine {
       const involvedIds = new Set([phase.sourceId]);
       let state = this.history.present;
 
-      if (hasResize) {
-        state = applyOperation(state, {
-          type: "resize-toggle",
-          id: phase.sourceId,
-          newSpan: phase.currentColSpan,
-        });
+      const resizeOp: CommittedOperation | null = hasResize
+        ? { type: "resize-toggle", id: phase.sourceId, newSpan: phase.currentColSpan }
+        : null;
+      const reorderOp: CommittedOperation | null = hasReorder
+        ? { type: "reorder", fromIndex: phase.originalIndex, toIndex: phase.currentIndex }
+        : null;
+
+      if (resizeOp) {
+        state = applyOperation(state, resizeOp);
       }
 
-      if (hasReorder) {
-        state = applyOperation(state, {
-          type: "reorder",
-          fromIndex: phase.originalIndex,
-          toIndex: phase.currentIndex,
-        });
+      if (reorderOp) {
+        state = applyOperation(state, reorderOp);
       }
 
       state = {
@@ -542,7 +563,8 @@ export class DragEngine {
       };
 
       if (state !== this.history.present) {
-        this.history = pushState(this.history, state, MAX_UNDO_DEPTH);
+        const committed: CommittedOperation = reorderOp ?? resizeOp!;
+        this.commitState(state, { type: "drag-operation", operation: committed }, true);
       }
     }
 
@@ -636,7 +658,7 @@ export class DragEngine {
     if (newState !== state) {
       const cfg = this.layoutConfig();
       newState = { ...newState, widgets: stabilizeUninvolvedWidgets(newState.widgets, this.baseLayout, new Set([event.id]), this.containerWidth, cfg.maxColumns, cfg.gap) };
-      this.history = pushState(this.history, newState, MAX_UNDO_DEPTH);
+      this.commitState(newState, { type: "drag-operation", operation: committed }, true);
       this.recomputeLayouts();
     }
   }

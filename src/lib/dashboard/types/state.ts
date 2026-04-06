@@ -3,24 +3,27 @@ import type { LockType, WidgetState } from "./widget.ts";
 /**
  * The externally-facing dashboard state for controlled mode.
  *
- * Pass this to `<DashboardProvider state={…}>`. It omits the transient
- * `containerWidth` field, which is managed internally by the provider.
+ * Pass this to `<DashboardProvider state={…}>`. Layout configuration
+ * (`maxColumns`, `gap`) is provided via top-level provider props, not here.
  */
 export interface DashboardStateInput {
+  /** All widget instances (visible and hidden). */
+  widgets: WidgetState[];
+}
+
+/**
+ * Complete internal state of the dashboard.
+ *
+ * Adds layout configuration and transient fields to the external
+ * {@link DashboardStateInput}.
+ */
+export interface DashboardState {
   /** All widget instances (visible and hidden). */
   widgets: WidgetState[];
   /** Current number of grid columns. */
   maxColumns: number;
   /** Gap between widgets in pixels. */
   gap: number;
-}
-
-/**
- * Complete internal state of the dashboard.
- *
- * Extends {@link DashboardStateInput} with the transient `containerWidth` field.
- */
-export interface DashboardState extends DashboardStateInput {
   /**
    * Measured container width in pixels.
    *
@@ -38,7 +41,6 @@ export type DashboardAction =
   | { type: "REMOVE_WIDGET"; id: string }
   | { type: "RESIZE_WIDGET"; id: string; colSpan: number }
   | { type: "REORDER_WIDGETS"; fromIndex: number; toIndex: number }
-  | { type: "SET_CONTAINER_WIDTH"; width: number }
   | { type: "SET_MAX_COLUMNS"; maxColumns: number }
   | { type: "BATCH_UPDATE"; widgets: WidgetState[] }
   | { type: "UPDATE_WIDGET_CONFIG"; id: string; config: Record<string, unknown> }

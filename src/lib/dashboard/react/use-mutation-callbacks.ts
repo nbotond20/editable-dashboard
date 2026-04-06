@@ -4,6 +4,7 @@ import type {
   DashboardState,
   WidgetState,
 } from "../types.ts";
+import type { CommitSource } from "../engine/types.ts";
 
 export interface MutationCallbackProps {
   onWidgetAdd?: (event: { widget: WidgetState }) => void;
@@ -96,5 +97,105 @@ export function useMutationCallbacks(props: MutationCallbackProps) {
     [],
   );
 
-  return fireMutationCallbacks;
+  /**
+   * Fires mutation callbacks for drag-committed operations (reorder, swap,
+   * auto-resize, resize-toggle, column-pin). This is called from the engine's
+   * `onCommit` callback for drag operations.
+   */
+  const fireDragCommitCallbacks = useCallback(
+    (source: CommitSource, prevState: DashboardState, nextState: DashboardState) => {
+      if (nextState === prevState) return;
+      if (source.type !== "drag-operation") return;
+
+      const { operation } = source;
+
+      switch (operation.type) {
+        case "reorder": {
+          const visible = [...prevState.widgets]
+            .filter((w) => w.visible)
+            .sort((a, b) => a.order - b.order);
+          const movedWidget = visible[operation.fromIndex];
+          if (movedWidget && operation.fromIndex !== operation.toIndex) {
+            onWidgetReorderRef.current?.({
+              widgetId: movedWidget.id,
+              fromIndex: operation.fromIndex,
+              toIndex: operation.toIndex,
+            });
+          }
+          break;
+        }
+        case "swap": {
+          const prevSourceWidget = prevState.widgets.find((w) => w.id === operation.sourceId);
+          const prevTargetWidget = prevState.widgets.find((w) => w.id === operation.targetId);
+          const nextSourceWidget = nextState.widgets.find((w) => w.id === operation.sourceId);
+          const nextTargetWidget = nextState.widgets.find((w) => w.id === operation.targetId);
+          if (prevSourceWidget && nextSourceWidget && prevSourceWidget.order !== nextSourceWidget.order) {
+            onWidgetReorderRef.current?.({
+              widgetId: operation.sourceId,
+              fromIndex: prevSourceWidget.order,
+              toIndex: nextSourceWidget.order,
+            });
+          }
+          if (prevTargetWidget && nextTargetWidget && prevTargetWidget.order !== nextTargetWidget.order) {
+            onWidgetReorderRef.current?.({
+              widgetId: operation.targetId,
+              fromIndex: prevTargetWidget.order,
+              toIndex: nextTargetWidget.order,
+            });
+          }
+          break;
+        }
+        case "auto-resize": {
+          const prevSource = prevState.widgets.find((w) => w.id === operation.sourceId);
+          const nextSource = nextState.widgets.find((w) => w.id === operation.sourceId);
+          if (prevSource && nextSource && prevSource.colSpan !== nextSource.colSpan) {
+            onWidgetResizeRef.current?.({
+              widgetId: operation.sourceId,
+              previousColSpan: prevSource.colSpan,
+              newColSpan: nextSource.colSpan,
+            });
+          }
+          const prevTarget = prevState.widgets.find((w) => w.id === operation.targetId);
+          const nextTarget = nextState.widgets.find((w) => w.id === operation.targetId);
+          if (prevTarget && nextTarget && prevTarget.colSpan !== nextTarget.colSpan) {
+            onWidgetResizeRef.current?.({
+              widgetId: operation.targetId,
+              previousColSpan: prevTarget.colSpan,
+              newColSpan: nextTarget.colSpan,
+            });
+          }
+          break;
+        }
+        case "resize-toggle": {
+          const prevWidget = prevState.widgets.find((w) => w.id === operation.id);
+          const nextWidget = nextState.widgets.find((w) => w.id === operation.id);
+          if (prevWidget && nextWidget && prevWidget.colSpan !== nextWidget.colSpan) {
+            onWidgetResizeRef.current?.({
+              widgetId: operation.id,
+              previousColSpan: prevWidget.colSpan,
+              newColSpan: nextWidget.colSpan,
+            });
+          }
+          break;
+        }
+        case "column-pin": {
+          const visible = [...prevState.widgets]
+            .filter((w) => w.visible)
+            .sort((a, b) => a.order - b.order);
+          const sourceIdx = visible.findIndex((w) => w.id === operation.sourceId);
+          if (sourceIdx >= 0 && sourceIdx !== operation.targetIndex) {
+            onWidgetReorderRef.current?.({
+              widgetId: operation.sourceId,
+              fromIndex: sourceIdx,
+              toIndex: operation.targetIndex,
+            });
+          }
+          break;
+        }
+      }
+    },
+    [],
+  );
+
+  return { fireMutationCallbacks, fireDragCommitCallbacks };
 }

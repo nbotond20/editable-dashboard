@@ -24,7 +24,7 @@ export type {
   DragConfig,
 } from "./types.ts";
 
-export type { CommittedOperation } from "./engine/types.ts";
+export type { CommittedOperation, CommitSource } from "./engine/types.ts";
 
 export {
   DEFAULT_MAX_COLUMNS,
