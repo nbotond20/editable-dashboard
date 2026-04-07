@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from "react";
 import { LayoutGroup, AnimatePresence, motion } from "motion/react";
 import { useDashboard, EXTERNAL_PHANTOM_ID, type WidgetState, type DragHandleProps } from "../../lib/dashboard/index.ts";
-import { LAYOUT_SPRING } from "../animation-config.ts";
+import { SPRINGS } from "../animation-config.ts";
 import { WidgetSlot } from "./WidgetSlot.tsx";
 
 interface WidgetSlotCallbackProps {
@@ -19,13 +19,14 @@ interface DashboardGridProps {
   className?: string;
   style?: React.CSSProperties;
   ghostClassName?: string;
+  animated?: boolean;
   children: (
     widget: WidgetState,
     slotProps: WidgetSlotCallbackProps
   ) => React.ReactNode;
 }
 
-export function DashboardGrid({ className, style, ghostClassName, children }: DashboardGridProps) {
+export function DashboardGrid({ className, style, ghostClassName, animated = true, children }: DashboardGridProps) {
   const { state, layout, dragState, containerRef, phase } = useDashboard();
 
   const visibleWidgets = useMemo(
@@ -53,61 +54,90 @@ export function DashboardGrid({ className, style, ghostClassName, children }: Da
     ? dragState.previewLayout.positions.get(ghostId)
     : null;
 
-  return (
-    <LayoutGroup>
-      <div
-        ref={containerRef}
-        className={className}
-        data-testid="dashboard-grid"
-        data-phase={phase}
-        data-max-columns={state.maxColumns}
-        data-gap={state.gap}
-        data-widget-count={visibleWidgets.length}
-        style={{
-          position: "relative",
-          height: containerHeight > 0 ? containerHeight : "auto",
-          minHeight: 100,
-          ...style,
+  const ghostElement = ghostPos && (
+    animated ? (
+      <motion.div
+        key="drop-ghost"
+        className={ghostClassName ?? "dashboard-drop-ghost"}
+        data-testid="drop-ghost"
+        data-ghost-x={ghostPos.x}
+        data-ghost-y={ghostPos.y}
+        data-ghost-width={ghostPos.width}
+        data-ghost-height={ghostPos.height}
+        initial={{ opacity: 0 }}
+        animate={{
+          opacity: 1,
+          x: ghostPos.x,
+          y: ghostPos.y,
+          width: ghostPos.width,
+          height: ghostPos.height,
         }}
-      >
-        <AnimatePresence>
-          {ghostPos && (
-            <motion.div
-              key="drop-ghost"
-              className={ghostClassName ?? "dashboard-drop-ghost"}
-              data-testid="drop-ghost"
-              data-ghost-x={ghostPos.x}
-              data-ghost-y={ghostPos.y}
-              data-ghost-width={ghostPos.width}
-              data-ghost-height={ghostPos.height}
-              initial={{ opacity: 0 }}
-              animate={{
-                opacity: 1,
-                x: ghostPos.x,
-                y: ghostPos.y,
-                width: ghostPos.width,
-                height: ghostPos.height,
-              }}
-              exit={{ opacity: 0 }}
-              transition={LAYOUT_SPRING}
-              style={{
-                position: "absolute",
-                left: 0,
-                top: 0,
-                pointerEvents: "none",
-              }}
-            />
-          )}
-        </AnimatePresence>
-
-        <AnimatePresence mode="popLayout">
-          {visibleWidgets.map((widget) => (
-            <WidgetSlot key={widget.id} widget={widget}>
-              {children}
-            </WidgetSlot>
-          ))}
-        </AnimatePresence>
-      </div>
-    </LayoutGroup>
+        exit={{ opacity: 0 }}
+        transition={SPRINGS.layout}
+        style={{
+          position: "absolute",
+          left: 0,
+          top: 0,
+          pointerEvents: "none",
+        }}
+      />
+    ) : (
+      <div
+        key="drop-ghost"
+        className={ghostClassName ?? "dashboard-drop-ghost"}
+        data-testid="drop-ghost"
+        data-ghost-x={ghostPos.x}
+        data-ghost-y={ghostPos.y}
+        data-ghost-width={ghostPos.width}
+        data-ghost-height={ghostPos.height}
+        style={{
+          position: "absolute",
+          left: 0,
+          top: 0,
+          transform: `translate(${ghostPos.x}px, ${ghostPos.y}px)`,
+          width: ghostPos.width,
+          height: ghostPos.height,
+          pointerEvents: "none",
+        }}
+      />
+    )
   );
+
+  const widgetElements = visibleWidgets.map((widget) => (
+    <WidgetSlot key={widget.id} widget={widget} animated={animated}>
+      {children}
+    </WidgetSlot>
+  ));
+
+  const container = (
+    <div
+      ref={containerRef}
+      className={className}
+      data-testid="dashboard-grid"
+      data-phase={phase}
+      data-max-columns={state.maxColumns}
+      data-gap={state.gap}
+      data-widget-count={visibleWidgets.length}
+      style={{
+        position: "relative",
+        height: containerHeight > 0 ? containerHeight : "auto",
+        minHeight: 100,
+        ...style,
+      }}
+    >
+      {animated ? (
+        <>
+          <AnimatePresence>{ghostElement}</AnimatePresence>
+          <AnimatePresence mode="popLayout">{widgetElements}</AnimatePresence>
+        </>
+      ) : (
+        <>
+          {ghostElement}
+          {widgetElements}
+        </>
+      )}
+    </div>
+  );
+
+  return animated ? <LayoutGroup>{container}</LayoutGroup> : container;
 }

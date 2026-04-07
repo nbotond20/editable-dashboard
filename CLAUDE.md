@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A headless React component library (`editable-dashboard`) for building dashboard layouts with drag-and-drop. Published to npm as a pure data/logic library with zero UI dependencies. Users bring their own UI and animation.
 
+Very important to always keep it headless, dependency-free, and framework-agnostic. The React integration is just one adapter layer.
+
 ## Commands
 
 ```bash
@@ -15,7 +17,6 @@ npm run build:lib        # Library-only build
 npm run typecheck:lib    # Typecheck library without emitting
 npm run lint             # ESLint
 npm run test             # Vitest unit tests (single run)
-npm run test:watch       # Vitest watch mode
 npx vitest run src/lib/dashboard/engine/__tests__/some-file.test.ts  # Single test file
 npm run test:e2e         # Playwright e2e tests (needs dev server running)
 npm run test:e2e:ui      # Playwright with UI
@@ -60,6 +61,7 @@ Reorder (gap drop), Swap (immediate on hover), Auto-resize (600ms dwell), Column
 ## Validation
 
 After every larger chunk of work, spawn multiple agents in parallel to verify everything passes:
+
 - Unit tests (`npm run test`)
 - Linting (`npm run lint`)
 - Type checking (`npm run typecheck:lib`)
@@ -112,3 +114,7 @@ Y ->| X>        → drag Y, hold on right side of X
 ## Tech stack
 
 TypeScript 5.9, React 18+ (peer dep), Vite 8, Vitest, Playwright, ESLint
+
+## Comments
+
+- Only add short and concise JSDoc comments on the public facing APIs. Remove every other comment. The code should be self-explanatory. If you find yourself writing a comment to explain what the code is doing, refactor the code until it's clear without comments. (Use the strip-comments.sh script if needed)

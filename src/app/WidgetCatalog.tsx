@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import type { WidgetDefinition } from "../lib/dashboard/index.ts";
 import { useExternalDragSource } from "../lib/dashboard/index.ts";
+import { SPRINGS } from "./animation-config.ts";
 
 interface WidgetCatalogProps {
   open: boolean;
@@ -55,7 +56,7 @@ export function WidgetCatalog({
             initial={{ x: "100%" }}
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
-            transition={{ type: "spring", stiffness: 400, damping: 35 }}
+            transition={SPRINGS.panel}
             style={hiddenForDrag ? { visibility: "hidden", pointerEvents: "none" } : undefined}
           >
             <div className="dash-catalog-panel__header">

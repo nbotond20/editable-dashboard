@@ -11,7 +11,6 @@ import {
   useTrashZone,
 } from "../lib/dashboard/index.ts";
 import { DashboardGrid } from "./components/DashboardGrid.tsx";
-import { DashboardGridStatic } from "./components/DashboardGridStatic.tsx";
 import { DemoWidget } from "./DemoWidget.tsx";
 import { WidgetCatalog } from "./WidgetCatalog.tsx";
 import "./App.css";
@@ -50,8 +49,9 @@ interface DashboardContentProps {
 function DashboardContent({ maxColumns: controlledMaxColumns, onMaxColumnsChange }: DashboardContentProps) {
   const { state, actions, definitions: defs, canUndo, canRedo } = useDashboardStable();
   const [catalogOpen, setCatalogOpen] = useState(false);
-  const [animated, setAnimated] = useState(true);
-  const Grid = animated ? DashboardGrid : DashboardGridStatic;
+  const [animated, setAnimated] = useState(
+    () => !window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
 
   const maxColumns = controlledMaxColumns ?? state.maxColumns;
   const setMaxColumns = onMaxColumnsChange ?? actions.setMaxColumns;
@@ -139,9 +139,9 @@ function DashboardContent({ maxColumns: controlledMaxColumns, onMaxColumnsChange
       </header>
 
       <main style={{ padding: 24, maxWidth: 1200, margin: "0 auto" }}>
-        <Grid style={{ width: "100%" }}>
+        <DashboardGrid animated={animated} style={{ width: "100%" }}>
           {renderWidget}
-        </Grid>
+        </DashboardGrid>
 
       </main>
 
