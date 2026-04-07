@@ -122,3 +122,7 @@ TypeScript 5.9, React 18+ (peer dep), Vite 8, Vitest, Playwright, ESLint
 ## Change log
 
 Always update the changelog.md file with a concise summary of the change, categorized by type (Added, Changed, Fixed, etc.). Follow the existing format for consistency.
+
+## Docs
+
+Always update the README.md file with usage instructions and examples for any new features or changes. The README should serve as the primary documentation for users of the library. Keep it clear and concise, with code snippets where helpful.
