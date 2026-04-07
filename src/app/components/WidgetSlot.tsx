@@ -209,7 +209,6 @@ export function WidgetSlot({ widget, children }: WidgetSlotProps) {
       animate={{
         opacity: 1,
         scale: isDragging ? 1.03 : 1,
-        width: position.width,
         boxShadow: isDragging
           ? "0 20px 40px rgba(0,0,0,0.15)"
           : "0 0px 0px rgba(0,0,0,0)",
@@ -217,7 +216,6 @@ export function WidgetSlot({ widget, children }: WidgetSlotProps) {
       exit={{ opacity: 0, scale: 0.95 }}
       transition={{
         ...LAYOUT_SPRING,
-        width: { type: "spring", stiffness: 500, damping: 35, mass: 0.5 },
       }}
     >
       {children(widget, {
