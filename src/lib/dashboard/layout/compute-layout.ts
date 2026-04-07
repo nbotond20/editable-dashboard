@@ -53,6 +53,7 @@ export function computeLayout(
       visible: true,
       order: options.phantom.order,
       ...(options.phantom.columnStart != null ? { columnStart: options.phantom.columnStart } : {}),
+      ...(options.phantom.rowStart != null ? { rowStart: options.phantom.rowStart } : {}),
     };
     const insertIdx = visible.findIndex((w) => w.order > phantomWidget.order);
     if (insertIdx === -1) {
@@ -62,7 +63,20 @@ export function computeLayout(
     }
   }
 
+  let currentRowStart: number | undefined;
+
   for (const widget of visible) {
+    if (widget.rowStart != null && widget.rowStart !== currentRowStart) {
+      const anyPlaced = columnHeights.some(h => h > 0);
+      if (anyPlaced) {
+        const maxH = Math.max(...columnHeights);
+        for (let c = 0; c < maxColumns; c++) {
+          columnHeights[c] = maxH;
+        }
+      }
+      currentRowStart = widget.rowStart;
+    }
+
     const span = Math.max(1, Math.min(widget.colSpan, maxColumns));
     const widgetWidth = span * colWidth + (span - 1) * gap;
     const widgetHeight =

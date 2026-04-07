@@ -816,3 +816,25 @@ test("case 85: B ->| <A (auto-resize left, after prior swap)", async ({ page }) 
   await dragByIdToSide(page, "b", "a", "left");
   await assertLayout(page, [["b", "a"]]);
 });
+
+// ── 2-col: x A / B — drag to empty cell (tests 89–91) ──────────
+
+test.describe("2-col: x A / B — drag to empty", () => {
+  test("case 89: A -> x (drag left into adjacent empty)", async ({ page }) => {
+    await setupDashboard(page, ["x A", "B"]);
+    await dragByIdToAdjacentEmpty(page, "a", "left");
+    await assertLayout(page, [["a"], ["b"]]);
+  });
+
+  test("case 90: A -> x> (drag to right side of empty cell)", async ({ page }) => {
+    await setupDashboard(page, ["x A", "B"]);
+    await dragByIdToAdjacentEmpty(page, "a", "left", { side: "right" });
+    await assertLayout(page, [["a"], ["b"]]);
+  });
+
+  test("case 91: A -> <x (drag to left side of empty cell)", async ({ page }) => {
+    await setupDashboard(page, ["x A", "B"]);
+    await dragByIdToAdjacentEmpty(page, "a", "left", { side: "left" });
+    await assertLayout(page, [["a"], ["b"]]);
+  });
+});

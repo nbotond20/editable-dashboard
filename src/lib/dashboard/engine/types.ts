@@ -178,6 +178,7 @@ export interface LayoutOptions {
     height: number;
     order: number;
     columnStart?: number;
+    rowStart?: number;
   };
   excludeIds?: ReadonlySet<string>;
 }

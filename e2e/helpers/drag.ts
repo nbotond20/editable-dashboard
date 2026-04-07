@@ -554,12 +554,17 @@ export async function dragByIdToEmptyCell(
 /**
  * Drag a widget to an adjacent empty cell (left or right of itself).
  * Used for self-repositioning (test cases 13-14).
+ *
+ * `side` adjusts cursor position within the empty cell:
+ *   "left"  → 25% of cell width (cursor on left side)
+ *   "right" → 75% of cell width (cursor on right side)
+ *   omitted → 50% (center)
  */
 export async function dragByIdToAdjacentEmpty(
   page: Page,
   sourceId: string,
   direction: "left" | "right",
-  options?: { steps?: number; dwellMs?: number },
+  options?: { steps?: number; dwellMs?: number; side?: "left" | "right" },
 ) {
   const widget = widgetById(page, sourceId);
   const handle = widgetDragHandleById(page, sourceId);
@@ -580,6 +585,7 @@ export async function dragByIdToAdjacentEmpty(
   if (!gridBox) throw new Error("Could not get grid bounding box");
 
   const colWidth = (gridBox.width - gap * (maxColumns - 1)) / maxColumns;
+  const sideOffset = options?.side === "left" ? 0.25 : options?.side === "right" ? 0.75 : 0.5;
 
   const startX = handleBox.x + handleBox.width / 2;
   const startY = handleBox.y + handleBox.height / 2;
@@ -587,10 +593,10 @@ export async function dragByIdToAdjacentEmpty(
   let endX: number;
   if (direction === "left") {
     // Target one column-width to the left of current position
-    endX = widgetBox.x - colWidth / 2;
+    endX = widgetBox.x - colWidth + colWidth * sideOffset;
   } else {
     // Target one column-width to the right
-    endX = widgetBox.x + widgetBox.width + colWidth / 2;
+    endX = widgetBox.x + widgetBox.width + colWidth * sideOffset;
   }
   const endY = widgetBox.y + widgetBox.height / 2;
 

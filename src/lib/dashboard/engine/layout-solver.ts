@@ -97,8 +97,19 @@ export function findColumnPinInsertionIndex(
   maxColumns: number,
   gap: number,
   heights: ReadonlyMap<string, number>,
+  baseLayout?: ComputedLayout,
 ): number {
   if (pointerY == null) return remainingWidgets.length;
+
+  if (baseLayout) {
+    for (let i = 0; i < remainingWidgets.length; i++) {
+      const pos = baseLayout.positions.get(remainingWidgets[i].id);
+      if (pos && pos.y > pointerY) {
+        return i;
+      }
+    }
+    return remainingWidgets.length;
+  }
 
   const columnHeights = new Array(maxColumns).fill(0);
 
@@ -226,6 +237,7 @@ export function solveDragLayout(
             height: heights.get(sourceId) ?? DEFAULT_WIDGET_HEIGHT,
             order: sourceWidget.order,
             columnStart: sourceWidget.columnStart,
+            rowStart: sourceWidget.rowStart,
           },
         }
       );
@@ -243,6 +255,10 @@ export function solvePreviewLayout(
   baseLayout?: ComputedLayout
 ): ComputedLayout {
   const fallback = () => solveDragLayout(widgets, heights, containerWidth, config, sourceId);
+
+  widgets = widgets.some(w => w.rowStart != null)
+    ? widgets.map(w => w.rowStart != null ? { ...w, rowStart: undefined } : w)
+    : widgets;
 
   switch (intent.type) {
     case "none":
@@ -423,6 +439,7 @@ export function solvePreviewLayout(
       const insertIdx = findColumnPinInsertionIndex(
         visibleSorted, intent.column, intent.pointerY,
         config.maxColumns, config.gap, heights,
+        baseLayout,
       );
       const reordered = [...visibleSorted];
       reordered.splice(insertIdx, 0, pinnedSource);

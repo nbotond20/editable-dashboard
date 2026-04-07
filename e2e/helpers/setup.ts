@@ -10,6 +10,7 @@ export interface TestWidget {
   order: number;
   type: string;
   columnStart?: number;
+  rowStart?: number;
 }
 
 export interface TestConfig {
@@ -40,11 +41,33 @@ export interface TestConfig {
  *   ]
  */
 export function parseNotation(lines: string[]): TestConfig {
-  const seen = new Map<string, { colSpan: number; columnStart?: number }>();
+  const seen = new Map<string, { colSpan: number; columnStart?: number; rowStart?: number }>();
   const orderList: string[] = []; // preserves first-seen order
   let maxColumns = 0;
 
+  // Pre-pass: track which columns are occupied per line (for rowStart).
+  const occupiedCols: Set<number>[] = [];
+  let anyEmpty = false;
+  for (const line of lines) {
+    const tokens = line.trim().split(/\s+/);
+    const occ = new Set<number>();
+    let cp = 0;
+    let j = 0;
+    while (j < tokens.length) {
+      const t = tokens[j].toUpperCase();
+      if (t === "X") { anyEmpty = true; cp++; j++; continue; }
+      let s = 1;
+      while (j + s < tokens.length && tokens[j + s].toUpperCase() === t) s++;
+      for (let c = cp; c < cp + s; c++) occ.add(c);
+      cp += s;
+      j += s;
+    }
+    occupiedCols.push(occ);
+  }
+
+  // Main pass: preserve the original progressive needsColumnStart behavior.
   let needsColumnStart = false;
+  let lineIdx = 0;
 
   for (const line of lines) {
     const tokens = line.trim().split(/\s+/);
@@ -78,9 +101,19 @@ export function parseNotation(lines: string[]): TestConfig {
 
       const id = token.toLowerCase();
       if (!seen.has(id)) {
-        const entry: { colSpan: number; columnStart?: number } = { colSpan: span };
+        const entry: { colSpan: number; columnStart?: number; rowStart?: number } = { colSpan: span };
         if (needsColumnStart || isSingleWidgetLine) {
           entry.columnStart = colPos;
+        }
+        // Set rowStart only when this widget's columns were never occupied
+        // in any earlier line — preventing greedy compaction into empty space.
+        if (anyEmpty && lineIdx > 0) {
+          const colNeverOccupied = !occupiedCols.slice(0, lineIdx).some(
+            occ => { for (let c = colPos; c < colPos + span; c++) if (occ.has(c)) return true; return false; },
+          );
+          if (colNeverOccupied) {
+            entry.rowStart = lineIdx;
+          }
         }
         seen.set(id, entry);
         orderList.push(id);
@@ -89,6 +122,7 @@ export function parseNotation(lines: string[]): TestConfig {
       colPos += span;
       i += span;
     }
+    lineIdx++;
   }
 
   let typeIdx = 0;
@@ -102,6 +136,9 @@ export function parseNotation(lines: string[]): TestConfig {
     };
     if (entry.columnStart !== undefined) {
       w.columnStart = entry.columnStart;
+    }
+    if (entry.rowStart !== undefined) {
+      w.rowStart = entry.rowStart;
     }
     return w;
   });
@@ -125,6 +162,9 @@ export function buildSeedState(config: TestConfig) {
       };
       if (w.columnStart !== undefined) {
         widget.columnStart = w.columnStart;
+      }
+      if (w.rowStart !== undefined) {
+        widget.rowStart = w.rowStart;
       }
       return widget;
     }),

@@ -708,6 +708,15 @@ export class DragEngine {
     let newState = applyOperation(this.history.present, committed);
     const cfg = this.layoutConfig();
 
+    if (newState.widgets.some(w => w.rowStart != null)) {
+      newState = {
+        ...newState,
+        widgets: newState.widgets.map(w =>
+          w.rowStart != null ? { ...w, rowStart: undefined } : w
+        ),
+      };
+    }
+
     if (committed.type === "swap") {
       newState = this.applySwapPostCommit(newState, committed);
     } else if (committed.type === "auto-resize") {
@@ -1567,6 +1576,7 @@ export class DragEngine {
         const insertIdx = findColumnPinInsertionIndex(
           remaining, intent.column, intent.pointerY,
           cfg.maxColumns, cfg.gap, this.heights,
+          this.baseLayout,
         );
         return {
           type: "column-pin",

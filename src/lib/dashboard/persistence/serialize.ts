@@ -123,6 +123,7 @@ export function serializeDashboard(
         order: w.order,
       };
       if (w.columnStart !== undefined) out.columnStart = w.columnStart;
+      if (w.rowStart !== undefined) out.rowStart = w.rowStart;
       if (w.config !== undefined) out.config = w.config;
       if (w.lockPosition) out.lockPosition = true;
       if (w.lockResize) out.lockResize = true;
@@ -237,6 +238,7 @@ export function deserializeDashboard(
         visible: w.visible ?? true,
         order: w.order ?? 0,
         ...(w.columnStart !== undefined ? { columnStart: w.columnStart } : {}),
+        ...(w.rowStart !== undefined ? { rowStart: w.rowStart } : {}),
         ...(w.config !== undefined ? { config: w.config } : {}),
       };
 

@@ -364,3 +364,39 @@ B ->| <A
 
 Result:
 B A
+
+### 26
+
+Start:
+x A
+B
+
+A -> x
+
+Result:
+A
+B
+
+### 27
+
+Start:
+x A
+B
+
+A -> x>
+
+Result:
+A
+B
+
+### 28
+
+Start:
+x A
+B
+
+A -> <x
+
+Result:
+A
+B

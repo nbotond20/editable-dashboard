@@ -50,6 +50,11 @@ export interface WidgetState {
   order: number;
   /** Column hint that forces the widget to start at a specific column. Set by column-shift drags; cleared on reorder. */
   columnStart?: number;
+  /**
+   * Row hint that prevents greedy compaction. When set, all column heights
+   * are flushed to the maximum before placing widgets in a new row group.
+   */
+  rowStart?: number;
   /** Arbitrary per-widget configuration object. Use {@link DashboardActions.updateWidgetConfig} to modify. */
   config?: Record<string, unknown>;
   /** Per-instance override for position locking. Takes precedence over the definition's `lockPosition`. */

@@ -232,11 +232,11 @@ function isInGapBefore(
 
   if (pointer.y < 0 || pointer.y >= first.y + first.height) return false;
 
-  if (insetX > 0) {
+  if (insetX > 0 && pointer.y >= first.y && pointer.y < first.y + first.height) {
     if (pointer.x >= 0 && pointer.x < insetX) return true;
   }
 
-  if (insetY > 0 && pointer.y >= 0 && pointer.y < insetY) {
+  if (insetY > 0 && pointer.y >= Math.max(0, first.y - inset) && pointer.y < insetY) {
     if (pointer.x >= first.x && pointer.x < first.x + first.width) return true;
   }
 
