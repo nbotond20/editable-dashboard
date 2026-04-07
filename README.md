@@ -18,7 +18,11 @@ Demo: https://nbotond20.github.io/editable-dashboard/
 - **Serialization built in** -- save and restore dashboard layouts with `serializeDashboard` / `deserializeDashboard`
 - **Pointer-based drag system** -- works with mouse and touch; supports Escape to cancel
 - **Auto-measuring heights** -- widgets are measured via `ResizeObserver`; no fixed heights required
-- **Configurable columns** -- 1, 2, or 3 column layouts with adjustable gaps
+- **External drag-to-add** -- drag widgets from a side panel or toolbar onto the dashboard using HTML5 Drag and Drop
+- **Headless trash zone** -- opt-in drop zone for removing widgets or cancelling external adds during drag
+- **Double-click to maximize** -- double-click a widget's drag handle to toggle full-width
+- **Empty-row maximize on dwell** -- dragging a shrunk widget into an empty row and holding maximizes it to full width
+- **Configurable columns** -- 1, 2, 3, or 4 column layouts with adjustable gaps
 - **Fully typed** -- written in TypeScript with every type exported
 - **Widget locking** -- lock position, resize, or removal at the definition or per-instance level
 - **Undo/redo** -- built-in history with `Ctrl+Z` / `Ctrl+Y` keyboard shortcuts
@@ -198,6 +202,8 @@ The root context provider. All hooks must be called within its subtree.
 | `maxWidgets`            | `number`                                                     | --             | Maximum number of widgets allowed.                                                                                              |
 | `maxUndoDepth`          | `number`                                                     | `50`           | Maximum number of undo states to retain.                                                                                        |
 | `keyboardShortcuts`     | `boolean`                                                    | `true`         | Enable `Ctrl+Z` / `Ctrl+Y` for undo/redo.                                                                                       |
+| `doubleClickToMaximize` | `boolean`                                                    | `true`         | Enable double-click on a drag handle to toggle a widget between its current span and full width (`maxColumns`).                 |
+| `enableExternalDrag`    | `boolean`                                                    | `false`        | Enable HTML5 drag-to-add from external sources. Required for `useExternalDragSource` to work. See [External Drag-to-Add](#external-drag-to-add). |
 | `canDrop`               | `(sourceId, targetIndex, state) => boolean`                  | --             | Custom drop validation. Return `false` to prevent a drop.                                                                       |
 | `dragConfig`            | `DragConfig`                                                 | --             | Fine-tune drag activation, dwell times, scroll speed, and animation duration. See [DragConfig](#dragconfig).                    |
 | `responsiveBreakpoints` | `ResponsiveBreakpoints`                                      | --             | Customize breakpoints for `getResponsiveColumns()`.                                                                             |
@@ -222,12 +228,12 @@ The root context provider. All hooks must be called within its subtree.
 
 | Prop            | Type                                   | Description                                                                       |
 | --------------- | -------------------------------------- | --------------------------------------------------------------------------------- |
-| `state`         | `DashboardStateInput`                  | The dashboard state managed externally (without transient `containerWidth`).      |
-| `onStateChange` | `(state: DashboardStateInput) => void` | Called with the next state after every action. Does not include `containerWidth`. |
+| `state`         | `WidgetState[]`                        | The widgets array managed externally.                                             |
+| `onStateChange` | `(widgets: WidgetState[]) => void`     | Called with the next widgets array after every action.                             |
 
 The two modes are mutually exclusive. In controlled mode, do not pass `initialWidgets`. In uncontrolled mode, do not pass `state` or `onStateChange`.
 
-> **Note:** Controlled mode uses `DashboardStateInput` (without `containerWidth`) rather than `DashboardState`. The provider manages `containerWidth` internally since it's a transient measurement value.
+> **Note:** Controlled mode passes only the `widgets` array. Layout configuration (`maxColumns`, `gap`) is provided via top-level provider props, and `containerWidth` is managed internally as a transient measurement value.
 
 ---
 
@@ -324,6 +330,8 @@ The current drag state. Use this to render drag previews and ghosts.
 | `previewLayout`     | `ComputedLayout \| null` | A full computed layout reflecting the tentative drop. Animate other widgets toward these positions for a live preview. |
 | `isLongPressing`    | `boolean`                | Whether a touch long-press is in progress (before drag activation).                                                    |
 | `longPressTargetId` | `string \| null`         | Widget ID being long-pressed, or `null`.                                                                               |
+| `isExternalDrag`    | `boolean`                | Whether the current drag is from an external source (via `useExternalDragSource`).                                     |
+| `externalWidgetType`| `string \| null`         | The widget type being dragged from an external source, or `null`.                                                      |
 
 #### Refs, Drag Functions, and Utilities
 
@@ -341,7 +349,137 @@ The current drag state. Use this to render drag previews and ghosts.
 | `canAddWidget`       | `() => boolean`                                                          | Check whether the maximum widget count has been reached.                                                                                |
 | `canUndo`            | `boolean`                                                                | Whether an undo operation is available.                                                                                                 |
 | `canRedo`            | `boolean`                                                                | Whether a redo operation is available.                                                                                                  |
-| `phase`              | `"idle" \| "pending" \| "dragging" \| "keyboard-dragging" \| "dropping"` | Current drag engine phase.                                                                                                              |
+| `phase`              | `"idle" \| "pending" \| "dragging" \| "keyboard-dragging" \| "dropping" \| "external-dragging"` | Current drag engine phase. `"external-dragging"` is active during HTML5 drag-to-add operations. |
+
+---
+
+### `useDashboardStable()`
+
+Returns only the **stable** context values -- state, layout, actions, and refs that do not change during a drag. Use this instead of `useDashboard()` in components that don't need drag state to avoid unnecessary re-renders during drag operations.
+
+```ts
+const {
+    state,
+    definitions,
+    layout,
+    actions,
+    canUndo,
+    canRedo,
+    getDragPosition,
+    containerRef,
+    measureRef,
+    startDrag,
+    updateDragPointer,
+    endDrag,
+    getA11yProps,
+    handleKeyboardDrag,
+    isWidgetLockActive,
+    canAddWidget,
+    doubleClickToMaximize,
+    registerTrashZone,
+} = useDashboardStable();
+```
+
+Returns the same fields as `useDashboard()` minus `phase` and `dragState`.
+
+---
+
+### `useDashboardDrag()`
+
+Returns only the **volatile** drag context values -- `phase` and `dragState`. These change frequently during drag operations. Use this in components that need to react to drag state (e.g., drop ghosts, drag overlays).
+
+```ts
+const { phase, dragState } = useDashboardDrag();
+```
+
+| Field       | Type                                                                                             | Description                      |
+| ----------- | ------------------------------------------------------------------------------------------------ | -------------------------------- |
+| `phase`     | `"idle" \| "pending" \| "dragging" \| "keyboard-dragging" \| "dropping" \| "external-dragging"` | Current drag engine phase.       |
+| `dragState` | `DragState`                                                                                      | Current drag state for previews. |
+
+> **Tip:** Splitting `useDashboardStable()` and `useDashboardDrag()` across components lets you avoid re-rendering your entire widget tree on every drag frame. Components that only need actions or layout use `useDashboardStable()`; components rendering drag ghosts use `useDashboardDrag()`.
+
+---
+
+### `useExternalDragSource(widgetType, options?)`
+
+Returns HTML5 drag props to make any element a drag source for adding widgets to the dashboard. Must be called inside `<DashboardProvider>`. Requires `enableExternalDrag={true}` on the provider.
+
+```ts
+import { useExternalDragSource } from "editable-dashboard";
+
+function CatalogItem({ widgetType }: { widgetType: string }) {
+    const dragProps = useExternalDragSource(widgetType, {
+        colSpan: 2,
+        config: { chartType: "bar" },
+        onDragStart: () => console.log("drag started"),
+        onDragEnd: () => console.log("drag ended"),
+    });
+
+    return <div {...dragProps}>Drag to add</div>;
+}
+```
+
+#### Parameters
+
+| Parameter              | Type                         | Description                                                                |
+| ---------------------- | ---------------------------- | -------------------------------------------------------------------------- |
+| `widgetType`           | `string`                     | Must match a `WidgetDefinition.type` registered on the provider.           |
+| `options.colSpan`      | `number?`                    | Override the definition's `defaultColSpan`.                                |
+| `options.config`       | `Record<string, unknown>?`   | Initial config to attach to the new widget instance.                       |
+| `options.onDragStart`  | `() => void`                 | Called when the user starts dragging this item.                             |
+| `options.onDragEnd`    | `() => void`                 | Called when the drag ends (drop, cancel, or escape).                       |
+
+#### Returns: `ExternalDragSourceProps`
+
+| Field         | Type                              | Description                                  |
+| ------------- | --------------------------------- | -------------------------------------------- |
+| `draggable`   | `true`                            | HTML5 draggable attribute.                   |
+| `onDragStart` | `(e: React.DragEvent) => void`    | Initiates the external drag.                 |
+| `onDragEnd`   | `(e: React.DragEvent) => void`    | Cleans up after drag ends.                   |
+
+Spread all returned props onto your element. During the drag, existing widgets reflow to make room for the incoming widget (matching internal drag behavior), and a phantom widget (`EXTERNAL_PHANTOM_ID`) appears in the preview layout.
+
+---
+
+### `useTrashZone()`
+
+Headless hook that turns any element into a trash/cancel drop zone. Must be called inside `<DashboardProvider>`.
+
+- During an **internal** pointer drag, dropping over the trash zone removes the widget.
+- During an **external** HTML5 drag, dropping on the trash zone cancels the add.
+
+```tsx
+import { useTrashZone } from "editable-dashboard";
+
+function MyTrashZone() {
+    const { ref, isActive, isOver } = useTrashZone();
+
+    if (!isActive) return null;
+
+    return (
+        <div
+            ref={ref}
+            style={{
+                padding: 24,
+                background: isOver ? "rgba(239,68,68,0.2)" : "rgba(0,0,0,0.05)",
+                border: `2px dashed ${isOver ? "#ef4444" : "#999"}`,
+                textAlign: "center",
+            }}
+        >
+            {isOver ? "Release to remove" : "Drag here to remove"}
+        </div>
+    );
+}
+```
+
+#### Returns: `TrashZoneResult`
+
+| Field      | Type                        | Description                                                         |
+| ---------- | --------------------------- | ------------------------------------------------------------------- |
+| `ref`      | `React.RefCallback<HTMLElement>` | Attach to the element that acts as the trash zone.             |
+| `isActive` | `boolean`                   | `true` when any drag (internal or external) is in progress.         |
+| `isOver`   | `boolean`                   | `true` when the dragged widget is hovering over the trash zone.     |
 
 ---
 
@@ -486,17 +624,15 @@ Represents a single widget instance on the dashboard.
 
 ### `DashboardStateInput`
 
-The externally-facing state type used in controlled mode. Does not include transient fields.
+The externally-facing state type used in controlled mode. Contains only the widget instances.
 
-| Field        | Type            | Description           |
-| ------------ | --------------- | --------------------- |
-| `widgets`    | `WidgetState[]` | All widget instances. |
-| `maxColumns` | `number`        | Current column count. |
-| `gap`        | `number`        | Gap in pixels.        |
+| Field     | Type            | Description           |
+| --------- | --------------- | --------------------- |
+| `widgets` | `WidgetState[]` | All widget instances. |
 
 ### `DashboardState`
 
-Extends `DashboardStateInput` with transient runtime data.
+Complete internal state of the dashboard, including layout configuration and transient runtime data.
 
 | Field            | Type            | Description                                                               |
 | ---------------- | --------------- | ------------------------------------------------------------------------- |
@@ -550,6 +686,7 @@ Props to spread onto a drag handle element.
 | ---------------------- | ----------------------------------------- | ----------------------------------------------------------- |
 | `onPointerDown`        | `(e: ReactPointerEvent) => void`          | Initiates the drag on pointer down.                         |
 | `onKeyDown`            | `(e: React.KeyboardEvent) => void`        | Keyboard interaction handler.                               |
+| `onDoubleClick`        | `(e: React.MouseEvent) => void` \| `undefined` | Double-click handler for maximize toggle. Present when `doubleClickToMaximize` is `true`. |
 | `style`                | `{ cursor: string; touchAction: string }` | Sets `cursor: grab/grabbing` and `touchAction: none`.       |
 | `role`                 | `'button'`                                | ARIA role.                                                  |
 | `tabIndex`             | `0`                                       | Makes the handle focusable.                                 |
@@ -641,11 +778,12 @@ type DashboardAction =
           widgetType: string;
           colSpan: number;
           config?: Record<string, unknown>;
+          targetIndex?: number;   // Insert at a specific position instead of appending
+          columnStart?: number;   // Force column placement for the new widget
       }
     | { type: "REMOVE_WIDGET"; id: string }
     | { type: "RESIZE_WIDGET"; id: string; colSpan: number }
     | { type: "REORDER_WIDGETS"; fromIndex: number; toIndex: number }
-    | { type: "SET_CONTAINER_WIDTH"; width: number }
     | { type: "SET_MAX_COLUMNS"; maxColumns: number }
     | { type: "BATCH_UPDATE"; widgets: WidgetState[] }
     | {
@@ -670,18 +808,62 @@ type DashboardAction =
 
 The memoized action dispatchers object. See the [actions table](#actions-dashboardactions).
 
+### `ExternalDragItem`
+
+Describes a widget being dragged from an external source.
+
+| Field        | Type                       | Description                                                   |
+| ------------ | -------------------------- | ------------------------------------------------------------- |
+| `widgetType` | `string`                   | Must match a `WidgetDefinition.type`.                         |
+| `colSpan`    | `number?`                  | Column span override. Falls back to `defaultColSpan`.         |
+| `config`     | `Record<string, unknown>?` | Initial config to attach to the new widget.                   |
+
+### `ExternalDragSourceProps`
+
+Props returned by `useExternalDragSource()` to spread onto a draggable element.
+
+| Field         | Type                              | Description                    |
+| ------------- | --------------------------------- | ------------------------------ |
+| `draggable`   | `true`                            | HTML5 draggable attribute.     |
+| `onDragStart` | `(e: React.DragEvent) => void`    | Initiates the external drag.   |
+| `onDragEnd`   | `(e: React.DragEvent) => void`    | Cleans up after drag ends.     |
+
+### `ExternalDropEvent`
+
+Event payload after an external widget is dropped onto the dashboard.
+
+| Field         | Type                       | Description                                     |
+| ------------- | -------------------------- | ----------------------------------------------- |
+| `widgetType`  | `string`                   | The dropped widget's type.                       |
+| `widgetId`    | `string`                   | The newly created widget's ID.                   |
+| `colSpan`     | `number`                   | Final column span.                               |
+| `targetIndex` | `number`                   | Insertion index in the visible-sorted list.      |
+| `columnStart` | `number?`                  | Column hint if pinned during drag.               |
+| `config`      | `Record<string, unknown>?` | Config passed from the drag source.              |
+
+### `TrashZoneResult`
+
+Return type of `useTrashZone()`.
+
+| Field      | Type                             | Description                                                    |
+| ---------- | -------------------------------- | -------------------------------------------------------------- |
+| `ref`      | `React.RefCallback<HTMLElement>` | Attach to the trash zone element.                              |
+| `isActive` | `boolean`                        | `true` when any drag (internal or external) is in progress.    |
+| `isOver`   | `boolean`                        | `true` when the dragged widget is hovering over the trash zone.|
+
 ---
 
 ## Constants
 
 Exported default values and thresholds:
 
-| Constant                    | Value | Description                                          |
-| --------------------------- | ----- | ---------------------------------------------------- |
-| `DEFAULT_MAX_COLUMNS`       | `2`   | Default column count.                                |
-| `DEFAULT_GAP`               | `16`  | Default gap in pixels.                               |
-| `DEFAULT_WIDGET_HEIGHT`     | `200` | Fallback height before measurement.                  |
-| `DRAG_ACTIVATION_THRESHOLD` | `5`   | Minimum pointer movement (px) before drag activates. |
+| Constant                    | Value                      | Description                                                                  |
+| --------------------------- | -------------------------- | ---------------------------------------------------------------------------- |
+| `DEFAULT_MAX_COLUMNS`       | `2`                        | Default column count.                                                        |
+| `DEFAULT_GAP`               | `16`                       | Default gap in pixels.                                                       |
+| `DEFAULT_WIDGET_HEIGHT`     | `200`                      | Fallback height before measurement.                                          |
+| `DRAG_ACTIVATION_THRESHOLD` | `5`                        | Minimum pointer movement (px) before drag activates.                         |
+| `EXTERNAL_PHANTOM_ID`       | `"__external_phantom__"`   | Widget ID used in preview layouts for the incoming external drag phantom.     |
 
 ---
 
@@ -1017,22 +1199,20 @@ For full control over state (useful for undo/redo, persistence, or syncing with 
 import { useState } from "react";
 import {
     DashboardProvider,
-    type DashboardStateInput,
     type WidgetDefinition,
+    type WidgetState,
 } from "editable-dashboard";
 
 function App() {
-    const [dashState, setDashState] = useState<DashboardStateInput>({
-        widgets: [],
-        maxColumns: 2,
-        gap: 16,
-    });
+    const [widgets, setWidgets] = useState<WidgetState[]>([]);
 
     return (
         <DashboardProvider
             definitions={definitions}
-            state={dashState}
-            onStateChange={setDashState}
+            state={widgets}
+            onStateChange={setWidgets}
+            maxColumns={2}
+            gap={16}
         >
             <MyGrid />
         </DashboardProvider>
@@ -1040,7 +1220,7 @@ function App() {
 }
 ```
 
-Every action dispatched inside the provider will call `onStateChange` with the next state (without `containerWidth`, which is managed internally) instead of updating internal state.
+Every action dispatched inside the provider will call `onStateChange` with the next widgets array instead of updating internal state. Layout configuration (`maxColumns`, `gap`) is always provided via top-level props.
 
 ### Batch Updates
 
@@ -1083,6 +1263,72 @@ function ChartWidget({ widget }: { widget: WidgetState }) {
     // ...
 }
 ```
+
+### External Drag-to-Add
+
+Allow users to drag widgets from a catalog or toolbar onto the dashboard grid using HTML5 Drag and Drop:
+
+```tsx
+import {
+    DashboardProvider,
+    useExternalDragSource,
+    useTrashZone,
+    type WidgetDefinition,
+} from "editable-dashboard";
+
+const definitions: WidgetDefinition[] = [
+    { type: "stats", label: "Statistics", defaultColSpan: 1 },
+    { type: "chart", label: "Chart", defaultColSpan: 2 },
+];
+
+function WidgetCatalog() {
+    return (
+        <div>
+            {definitions.map((def) => (
+                <CatalogItem key={def.type} definition={def} />
+            ))}
+        </div>
+    );
+}
+
+function CatalogItem({ definition }: { definition: WidgetDefinition }) {
+    const dragProps = useExternalDragSource(definition.type);
+    return <div {...dragProps}>{definition.label}</div>;
+}
+
+function TrashZone() {
+    const { ref, isActive, isOver } = useTrashZone();
+    if (!isActive) return null;
+    return (
+        <div ref={ref} style={{ background: isOver ? "red" : "gray" }}>
+            Drop here to remove
+        </div>
+    );
+}
+
+function App() {
+    return (
+        <DashboardProvider
+            definitions={definitions}
+            enableExternalDrag
+            maxColumns={3}
+        >
+            <WidgetCatalog />
+            <MyGrid />
+            <TrashZone />
+        </DashboardProvider>
+    );
+}
+```
+
+Key points:
+
+- Set `enableExternalDrag={true}` on the provider to opt in.
+- `useExternalDragSource` must be called inside `<DashboardProvider>`.
+- During the drag, existing widgets reflow and a phantom widget appears in the preview layout.
+- The drag uses a module-scoped registry and custom MIME type (`application/x-dashboard-widget`) to pass data between source and target.
+
+---
 
 ### Responsive Columns
 
@@ -1302,7 +1548,7 @@ The `onChange` callback fires on every state change in **both** controlled and u
 >
 ```
 
-> **Note:** In controlled mode, `onStateChange` emits `DashboardStateInput` (without `containerWidth`), while `onChange` emits the full `DashboardState` (with `containerWidth`).
+> **Note:** In controlled mode, `onStateChange` emits the `WidgetState[]` array, while `onChange` emits the full `DashboardState` (with `containerWidth`, `maxColumns`, and `gap`).
 
 ---
 
@@ -1364,8 +1610,17 @@ import {
     canRedo,
     type EngineDragEvent,
     type DragPhase,
+    type DropZone,
+    type OperationIntent,
+    type CommittedOperation,
     type DragEngineConfig,
+    type DragEngineSnapshot,
+    type Point,
     type UndoHistory,
+    TOUCH_DRAG_ACTIVATION_DELAY,
+    TOUCH_MOVE_TOLERANCE,
+    AUTO_SCROLL_EDGE_SIZE,
+    AUTO_SCROLL_MAX_SPEED,
 } from "editable-dashboard/engine";
 ```
 
@@ -1387,6 +1642,7 @@ import type {
     DashboardError,
     DragConfig,
     CommittedOperation,
+    CommitSource,
     WidgetLayout,
     ComputedLayout,
     DragState,
@@ -1395,11 +1651,19 @@ import type {
     DashboardActions,
     DragHandleA11yProps,
     DragHandleProps,
+    KeyboardDragState,
     WidgetSlotRenderProps,
     DashboardProviderProps,
     DashboardContextValue,
+    DashboardStableContextValue,
+    DashboardDragContextValue,
     SerializedDashboard,
     ResponsiveBreakpoints,
+    ExternalDragItem,
+    ExternalDragSourceProps,
+    ExternalDropEvent,
+    TrashZoneResult,
+    UseActionsOptions,
 } from "editable-dashboard";
 ```
 
@@ -1414,8 +1678,10 @@ The repository includes a full demo app in `src/app/` that showcases:
 - Uncontrolled provider with initial widgets
 - Custom grid built with Framer Motion (`motion/react`)
 - Animated widget slots with drag previews and drop ghosts
-- Widget catalog for adding new widgets
-- Column count switching (1/2/3)
+- Widget catalog with external drag-to-add
+- Trash zone for removing widgets during drag
+- Column count switching (1/2/3/4)
+- Double-click to maximize widgets
 - Per-widget resize controls
 - Hide/show and remove actions
 
@@ -1423,4 +1689,4 @@ The repository includes a full demo app in `src/app/` that showcases:
 
 ## License
 
-MIT
+Apache-2.0
