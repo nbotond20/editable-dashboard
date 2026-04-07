@@ -56,6 +56,19 @@ export function resolveZone(
     }
   }
 
+  if (rects.length > 0) {
+    const first = rects[0];
+    if (
+      pointer.y >= 0 &&
+      pointer.y < first.y &&
+      pointer.x >= first.x &&
+      pointer.x < first.x + first.width &&
+      !Array.from(layout.positions.values()).some(pos => pointer.y >= pos.y)
+    ) {
+      return { type: "gap", beforeId: null, afterId: first.id, index: 0 };
+    }
+  }
+
   const emptyZone = resolveEmptyZone(
     pointer,
     layout,
@@ -88,6 +101,23 @@ export function resolveZone(
       maxColumns - 1,
     );
     return { type: "empty", column: Math.max(0, column) };
+  }
+
+  if (
+    maxColumns > 1 &&
+    rects.length > 0 &&
+    pointer.x >= containerWidth &&
+    pointer.x < containerWidth + gap
+  ) {
+    const last = rects[rects.length - 1];
+    if (pointer.y >= last.y && pointer.y < last.y + last.height) {
+      return {
+        type: "gap",
+        beforeId: last.id,
+        afterId: null,
+        index: rects.length,
+      };
+    }
   }
 
   return { type: "outside" };

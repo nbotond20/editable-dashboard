@@ -100,9 +100,8 @@ export function DashboardProvider(props: DashboardProviderProps) {
     ? (props as { onStateChange: (widgets: WidgetState[]) => void }).onStateChange
     : undefined;
 
+  const wasControlledRef = useRef(isControlled);
   if (import.meta.env.DEV) {
-
-    const wasControlledRef = useRef(isControlled);
     if (wasControlledRef.current !== isControlled) {
       console.warn(
         "DashboardProvider: switching between controlled and uncontrolled mode is not supported. " +
@@ -120,7 +119,7 @@ export function DashboardProvider(props: DashboardProviderProps) {
       }
       return result;
     },
-
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: one-time seed like useState's initializer
     [],
   );
 

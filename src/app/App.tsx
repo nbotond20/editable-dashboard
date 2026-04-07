@@ -190,7 +190,7 @@ function saveState(widgets: WidgetState[], maxColumns: number, gap: number) {
   try {
     const serialized = serializeDashboard({ widgets, maxColumns, gap, containerWidth: 0 });
     localStorage.setItem(STORAGE_KEY, JSON.stringify(serialized));
-  } catch {  }
+  } catch { /* serialization may fail in private browsing */ }
 }
 
 function UncontrolledApp({ saved }: { saved: { widgets: WidgetState[]; maxColumns: number } | undefined }) {
