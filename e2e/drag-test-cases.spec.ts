@@ -8,6 +8,7 @@ import {
   dragByIdToColumn,
   dragByIdToCoords,
   dragByIdToColumnAtWidget,
+  dragByIdToEmptyCell,
 } from "./helpers/drag";
 import { widgetById, widgetDragHandleById } from "./helpers/locators";
 
@@ -768,6 +769,34 @@ test.describe("2-col: A / B B / C (with columnStart)", () => {
     ], 2);
     await dragByIdToSide(page, "a", "b", "left", { dwellMs: 150 });
     await assertLayout(page, [["b", "b"], ["a"], ["c"]]);
+  });
+});
+
+// ── empty-row maximize on dwell (tests 86–88) ───────────────────────
+
+test.describe("empty-row maximize on dwell", () => {
+  test("case 86: shrunk widget maximizes when held in empty row", async ({ page }) => {
+    await setupDashboard(page, ["A B", "C"]);
+    // C (colSpan=1) dragged to empty area below — dwell 1000ms > 800ms threshold
+    await dragByIdToEmptyCell(page, "c", 0, { dwellMs: 1000 });
+    // C should be maximized to full width (colSpan=2)
+    await assertLayout(page, [["a", "b"], ["c", "c"]]);
+  });
+
+  test("case 87: short dwell keeps column-pin (no maximize)", async ({ page }) => {
+    await setupDashboard(page, ["A B", "C"]);
+    // C (colSpan=1) dragged to empty area below — dwell 350ms < 800ms threshold
+    await dragByIdToEmptyCell(page, "c", 0, { dwellMs: 350 });
+    // C should stay at colSpan=1, pinned to column 0 below the others
+    await assertLayout(page, [["a", "b"], ["c"]]);
+  });
+
+  test("case 88: already-max widget does not change on dwell", async ({ page }) => {
+    await setupDashboard(page, ["A A", "B"]);
+    // A is already maxColumns-wide (colSpan=2), drag to empty below
+    await dragByIdToEmptyCell(page, "a", 0, { dwellMs: 1000 });
+    // A should stay at colSpan=2 (already max), just repositioned
+    await assertLayout(page, [["b"], ["a", "a"]]);
   });
 });
 

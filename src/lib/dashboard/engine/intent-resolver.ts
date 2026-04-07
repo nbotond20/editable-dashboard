@@ -1,13 +1,17 @@
 import type { DropZone, OperationIntent } from "./types.ts";
-import type { WidgetState } from "../types.ts";
+import type { ComputedLayout, WidgetState } from "../types.ts";
 
 export interface IntentResolverConfig {
   swapDwellMs: number;
   resizeDwellMs: number;
+  emptyRowMaximizeDwellMs: number;
   maxColumns: number;
   isPositionLocked: (id: string) => boolean;
+  isResizeLocked: (id: string) => boolean;
   canDrop: (sourceId: string, targetIndex: number) => boolean;
   getWidgetConstraints: (id: string) => { minSpan: number; maxSpan: number };
+  layout?: ComputedLayout;
+  pointerY?: number;
 }
 
 export function resolveIntent(
@@ -136,6 +140,23 @@ export function resolveIntent(
     }
 
     case "empty": {
+      if (
+        dwellMs >= config.emptyRowMaximizeDwellMs &&
+        config.layout &&
+        config.pointerY != null
+      ) {
+        const constraints = config.getWidgetConstraints(sourceWidget.id);
+        const maxSpan = Math.min(constraints.maxSpan, config.maxColumns);
+        const isShrunk = sourceWidget.colSpan < config.maxColumns;
+        const canMaximize =
+          isShrunk &&
+          maxSpan > sourceWidget.colSpan &&
+          !config.isResizeLocked(sourceWidget.id);
+
+        if (canMaximize && isEmptyRow(config.layout, config.pointerY, sourceWidget.id)) {
+          return { type: "empty-row-maximize", newSpan: maxSpan, pointerY: config.pointerY };
+        }
+      }
       return { type: "column-pin", column: zone.column };
     }
 
@@ -150,11 +171,18 @@ export function computeDwellProgress(
   dwellMs: number,
   swapDwellMs: number,
   resizeDwellMs: number,
+  emptyRowMaximizeDwellMs?: number,
 ): number {
   switch (zone.type) {
     case "gap":
-    case "empty":
       return 1;
+
+    case "empty": {
+      if (emptyRowMaximizeDwellMs != null && emptyRowMaximizeDwellMs > 0) {
+        return Math.min(1, dwellMs / emptyRowMaximizeDwellMs);
+      }
+      return 1;
+    }
 
     case "outside":
       return 0;
@@ -220,4 +248,19 @@ function computeTargetRowNeighborSpans(
     }
   }
   return neighborSpans;
+}
+
+function isEmptyRow(
+  layout: ComputedLayout,
+  pointerY: number,
+  sourceId: string,
+): boolean {
+  for (const [id, pos] of layout.positions) {
+    if (id === sourceId) continue;
+    if (id.startsWith("__phantom_")) continue;
+    if (pointerY >= pos.y && pointerY < pos.y + pos.height) {
+      return false;
+    }
+  }
+  return true;
 }

@@ -444,5 +444,32 @@ export function solvePreviewLayout(
         config.gap,
       );
     }
+
+    case "empty-row-maximize": {
+      const visible = widgets.filter(w => w.visible).sort((a, b) => a.order - b.order);
+      const visibleSorted = visible.filter(w => w.id !== sourceId);
+      const source = visible.find(w => w.id === sourceId);
+      if (!source) return fallback();
+      const maximizedSource = {
+        ...source,
+        colSpan: intent.newSpan,
+        columnStart: 0,
+      };
+      const insertIdx = findColumnPinInsertionIndex(
+        visibleSorted, 0, intent.pointerY,
+        config.maxColumns, config.gap, heights,
+      );
+      const reordered = [...visibleSorted];
+      reordered.splice(insertIdx, 0, maximizedSource);
+      const previewWidgets = reordered.map((w, i) => ({ ...w, order: i }));
+      const hidden = widgets.filter(w => !w.visible);
+      return computeLayout(
+        [...previewWidgets, ...hidden],
+        heights as Map<string, number>,
+        containerWidth,
+        config.maxColumns,
+        config.gap,
+      );
+    }
   }
 }

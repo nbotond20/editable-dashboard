@@ -82,7 +82,8 @@ export type OperationIntent =
       targetSpan: number;
       targetIndex: number;
     }
-  | { type: "column-pin"; column: number; pointerY?: number };
+  | { type: "column-pin"; column: number; pointerY?: number }
+  | { type: "empty-row-maximize"; newSpan: number; pointerY?: number };
 
 export type CommittedOperation =
   | { type: "reorder"; fromIndex: number; toIndex: number }
@@ -96,6 +97,7 @@ export type CommittedOperation =
       targetIndex: number;
     }
   | { type: "column-pin"; sourceId: string; column: number; targetIndex: number }
+  | { type: "empty-row-maximize"; sourceId: string; newSpan: number; targetIndex: number }
   | { type: "resize-toggle"; id: string; newSpan: number }
   | { type: "cancelled" };
 
@@ -114,6 +116,7 @@ export interface DragEngineConfig {
   touchMoveTolerance: number;
   swapDwellMs: number;
   resizeDwellMs: number;
+  emptyRowMaximizeDwellMs: number;
   autoFillMode: "immediate" | "on-drop" | "none";
   maxColumns: number;
   gap: number;

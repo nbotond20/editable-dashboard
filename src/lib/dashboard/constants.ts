@@ -28,5 +28,8 @@ export const SWAP_DWELL_MS = 0;
 /** Dwell time in milliseconds before an auto-resize operation activates. */
 export const RESIZE_DWELL_MS = 600;
 
+/** Dwell time in milliseconds before a shrunk widget maximizes in an empty row. */
+export const EMPTY_ROW_MAXIMIZE_DWELL_MS = 600;
+
 /** Duration of the drop animation in milliseconds. */
 export const DROP_ANIMATION_DURATION = 250;

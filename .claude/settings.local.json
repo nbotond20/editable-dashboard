@@ -25,7 +25,8 @@
       "mcp__playwright__browser_snapshot",
       "Bash(npm run:*)",
       "Bash(npm test:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(pnpm test:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

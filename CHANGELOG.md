@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Empty-row dwell-to-maximize: dragging a shrunk widget into an empty row and holding for 600ms automatically maximizes it to full width
+- New `emptyRowMaximizeDwellMs` config option on `DragEngineConfig` to control the dwell threshold (default: 600ms)
+- New `empty-row-maximize` operation intent and committed operation types
+- E2E tests for the maximize-on-dwell feature (cases 86-88)
+
 ## [4.1.0] - 2026-04-06
 ## [4.0.0] - 2026-04-06
 ## [3.0.2] - 2026-04-06

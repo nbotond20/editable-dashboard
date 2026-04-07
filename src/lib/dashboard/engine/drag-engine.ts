@@ -41,6 +41,7 @@ import {
   TOUCH_MOVE_TOLERANCE,
   SWAP_DWELL_MS,
   RESIZE_DWELL_MS,
+  EMPTY_ROW_MAXIMIZE_DWELL_MS,
   DROP_ANIMATION_DURATION,
 } from "../constants.ts";
 
@@ -67,6 +68,7 @@ function defaultConfig(): DragEngineConfig {
     touchMoveTolerance: TOUCH_MOVE_TOLERANCE,
     swapDwellMs: SWAP_DWELL_MS,
     resizeDwellMs: RESIZE_DWELL_MS,
+    emptyRowMaximizeDwellMs: EMPTY_ROW_MAXIMIZE_DWELL_MS,
     autoFillMode: "on-drop",
     maxColumns: DEFAULT_MAX_COLUMNS,
     gap: DEFAULT_GAP,
@@ -228,6 +230,7 @@ export class DragEngine {
               dwellMs,
               this.config.swapDwellMs,
               this.config.resizeDwellMs,
+              this.config.emptyRowMaximizeDwellMs,
             )
           : 0,
       canUndo: canUndo(this.history),
@@ -688,6 +691,11 @@ export class DragEngine {
             : w
         ),
       };
+    } else if (committed.type === "empty-row-maximize") {
+      newState = {
+        ...newState,
+        widgets: pinToGreedyColumns(newState.widgets, cfg.maxColumns),
+      };
     } else if (committed.type === "reorder" && this.baseLayout) {
       const involvedIds = new Set([sourceId]);
       newState = {
@@ -1054,10 +1062,14 @@ export class DragEngine {
     let newIntent = resolveIntent(this.currentZone, dwellMs, source, visible, {
       swapDwellMs: this.config.swapDwellMs,
       resizeDwellMs: effectiveResizeDwellMs,
+      emptyRowMaximizeDwellMs: this.config.emptyRowMaximizeDwellMs,
       maxColumns: state.maxColumns,
       isPositionLocked: this.config.isPositionLocked,
+      isResizeLocked: this.config.isResizeLocked,
       canDrop: this.config.canDrop,
       getWidgetConstraints: this.config.getWidgetConstraints,
+      layout,
+      pointerY: this.phase.type === "dragging" ? this.phase.pointerPos.y : undefined,
     });
 
     if (
@@ -1077,6 +1089,9 @@ export class DragEngine {
     }
 
     if (newIntent.type === "column-pin" && this.phase.type === "dragging") {
+      newIntent = { ...newIntent, pointerY: this.phase.pointerPos.y };
+    }
+    if (newIntent.type === "empty-row-maximize" && this.phase.type === "dragging") {
       newIntent = { ...newIntent, pointerY: this.phase.pointerPos.y };
     }
 
@@ -1178,6 +1193,21 @@ export class DragEngine {
           type: "column-pin",
           sourceId,
           column: intent.column,
+          targetIndex: Math.min(insertIdx, remaining.length),
+        };
+      }
+
+      case "empty-row-maximize": {
+        const remaining = visible.filter(w => w.id !== sourceId);
+        const cfg = this.layoutConfig();
+        const insertIdx = findColumnPinInsertionIndex(
+          remaining, 0, intent.pointerY,
+          cfg.maxColumns, cfg.gap, this.heights,
+        );
+        return {
+          type: "empty-row-maximize",
+          sourceId,
+          newSpan: intent.newSpan,
           targetIndex: Math.min(insertIdx, remaining.length),
         };
       }
@@ -1291,6 +1321,8 @@ export class DragEngine {
         );
       case "column-pin":
         return a.column === (b as typeof a).column;
+      case "empty-row-maximize":
+        return a.newSpan === (b as typeof a).newSpan;
     }
   }
 
@@ -1338,6 +1370,8 @@ export class DragEngine {
         return "Resized and placed adjacent";
       case "column-pin":
         return `Pinned to column ${operation.column + 1}`;
+      case "empty-row-maximize":
+        return `Maximized to ${operation.newSpan} column${operation.newSpan > 1 ? "s" : ""}`;
       case "resize-toggle":
         return `Resized to ${operation.newSpan} column${operation.newSpan > 1 ? "s" : ""}`;
       case "cancelled":

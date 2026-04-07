@@ -75,6 +75,28 @@ export function applyOperation(
       return result;
     }
 
+    case "empty-row-maximize": {
+      let result = dashboardReducer(state, {
+        type: "RESIZE_WIDGET",
+        id: operation.sourceId,
+        colSpan: operation.newSpan,
+      });
+
+      const visibleSorted = getVisibleSorted(result.widgets);
+      const sourceVisibleIdx = visibleSorted.findIndex(
+        (w) => w.id === operation.sourceId
+      );
+      if (sourceVisibleIdx === -1) return result;
+
+      result = dashboardReducer(result, {
+        type: "REORDER_WIDGETS",
+        fromIndex: sourceVisibleIdx,
+        toIndex: operation.targetIndex,
+      });
+
+      return result;
+    }
+
     case "resize-toggle":
       return dashboardReducer(state, {
         type: "RESIZE_WIDGET",
