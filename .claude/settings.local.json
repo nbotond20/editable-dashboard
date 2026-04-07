@@ -26,7 +26,8 @@
       "Bash(npm run:*)",
       "Bash(npm test:*)",
       "Bash(find:*)",
-      "Bash(pnpm test:*)"
+      "Bash(pnpm test:*)",
+      "mcp__playwright__browser_drag"
     ]
   },
   "enableAllProjectMcpServers": true,

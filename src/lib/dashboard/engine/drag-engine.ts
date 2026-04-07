@@ -22,6 +22,7 @@ import {
   pinToGreedyColumns,
   findColumnPinInsertionIndex,
 } from "./layout-solver.ts";
+import { computeLayout } from "../layout/compute-layout.ts";
 import type { LayoutSolverConfig } from "./layout-solver.ts";
 import { dashboardReducer } from "../state/dashboard-reducer.ts";
 import {
@@ -43,6 +44,7 @@ import {
   RESIZE_DWELL_MS,
   EMPTY_ROW_MAXIMIZE_DWELL_MS,
   DROP_ANIMATION_DURATION,
+  EXTERNAL_PHANTOM_ID,
 } from "../constants.ts";
 
 const UNDOABLE_ACTIONS = new Set<string>([
@@ -183,6 +185,18 @@ export class DragEngine {
         this.containerWidth = event.width;
         this.recomputeLayouts();
         break;
+      case "EXTERNAL_ENTER":
+        this.handleExternalEnter(event);
+        break;
+      case "EXTERNAL_MOVE":
+        this.handleExternalMove(event);
+        break;
+      case "EXTERNAL_LEAVE":
+        this.handleExternalLeave();
+        break;
+      case "EXTERNAL_DROP":
+        this.handleExternalDrop(event);
+        break;
     }
 
     const newSnapshot = this.getSnapshot();
@@ -210,7 +224,7 @@ export class DragEngine {
     }
 
     const dwellMs =
-      phase.type === "dragging" && this.currentZone
+      (phase.type === "dragging" || phase.type === "external-dragging") && this.currentZone
         ? this.lastTimestamp - this.zoneEnteredAt
         : 0;
 
@@ -408,6 +422,20 @@ export class DragEngine {
     if (this.phase.type !== "dragging") return;
 
     const sourceId = this.phase.sourceId;
+
+    if (this.isOverTrash()) {
+      const committed: CommittedOperation = { type: "trash", sourceId };
+      const newState = dashboardReducer(this.history.present, { type: "REMOVE_WIDGET", id: sourceId });
+      if (newState !== this.history.present) {
+        this.commitState(newState, { type: "drag-operation", operation: committed }, true);
+      }
+      this.phase = { type: "idle" };
+      this.clearDragState();
+      this.recomputeLayouts();
+      this.announcement = "Widget removed";
+      return;
+    }
+
     const intent = this.currentIntent;
 
     if (!intent || intent.type === "none") {
@@ -591,6 +619,11 @@ export class DragEngine {
       return;
     }
 
+    if (this.phase.type === "external-dragging") {
+      this.handleExternalLeave();
+      return;
+    }
+
     this.cancelDrag(false);
   }
 
@@ -601,6 +634,8 @@ export class DragEngine {
       this.handlePendingTick(event);
     } else if (this.phase.type === "dragging") {
       this.updateZoneAndIntent(event.timestamp);
+    } else if (this.phase.type === "external-dragging") {
+      this.updateExternalZoneAndIntent(event.timestamp);
     } else if (this.phase.type === "dropping") {
       if (
         event.timestamp - this.phase.startTime >=
@@ -665,10 +700,6 @@ export class DragEngine {
       this.recomputeLayouts();
     }
   }
-
-  // ---------------------------------------------------------------------------
-  // Post-commit operation logic
-  // ---------------------------------------------------------------------------
 
   private applyCommittedOperation(
     sourceId: string,
@@ -886,9 +917,357 @@ export class DragEngine {
     return newState;
   }
 
-  // ---------------------------------------------------------------------------
-  // Drag lifecycle helpers
-  // ---------------------------------------------------------------------------
+  private handleExternalEnter(
+    event: Extract<DragEvent, { type: "EXTERNAL_ENTER" }>,
+  ): void {
+    if (this.phase.type !== "idle") return;
+
+    this.lastTimestamp = event.timestamp;
+    this.phase = {
+      type: "external-dragging",
+      widgetType: event.widgetType,
+      colSpan: Math.min(event.colSpan, this.config.maxColumns),
+      pointerPos: event.position,
+      config: event.config,
+    };
+
+    this.dragLayout = this.baseLayout;
+    this.announcement = "External widget entering dashboard";
+  }
+
+  private handleExternalMove(
+    event: Extract<DragEvent, { type: "EXTERNAL_MOVE" }>,
+  ): void {
+    if (this.phase.type !== "external-dragging") return;
+    this.lastTimestamp = event.timestamp;
+    this.phase = { ...this.phase, pointerPos: event.position };
+  }
+
+  private handleExternalLeave(): void {
+    if (this.phase.type !== "external-dragging") return;
+    this.phase = { type: "idle" };
+    this.clearDragState();
+    this.recomputeLayouts();
+    this.announcement = "External drag cancelled";
+  }
+
+  private handleExternalDrop(
+    event: Extract<DragEvent, { type: "EXTERNAL_DROP" }>,
+  ): void {
+    if (this.phase.type !== "external-dragging") return;
+    this.lastTimestamp = event.timestamp;
+
+    if (this.isOverTrash()) {
+      this.phase = { type: "idle" };
+      this.clearDragState();
+      this.recomputeLayouts();
+      this.announcement = "External drag cancelled";
+      return;
+    }
+
+    const phase = this.phase;
+    const intent = this.currentIntent;
+    const visible = this.visibleSortedCache;
+
+    const cfg = this.layoutConfig();
+    let targetIndex = visible.length;
+    let columnStart: number | undefined;
+    let colSpan = Math.min(phase.colSpan, cfg.maxColumns);
+
+    if (intent && intent.type !== "none") {
+      switch (intent.type) {
+        case "reorder":
+          targetIndex = intent.targetIndex;
+          break;
+        case "column-pin": {
+          targetIndex = findColumnPinInsertionIndex(
+            visible, intent.column, intent.pointerY,
+            cfg.maxColumns, cfg.gap, this.heights,
+          );
+          targetIndex = Math.min(targetIndex, visible.length);
+          columnStart = intent.column;
+          colSpan = Math.min(colSpan, Math.max(1, cfg.maxColumns - intent.column));
+          break;
+        }
+        case "empty-row-maximize": {
+          targetIndex = findColumnPinInsertionIndex(
+            visible, 0, intent.pointerY,
+            cfg.maxColumns, cfg.gap, this.heights,
+          );
+          targetIndex = Math.min(targetIndex, visible.length);
+          colSpan = intent.newSpan;
+          break;
+        }
+        default:
+          break;
+      }
+    }
+
+    const committed: CommittedOperation = {
+      type: "external-add",
+      widgetType: phase.widgetType,
+      colSpan,
+      targetIndex,
+      columnStart,
+      config: phase.config,
+    };
+
+    const prevState = this.history.present;
+    const newState = dashboardReducer(prevState, {
+      type: "ADD_WIDGET",
+      widgetType: phase.widgetType,
+      colSpan,
+      config: phase.config,
+      targetIndex,
+      columnStart,
+    });
+
+    if (newState !== prevState) {
+      this.commitState(newState, { type: "drag-operation", operation: committed }, true);
+    }
+
+    this.phase = { type: "idle" };
+    this.clearDragState();
+    this.recomputeLayouts();
+
+    this.announcement = this.buildDropAnnouncement(committed);
+  }
+
+  /**
+   * Zone and intent resolution for external drags.
+   *
+   * Similar to `updateZoneAndIntent` but:
+   * - sourceId is null (no existing widget to exclude from hit testing)
+   * - Only reorder, column-pin, and empty-row-maximize intents are valid
+   * - A synthetic source widget is created for the intent resolver
+   */
+  private updateExternalZoneAndIntent(timestamp: number): void {
+    if (this.phase.type !== "external-dragging") return;
+
+    const state = this.history.present;
+    const visible = this.visibleSortedCache;
+    const layout = this.dragLayout ?? this.baseLayout;
+    const pointerPos = this.phase.pointerPos;
+
+    const pointerMoved =
+      !this.lastProcessedPointerPos ||
+      pointerPos.x !== this.lastProcessedPointerPos.x ||
+      pointerPos.y !== this.lastProcessedPointerPos.y;
+
+    if (pointerMoved || this.pendingZone !== null) {
+      if (pointerMoved) {
+        this.lastProcessedPointerPos = { x: pointerPos.x, y: pointerPos.y };
+      }
+
+      const currentWidgetSide =
+        this.currentZone?.type === "widget" ? this.currentZone.side : undefined;
+
+      const computedZone = resolveZone(
+        pointerPos,
+        layout,
+        state.widgets,
+        state.gap,
+        state.maxColumns,
+        this.containerWidth,
+        null,
+        currentWidgetSide,
+      );
+
+      if (!zonesEqual(computedZone, this.currentZone)) {
+        if (zonesEqual(computedZone, this.pendingZone)) {
+          this.pendingZoneFrames++;
+          if (this.pendingZoneFrames >= 2) {
+            this.currentZone = computedZone;
+            this.zoneEnteredAt = timestamp;
+            this.lastZonePointerPos = null;
+            this.pendingZone = null;
+            this.pendingZoneFrames = 0;
+            this.sideCollapsed = false;
+            this.intentGraceStart = null;
+          }
+        } else {
+          this.pendingZone = computedZone;
+          this.pendingZoneFrames = 1;
+          if (this.currentZone === null || computedZone.type === "outside") {
+            this.currentZone = computedZone;
+            this.zoneEnteredAt = timestamp;
+            this.lastZonePointerPos = null;
+            this.pendingZone = null;
+            this.pendingZoneFrames = 0;
+            this.sideCollapsed = false;
+            this.intentGraceStart = null;
+          }
+        }
+      } else {
+        this.pendingZone = null;
+        this.pendingZoneFrames = 0;
+        if (
+          computedZone.type === "widget" &&
+          this.currentZone?.type === "widget" &&
+          computedZone.side !== this.currentZone.side
+        ) {
+          this.currentZone = computedZone;
+        }
+      }
+
+      if (this.lastZonePointerPos) {
+        const drift = distance(pointerPos, this.lastZonePointerPos);
+        if (drift > 20) {
+          this.zoneEnteredAt = timestamp;
+          this.lastZonePointerPos = { x: pointerPos.x, y: pointerPos.y };
+        }
+      } else {
+        this.lastZonePointerPos = { x: pointerPos.x, y: pointerPos.y };
+      }
+    }
+
+    if (!this.currentZone) return;
+
+    const dwellMs = timestamp - this.zoneEnteredAt;
+    const phase = this.phase;
+
+    const syntheticSource: WidgetState = {
+      id: EXTERNAL_PHANTOM_ID,
+      type: phase.widgetType,
+      colSpan: phase.colSpan,
+      visible: true,
+      order: visible.length,
+    };
+
+    let newIntent = resolveIntent(this.currentZone, dwellMs, syntheticSource, visible, {
+      swapDwellMs: this.config.swapDwellMs,
+      resizeDwellMs: this.config.resizeDwellMs,
+      emptyRowMaximizeDwellMs: this.config.emptyRowMaximizeDwellMs,
+      maxColumns: state.maxColumns,
+      isPositionLocked: this.config.isPositionLocked,
+      isResizeLocked: this.config.isResizeLocked,
+      canDrop: () => true,
+      getWidgetConstraints: () => ({
+        minSpan: 1,
+        maxSpan: state.maxColumns,
+      }),
+      layout,
+      pointerY: phase.pointerPos.y,
+    });
+
+    if (newIntent.type === "swap" || newIntent.type === "auto-resize") {
+      if (this.currentZone.type === "widget") {
+        const targetId = this.currentZone.targetId;
+        const targetIdx = visible.findIndex(w => w.id === targetId);
+        newIntent = { type: "reorder", targetIndex: Math.max(0, targetIdx) };
+      } else {
+        newIntent = { type: "none" };
+      }
+    }
+
+    if (newIntent.type === "column-pin") {
+      newIntent = { ...newIntent, pointerY: phase.pointerPos.y };
+    }
+    if (newIntent.type === "empty-row-maximize") {
+      newIntent = { ...newIntent, pointerY: phase.pointerPos.y };
+    }
+
+    if (!this.intentsEqual(newIntent, this.currentIntent)) {
+      this.currentIntent = newIntent;
+      this.previewLayout =
+        newIntent.type !== "none"
+          ? this.solveExternalPreviewLayout(newIntent, phase.colSpan)
+          : null;
+    }
+  }
+
+  /**
+   * Compute preview layout for external drag by inserting a phantom widget.
+   */
+  private solveExternalPreviewLayout(
+    intent: OperationIntent,
+    colSpan: number,
+  ): ComputedLayout {
+    const state = this.history.present;
+    const visible = this.visibleSortedCache;
+    const cfg = this.layoutConfig();
+
+    switch (intent.type) {
+      case "reorder": {
+        const idx = Math.max(0, Math.min(intent.targetIndex, visible.length));
+        const phantom: WidgetState = {
+          id: EXTERNAL_PHANTOM_ID,
+          type: "__external__",
+          colSpan: Math.min(colSpan, cfg.maxColumns),
+          visible: true,
+          order: 0,
+        };
+        const ordered = [...visible];
+        ordered.splice(idx, 0, phantom);
+        const widgets = ordered.map((w, i) => ({ ...w, order: i }));
+        const hidden = state.widgets.filter(w => !w.visible);
+        return computeLayout(
+          [...widgets, ...hidden],
+          this.heights as Map<string, number>,
+          this.containerWidth,
+          cfg.maxColumns,
+          cfg.gap,
+        );
+      }
+
+      case "column-pin": {
+        const remaining = [...visible];
+        const insertIdx = findColumnPinInsertionIndex(
+          remaining, intent.column, intent.pointerY,
+          cfg.maxColumns, cfg.gap, this.heights,
+        );
+        const idx = Math.min(insertIdx, remaining.length);
+        const maxSpanAtCol = Math.max(1, cfg.maxColumns - intent.column);
+        const phantom: WidgetState = {
+          id: EXTERNAL_PHANTOM_ID,
+          type: "__external__",
+          colSpan: Math.min(colSpan, maxSpanAtCol),
+          visible: true,
+          order: 0,
+          columnStart: intent.column,
+        };
+        remaining.splice(idx, 0, phantom);
+        const widgets = remaining.map((w, i) => ({ ...w, order: i }));
+        const hidden = state.widgets.filter(w => !w.visible);
+        return computeLayout(
+          [...widgets, ...hidden],
+          this.heights as Map<string, number>,
+          this.containerWidth,
+          cfg.maxColumns,
+          cfg.gap,
+        );
+      }
+
+      case "empty-row-maximize": {
+        const remaining = [...visible];
+        const insertIdx = findColumnPinInsertionIndex(
+          remaining, 0, intent.pointerY,
+          cfg.maxColumns, cfg.gap, this.heights,
+        );
+        const idx = Math.min(insertIdx, remaining.length);
+        const phantom: WidgetState = {
+          id: EXTERNAL_PHANTOM_ID,
+          type: "__external__",
+          colSpan: intent.newSpan,
+          visible: true,
+          order: 0,
+        };
+        remaining.splice(idx, 0, phantom);
+        const widgets = remaining.map((w, i) => ({ ...w, order: i }));
+        const hidden = state.widgets.filter(w => !w.visible);
+        return computeLayout(
+          [...widgets, ...hidden],
+          this.heights as Map<string, number>,
+          this.containerWidth,
+          cfg.maxColumns,
+          cfg.gap,
+        );
+      }
+
+      default:
+        return this.baseLayout;
+    }
+  }
 
   private cancelDrag(recompute: boolean): void {
     this.phase = { type: "idle" };
@@ -1214,6 +1593,34 @@ export class DragEngine {
     }
   }
 
+  /**
+   * Checks if the current pointer position is inside the trash zone.
+   *
+   * `getTrashRect` must return a rect in **container-relative** coordinates
+   * (the same space as `phase.pointerPos`).
+   */
+  private isOverTrash(): boolean {
+    const getRect = this.config.getTrashRect;
+    if (!getRect) return false;
+    const rect = getRect();
+    if (!rect) return false;
+
+    let pos: Point | null = null;
+    if (this.phase.type === "dragging") {
+      pos = this.phase.pointerPos;
+    } else if (this.phase.type === "external-dragging") {
+      pos = this.phase.pointerPos;
+    }
+    if (!pos) return false;
+
+    return (
+      pos.x >= rect.left &&
+      pos.x <= rect.right &&
+      pos.y >= rect.top &&
+      pos.y <= rect.bottom
+    );
+  }
+
   private clearDragState(): void {
     this.currentZone = null;
     this.currentIntent = null;
@@ -1357,6 +1764,11 @@ export class DragEngine {
         );
       case "dropping":
         return a.sourceId === (b as typeof a).sourceId;
+      case "external-dragging":
+        return (
+          a.widgetType === (b as typeof a).widgetType &&
+          a.colSpan === (b as typeof a).colSpan
+        );
     }
   }
 
@@ -1374,6 +1786,10 @@ export class DragEngine {
         return `Maximized to ${operation.newSpan} column${operation.newSpan > 1 ? "s" : ""}`;
       case "resize-toggle":
         return `Resized to ${operation.newSpan} column${operation.newSpan > 1 ? "s" : ""}`;
+      case "external-add":
+        return `Added widget at position ${operation.targetIndex + 1}`;
+      case "trash":
+        return "Widget removed";
       case "cancelled":
         return "Drop cancelled";
     }

@@ -20,6 +20,7 @@ export type DashboardProviderProps = {
   canDrop?: (sourceId: string, targetIndex: number, state: DashboardState) => boolean;
   dragConfig?: DragConfig;
   responsiveBreakpoints?: ResponsiveBreakpoints;
+  enableExternalDrag?: boolean;
   onError?: (error: DashboardError) => void;
   onDragStart?: (event: { widgetId: string; phase: 'pointer' | 'keyboard' }) => void;
   onDragEnd?: (event: { widgetId: string; operation: CommittedOperation; cancelled: boolean }) => void;
@@ -70,13 +71,14 @@ export interface DashboardStableContextValue {
   isWidgetLockActive: (id: string, lockType: LockType) => boolean;
   canAddWidget: () => boolean;
   doubleClickToMaximize: boolean;
+  registerTrashZone: (element: HTMLElement | null) => void;
 }
 
 /**
  * Volatile context values that change during drag operations.
  */
 export interface DashboardDragContextValue {
-  phase: "idle" | "pending" | "dragging" | "keyboard-dragging" | "dropping";
+  phase: "idle" | "pending" | "dragging" | "keyboard-dragging" | "dropping" | "external-dragging";
   dragState: DragState;
 }
 

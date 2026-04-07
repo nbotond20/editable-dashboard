@@ -9,10 +9,6 @@ type WidgetRect = {
   height: number;
 };
 
-// ---------------------------------------------------------------------------
-// Main entry point
-// ---------------------------------------------------------------------------
-
 export function resolveZone(
   pointer: Point,
   layout: ComputedLayout,
@@ -20,7 +16,7 @@ export function resolveZone(
   gap: number,
   maxColumns: number,
   containerWidth: number,
-  sourceId: string,
+  sourceId: string | null,
   currentWidgetSide?: "left" | "right",
 ): DropZone {
   const colWidth =
@@ -31,7 +27,6 @@ export function resolveZone(
   const rects = buildRects(layout, widgets, sourceId);
   const inset = gap / 2;
 
-  // 1. Pointer lands inside a widget body (inset area)
   const widgetHit = resolveWidgetHit(
     pointer,
     rects,
@@ -41,7 +36,6 @@ export function resolveZone(
   );
   if (widgetHit) return widgetHit;
 
-  // 2. Gap before the first widget
   if (rects.length > 0) {
     const first = rects[0];
     if (isInGapBefore(pointer, first, inset)) {
@@ -49,7 +43,6 @@ export function resolveZone(
     }
   }
 
-  // 3. Gap between consecutive widgets
   for (let i = 0; i < rects.length - 1; i++) {
     const current = rects[i];
     const next = rects[i + 1];
@@ -63,7 +56,6 @@ export function resolveZone(
     }
   }
 
-  // 4. Empty space within or below columns (but inside totalHeight)
   const emptyZone = resolveEmptyZone(
     pointer,
     layout,
@@ -74,7 +66,6 @@ export function resolveZone(
   );
   if (emptyZone) return emptyZone;
 
-  // 5. Gap after the last widget
   if (rects.length > 0) {
     const last = rects[rects.length - 1];
     if (isInGapAfter(pointer, last, inset, layout.totalHeight, containerWidth)) {
@@ -87,7 +78,6 @@ export function resolveZone(
     }
   }
 
-  // 6. Fallback: pointer is below the entire layout but inside the container
   if (
     pointer.y >= layout.totalHeight &&
     pointer.x >= 0 &&
@@ -100,21 +90,16 @@ export function resolveZone(
     return { type: "empty", column: Math.max(0, column) };
   }
 
-  // 7. Outside the container
   return { type: "outside" };
 }
-
-// ---------------------------------------------------------------------------
-// Rect builder
-// ---------------------------------------------------------------------------
 
 function buildRects(
   layout: ComputedLayout,
   widgets: WidgetState[],
-  sourceId: string,
+  sourceId: string | null,
 ): WidgetRect[] {
   const visible = widgets
-    .filter((w) => w.visible && w.id !== sourceId)
+    .filter((w) => w.visible && (sourceId == null || w.id !== sourceId))
     .sort((a, b) => a.order - b.order);
 
   const rects: WidgetRect[] = [];
@@ -132,10 +117,6 @@ function buildRects(
   }
   return rects;
 }
-
-// ---------------------------------------------------------------------------
-// Widget inset hit-test with side detection
-// ---------------------------------------------------------------------------
 
 function resolveWidgetHit(
   pointer: Point,
@@ -178,10 +159,6 @@ function resolveWidgetHit(
   return null;
 }
 
-// ---------------------------------------------------------------------------
-// Empty column space detection
-// ---------------------------------------------------------------------------
-
 function resolveEmptyZone(
   pointer: Point,
   layout: ComputedLayout,
@@ -215,7 +192,6 @@ function resolveEmptyZone(
     maxColumns - 1,
   );
 
-  // Below all widgets in this column but within the grid's total height
   if (
     colBottoms[col] > 0 &&
     pointer.y >= colBottoms[col] &&
@@ -224,7 +200,6 @@ function resolveEmptyZone(
     return { type: "empty", column: col };
   }
 
-  // Inside the column area but not overlapping any widget rect
   if (colBottoms[col] > 0 && pointer.y < colBottoms[col]) {
     const overlaps = Array.from(layout.positions.values()).some((r) => {
       const rCol = Math.round(r.x / (colWidth + gap));
@@ -246,10 +221,6 @@ function resolveEmptyZone(
 
   return null;
 }
-
-// ---------------------------------------------------------------------------
-// Gap helpers
-// ---------------------------------------------------------------------------
 
 function isInGapBefore(
   pointer: Point,
@@ -285,7 +256,6 @@ function isInGapBetween(
   const aInsetRight = a.x + a.width - inset;
   const bInsetLeft = b.x + inset;
 
-  // Same-row horizontal gap
   const sameRow = a.y < bBottom && b.y < aBottom;
   if (sameRow && bInsetLeft > aInsetRight) {
     const gapTop = Math.min(a.y, b.y);
@@ -301,7 +271,6 @@ function isInGapBetween(
     }
   }
 
-  // Cross-row gap (b starts on a new row below a)
   if (b.y >= aBottom) {
     const aInsetBottom = aBottom - inset;
     const bInsetTop = b.y + inset;
@@ -318,7 +287,6 @@ function isInGapBetween(
       }
     }
 
-    // Right-side gap next to widget a
     const aRight = a.x + a.width;
     if (aRight < containerWidth) {
       const gapRight = b.x <= a.x ? containerWidth : aRight + inset;
@@ -332,7 +300,6 @@ function isInGapBetween(
       }
     }
 
-    // Left-side gap next to widget b
     if (b.x > 0) {
       const gapLeft = Math.max(0, b.x - inset);
       if (

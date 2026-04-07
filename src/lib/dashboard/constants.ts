@@ -33,3 +33,6 @@ export const EMPTY_ROW_MAXIMIZE_DWELL_MS = 600;
 
 /** Duration of the drop animation in milliseconds. */
 export const DROP_ANIMATION_DURATION = 250;
+
+/** Widget ID used for the phantom placeholder during external drag-to-add. */
+export const EXTERNAL_PHANTOM_ID = "__external_phantom__";

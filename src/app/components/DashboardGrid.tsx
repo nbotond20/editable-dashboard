@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from "react";
 import { LayoutGroup, AnimatePresence, motion } from "motion/react";
-import { useDashboard, type WidgetState, type DragHandleProps } from "../../lib/dashboard/index.ts";
+import { useDashboard, EXTERNAL_PHANTOM_ID, type WidgetState, type DragHandleProps } from "../../lib/dashboard/index.ts";
 import { LAYOUT_SPRING } from "../animation-config.ts";
 import { WidgetSlot } from "./WidgetSlot.tsx";
 
@@ -37,7 +37,7 @@ export function DashboardGrid({ className, style, ghostClassName, children }: Da
   );
 
   useEffect(() => {
-    if (phase === "pending" || phase === "dragging") {
+    if (phase === "pending" || phase === "dragging" || phase === "external-dragging") {
       document.body.classList.add("dash-dragging");
     } else {
       document.body.classList.remove("dash-dragging");
@@ -48,8 +48,9 @@ export function DashboardGrid({ className, style, ghostClassName, children }: Da
   const activeLayout = dragState.previewLayout ?? layout;
   const containerHeight = activeLayout.totalHeight;
 
-  const ghostPos = dragState.activeId && dragState.previewLayout
-    ? dragState.previewLayout.positions.get(dragState.activeId)
+  const ghostId = dragState.activeId ?? (dragState.isExternalDrag ? EXTERNAL_PHANTOM_ID : null);
+  const ghostPos = ghostId && dragState.previewLayout
+    ? dragState.previewLayout.positions.get(ghostId)
     : null;
 
   return (

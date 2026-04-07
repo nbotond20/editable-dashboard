@@ -61,7 +61,7 @@ function createPointerListeners(
     document.removeEventListener("contextmenu", preventContextMenu);
     document.removeEventListener("selectstart", preventSelectStart);
     if (activePointerId != null) {
-      try { element.releasePointerCapture(activePointerId); } catch { /* already released */ }
+      try { element.releasePointerCapture(activePointerId); } catch {  }
     }
     clientPosRef.current = null;
     activePointerId = null;
@@ -143,7 +143,7 @@ export function usePointerAdapter(
 
       try {
         element.setPointerCapture(pointerId);
-      } catch { /* expected for synthetic events */ }
+      } catch {  }
 
       const listeners = createPointerListeners(
         engine, containerRef, element, clientPosRef,

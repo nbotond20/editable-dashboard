@@ -8,6 +8,7 @@ import {
   type WidgetState,
   type DashboardState,
   type DragHandleProps,
+  useTrashZone,
 } from "../lib/dashboard/index.ts";
 import { DashboardGrid } from "./components/DashboardGrid.tsx";
 import { DashboardGridStatic } from "./components/DashboardGridStatic.tsx";
@@ -36,10 +37,6 @@ const DRAG_CONFIG = {
   touchMoveTolerance: 20,
   autoScrollEdgeSize: 80,
 } as const;
-
-// ---------------------------------------------------------------------------
-// Shared dashboard UI (used by both modes)
-// ---------------------------------------------------------------------------
 
 interface DashboardContentProps {
   /**
@@ -148,6 +145,8 @@ function DashboardContent({ maxColumns: controlledMaxColumns, onMaxColumnsChange
 
       </main>
 
+      <TrashZone />
+
       <WidgetCatalog
         open={catalogOpen}
         onClose={closeCatalog}
@@ -159,9 +158,21 @@ function DashboardContent({ maxColumns: controlledMaxColumns, onMaxColumnsChange
   );
 }
 
-// ---------------------------------------------------------------------------
-// Persistence helpers
-// ---------------------------------------------------------------------------
+function TrashZone() {
+  const { ref, isActive, isOver } = useTrashZone();
+  if (!isActive) return null;
+  return (
+    <div
+      ref={ref}
+      className={`dash-trash-zone${isOver ? " dash-trash-zone--over" : ""}`}
+    >
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+      </svg>
+      {isOver ? "Release to remove" : "Drag here to remove"}
+    </div>
+  );
+}
 
 function loadSavedState(): { widgets: WidgetState[]; maxColumns: number } | undefined {
   try {
@@ -179,12 +190,8 @@ function saveState(widgets: WidgetState[], maxColumns: number, gap: number) {
   try {
     const serialized = serializeDashboard({ widgets, maxColumns, gap, containerWidth: 0 });
     localStorage.setItem(STORAGE_KEY, JSON.stringify(serialized));
-  } catch { /* ignore storage errors */ }
+  } catch {  }
 }
-
-// ---------------------------------------------------------------------------
-// Uncontrolled mode — provider owns state, we observe via onChange
-// ---------------------------------------------------------------------------
 
 function UncontrolledApp({ saved }: { saved: { widgets: WidgetState[]; maxColumns: number } | undefined }) {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -203,6 +210,7 @@ function UncontrolledApp({ saved }: { saved: { widgets: WidgetState[]; maxColumn
       maxColumns={saved?.maxColumns ?? 2}
       gap={16}
       dragConfig={DRAG_CONFIG}
+      enableExternalDrag
       onChange={handleChange}
     >
       <DashboardContent />
@@ -210,15 +218,10 @@ function UncontrolledApp({ saved }: { saved: { widgets: WidgetState[]; maxColumn
   );
 }
 
-// ---------------------------------------------------------------------------
-// Controlled mode — parent owns ALL state, provider is a pure render engine
-// ---------------------------------------------------------------------------
-
 function ControlledApp({ saved }: { saved: { widgets: WidgetState[]; maxColumns: number } | undefined }) {
   const [widgets, setWidgets] = useState<WidgetState[]>(saved?.widgets ?? initialWidgets);
   const [maxColumns, setMaxColumns] = useState(saved?.maxColumns ?? 2);
 
-  // Parent owns persistence — save whenever our state changes
   const saveTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => {
     clearTimeout(saveTimerRef.current);
@@ -235,6 +238,7 @@ function ControlledApp({ saved }: { saved: { widgets: WidgetState[]; maxColumns:
       maxColumns={maxColumns}
       gap={16}
       dragConfig={DRAG_CONFIG}
+      enableExternalDrag
     >
       <DashboardContent
         maxColumns={maxColumns}
@@ -243,10 +247,6 @@ function ControlledApp({ saved }: { saved: { widgets: WidgetState[]; maxColumns:
     </DashboardProvider>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Root — mode switcher
-// ---------------------------------------------------------------------------
 
 export default function App() {
   const [mode, setMode] = useState<"uncontrolled" | "controlled">("uncontrolled");

@@ -31,6 +31,7 @@ import { useMutationCallbacks } from "./use-mutation-callbacks.ts";
 import { usePhaseCallbacks } from "./use-phase-callbacks.ts";
 import { useDispatch } from "./use-dispatch.ts";
 import { useUndoRedoShortcuts } from "./use-undo-redo-shortcuts.ts";
+import { useExternalDropTarget } from "./use-external-drop-target.ts";
 import { buildDragState, buildEngineConfig } from "./build-context-helpers.ts";
 
 /**
@@ -55,6 +56,7 @@ export function DashboardProvider(props: DashboardProviderProps) {
     doubleClickToMaximize = true,
     canDrop,
     dragConfig,
+    enableExternalDrag,
     onError,
     onDragStart,
     onDragEnd,
@@ -66,8 +68,6 @@ export function DashboardProvider(props: DashboardProviderProps) {
     onChange,
     children,
   } = props;
-
-  // ── Error handling ──────────────────────────────────────────────────
 
   const onErrorRef = useRef(onError);
   useEffect(() => { onErrorRef.current = onError; });
@@ -88,8 +88,6 @@ export function DashboardProvider(props: DashboardProviderProps) {
     }
   }, [maxColumns, gap, maxUndoDepth, emitError]);
 
-  // ── Controlled / uncontrolled state resolution ──────────────────────
-
   const isControlled = "state" in props && props.state !== undefined;
   const rawInitialWidgets =
     !isControlled && "initialWidgets" in props && props.initialWidgets
@@ -102,9 +100,8 @@ export function DashboardProvider(props: DashboardProviderProps) {
     ? (props as { onStateChange: (widgets: WidgetState[]) => void }).onStateChange
     : undefined;
 
-  // Dev-mode warning on mode switch
   if (import.meta.env.DEV) {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
+
     const wasControlledRef = useRef(isControlled);
     if (wasControlledRef.current !== isControlled) {
       console.warn(
@@ -123,7 +120,7 @@ export function DashboardProvider(props: DashboardProviderProps) {
       }
       return result;
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only on mount
+
     [],
   );
 
@@ -141,8 +138,6 @@ export function DashboardProvider(props: DashboardProviderProps) {
         containerWidth: 0,
       };
 
-  // ── Mutation callbacks ────────────────────────────────────────────
-
   const { fireMutationCallbacks, fireDragCommitCallbacks } = useMutationCallbacks({
     onWidgetAdd,
     onWidgetRemove,
@@ -150,8 +145,6 @@ export function DashboardProvider(props: DashboardProviderProps) {
     onWidgetReorder,
     onWidgetConfigChange,
   });
-
-  // ── onCommit callback for the engine ──────────────────────────────
 
   const onStateChangeRef = useRef(onStateChange);
   useEffect(() => { onStateChangeRef.current = onStateChange; });
@@ -161,16 +154,12 @@ export function DashboardProvider(props: DashboardProviderProps) {
 
   const onCommit = useCallback(
     (nextState: DashboardState, prevState: DashboardState, source: CommitSource) => {
-      // Fire mutation callbacks for drag-committed operations (both modes)
       fireDragCommitCallbacksRef.current(source, prevState, nextState);
 
-      // In controlled mode, notify the parent of the new widget state
       onStateChangeRef.current?.(nextState.widgets);
     },
     [],
   );
-
-  // ── Engine, adapters, measurement ───────────────────────────────────
 
   const canDropRef = useRef(canDrop);
   useEffect(() => { canDropRef.current = canDrop; });
@@ -214,6 +203,31 @@ export function DashboardProvider(props: DashboardProviderProps) {
 
   const { measureRef, containerRef, containerCallbackRef } = useMeasurementBridge(engine);
 
+  const trashElementRef = useRef<HTMLElement | null>(null);
+  const registerTrashZone = useCallback((el: HTMLElement | null) => {
+    trashElementRef.current = el;
+  }, []);
+
+  useEffect(() => {
+    engine.updateConfig({
+      getTrashRect: () => {
+        const trash = trashElementRef.current;
+        const container = containerRef.current;
+        if (!trash || !container) return null;
+        const trashRect = trash.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
+        return {
+          left: trashRect.left - containerRect.left + container.scrollLeft,
+          top: trashRect.top - containerRect.top + container.scrollTop,
+          right: trashRect.right - containerRect.left + container.scrollLeft,
+          bottom: trashRect.bottom - containerRect.top + container.scrollTop,
+        };
+      },
+    });
+  }, [engine, containerRef]);
+
+  useExternalDropTarget(engine, containerRef, definitions, enableExternalDrag ?? false);
+
   const { startDrag, clientPosRef } = usePointerAdapter(engine, containerRef);
 
   const { handleKeyDown } = useKeyboardAdapter(engine);
@@ -223,16 +237,12 @@ export function DashboardProvider(props: DashboardProviderProps) {
     engine.getSnapshot,
   );
 
-  // ── Announcements ───────────────────────────────────────────────────
-
   const { announce, LiveRegion } = useDragAnnouncements();
   useEffect(() => {
     if (snapshot.announcement) {
       announce(snapshot.announcement);
     }
   }, [snapshot.announcement, announce]);
-
-  // ── Extracted hooks ─────────────────────────────────────────────────
 
   usePhaseCallbacks({ phase: snapshot.phase, onDragStart, onDragEnd });
 
@@ -250,8 +260,6 @@ export function DashboardProvider(props: DashboardProviderProps) {
 
   useUndoRedoShortcuts(keyboardShortcuts, containerRef, dispatch);
 
-  // ── Actions & helpers ───────────────────────────────────────────────
-
   const getState = useCallback(() => engine.getState(), [engine]);
   const actions = useActions({ dispatch, definitions, getState, maxWidgets, onError: emitError });
 
@@ -266,8 +274,6 @@ export function DashboardProvider(props: DashboardProviderProps) {
     () => maxWidgets == null || engine.getState().widgets.length < maxWidgets,
     [engine, maxWidgets],
   );
-
-  // ── Drag state & position ──────────────────────────────────────────
 
   const dragState = useMemo(
     () => buildDragState(snapshot),
@@ -326,8 +332,6 @@ export function DashboardProvider(props: DashboardProviderProps) {
     [handleKeyDown],
   );
 
-  // ── Context values ──────────────────────────────────────────────────
-
   const state = engine.getState();
   const layout = snapshot.layout;
   const phase = snapshot.phase.type;
@@ -351,16 +355,15 @@ export function DashboardProvider(props: DashboardProviderProps) {
       isWidgetLockActive,
       canAddWidget,
       doubleClickToMaximize,
+      registerTrashZone,
     }),
-    [state, definitions, layout, actions, snapshot.canUndo, snapshot.canRedo, getDragPosition, containerCallbackRef, measureRef, constrainedStartDrag, getA11yProps, handleKeyboardDrag, isWidgetLockActive, canAddWidget, doubleClickToMaximize],
+    [state, definitions, layout, actions, snapshot.canUndo, snapshot.canRedo, getDragPosition, containerCallbackRef, measureRef, constrainedStartDrag, getA11yProps, handleKeyboardDrag, isWidgetLockActive, canAddWidget, doubleClickToMaximize, registerTrashZone],
   );
 
   const dragValue = useMemo(
     () => ({ phase, dragState }),
     [phase, dragState],
   );
-
-  // ── onChange (skip first render) ────────────────────────────────────
 
   const onChangeRef = useRef(onChange);
   useEffect(() => { onChangeRef.current = onChange; });

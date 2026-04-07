@@ -104,6 +104,22 @@ export function applyOperation(
         colSpan: operation.newSpan,
       });
 
+    case "external-add":
+      return dashboardReducer(state, {
+        type: "ADD_WIDGET",
+        widgetType: operation.widgetType,
+        colSpan: operation.colSpan,
+        config: operation.config,
+        targetIndex: operation.targetIndex,
+        columnStart: operation.columnStart,
+      });
+
+    case "trash":
+      return dashboardReducer(state, {
+        type: "REMOVE_WIDGET",
+        id: operation.sourceId,
+      });
+
     case "cancelled":
       return state;
   }

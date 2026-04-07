@@ -37,7 +37,7 @@ export interface DashboardState {
  * Discriminated union of all state reducer actions.
  */
 export type DashboardAction =
-  | { type: "ADD_WIDGET"; widgetType: string; colSpan: number; config?: Record<string, unknown> }
+  | { type: "ADD_WIDGET"; widgetType: string; colSpan: number; config?: Record<string, unknown>; targetIndex?: number; columnStart?: number }
   | { type: "REMOVE_WIDGET"; id: string }
   | { type: "RESIZE_WIDGET"; id: string; colSpan: number }
   | { type: "REORDER_WIDGETS"; fromIndex: number; toIndex: number }

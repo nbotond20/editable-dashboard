@@ -18,19 +18,39 @@ export function dashboardReducer(
 ): DashboardState {
   switch (action.type) {
     case "ADD_WIDGET": {
-      const maxOrder = state.widgets.reduce(
-        (max, w) => Math.max(max, w.order),
-        -1
-      );
       const newWidget: WidgetState = {
         id: crypto.randomUUID(),
         type: action.widgetType,
         colSpan: Math.min(action.colSpan, state.maxColumns),
         visible: true,
-        order: maxOrder + 1,
+        order: 0,
         ...(action.config != null ? { config: action.config } : {}),
+        ...(action.columnStart != null ? { columnStart: action.columnStart } : {}),
       };
-      return { ...state, widgets: [...state.widgets, newWidget] };
+
+      if (action.targetIndex != null) {
+        const visible = state.widgets
+          .filter((w) => w.visible)
+          .sort((a, b) => a.order - b.order);
+        const idx = Math.max(0, Math.min(action.targetIndex, visible.length));
+        visible.splice(idx, 0, newWidget);
+        const orderMap = new Map<string, number>();
+        visible.forEach((w, i) => orderMap.set(w.id, i));
+        let nextOrder = visible.length;
+        const widgets = [...state.widgets, newWidget].map((w) => {
+          const o = orderMap.get(w.id);
+          if (o != null) return w.order === o ? w : { ...w, order: o };
+          const newOrd = nextOrder++;
+          return w.order === newOrd ? w : { ...w, order: newOrd };
+        });
+        return { ...state, widgets: normalizeOrder(widgets) };
+      }
+
+      const maxOrder = state.widgets.reduce(
+        (max, w) => Math.max(max, w.order),
+        -1
+      );
+      return { ...state, widgets: [...state.widgets, { ...newWidget, order: maxOrder + 1 }] };
     }
 
     case "REMOVE_WIDGET":

@@ -12,6 +12,8 @@ export interface DragState {
   previewLayout: ComputedLayout | null;
   isLongPressing: boolean;
   longPressTargetId: string | null;
+  isExternalDrag: boolean;
+  externalWidgetType: string | null;
 }
 
 /** Resolved drop target information produced by the drag engine. */

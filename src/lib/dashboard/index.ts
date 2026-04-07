@@ -26,15 +26,25 @@ export type {
 
 export type { CommittedOperation, CommitSource } from "./engine/types.ts";
 
+export type {
+  ExternalDragItem,
+  ExternalDragSourceProps,
+  ExternalDropEvent,
+} from "./types/external-drag.ts";
+
 export {
   DEFAULT_MAX_COLUMNS,
   DEFAULT_GAP,
   DEFAULT_WIDGET_HEIGHT,
   DRAG_ACTIVATION_THRESHOLD,
+  EXTERNAL_PHANTOM_ID,
 } from "./constants.ts";
 
 export { DashboardProvider } from "./react/DashboardProvider.tsx";
 export { useDashboard, useDashboardStable, useDashboardDrag } from "./state/use-dashboard.ts";
+export { useExternalDragSource } from "./react/use-external-drag-source.ts";
+export { useTrashZone } from "./react/use-trash-zone.ts";
+export type { TrashZoneResult } from "./react/use-trash-zone.ts";
 export type { UseActionsOptions } from "./state/use-dashboard.ts";
 
 export { computeLayout } from "./layout/compute-layout.ts";

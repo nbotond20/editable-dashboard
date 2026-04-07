@@ -34,7 +34,7 @@ export function WidgetSlot({ widget, children }: WidgetSlotProps) {
   const { layout, actions, dragState, getDragPosition, measureRef, startDrag, getA11yProps, handleKeyboardDrag, isWidgetLockActive, doubleClickToMaximize, state } = useDashboard();
 
   const isDragging = dragState.activeId === widget.id;
-  const isAnyDragging = dragState.activeId !== null;
+  const isAnyDragging = dragState.activeId !== null || dragState.isExternalDrag;
   const locked = isWidgetLockActive(widget.id, "position");
 
   const previewPos = dragState.previewLayout?.positions.get(widget.id);

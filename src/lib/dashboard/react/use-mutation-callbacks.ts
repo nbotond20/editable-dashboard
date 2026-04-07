@@ -192,6 +192,17 @@ export function useMutationCallbacks(props: MutationCallbackProps) {
           }
           break;
         }
+        case "external-add": {
+          const prevIds = new Set(prevState.widgets.map((w) => w.id));
+          const newWidget = nextState.widgets.find((w) => !prevIds.has(w.id));
+          if (newWidget) {
+            onWidgetAddRef.current?.({ widget: newWidget });
+          }
+          break;
+        }
+        case "trash":
+          onWidgetRemoveRef.current?.({ widgetId: operation.sourceId });
+          break;
       }
     },
     [],

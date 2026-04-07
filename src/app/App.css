@@ -429,6 +429,31 @@ body.dash-dragging {
   user-select: none;
 }
 
+.dash-trash-zone {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  border-radius: var(--dash-radius-lg);
+  border: 2px dashed var(--dash-color-border);
+  background: var(--dash-color-surface);
+  color: var(--dash-color-text-secondary);
+  font: var(--dash-font-body-sm);
+  pointer-events: auto;
+  transition: background 150ms, border-color 150ms, color 150ms;
+}
+
+.dash-trash-zone--over {
+  border-color: #ef4444;
+  background: #fef2f2;
+  color: #dc2626;
+}
+
 @media (pointer: coarse) {
   .dash-widget__drag-handle {
     width: 44px;

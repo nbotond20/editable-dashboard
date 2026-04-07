@@ -27,7 +27,18 @@ export type DragEvent =
   | { type: "TICK"; timestamp: number }
   | { type: "RESIZE_TOGGLE"; id: string; timestamp: number }
   | { type: "SET_HEIGHTS"; heights: ReadonlyMap<string, number> }
-  | { type: "SET_CONTAINER"; width: number };
+  | { type: "SET_CONTAINER"; width: number }
+  | {
+      type: "EXTERNAL_ENTER";
+      widgetType: string;
+      colSpan: number;
+      position: Point;
+      timestamp: number;
+      config?: Record<string, unknown>;
+    }
+  | { type: "EXTERNAL_MOVE"; position: Point; timestamp: number }
+  | { type: "EXTERNAL_LEAVE"; timestamp: number }
+  | { type: "EXTERNAL_DROP"; timestamp: number };
 
 export type DragPhase =
   | { type: "idle" }
@@ -58,6 +69,13 @@ export type DragPhase =
       sourceId: string;
       operation: CommittedOperation;
       startTime: number;
+    }
+  | {
+      type: "external-dragging";
+      widgetType: string;
+      colSpan: number;
+      pointerPos: Point;
+      config?: Record<string, unknown>;
     };
 
 export type DropZone =
@@ -99,6 +117,15 @@ export type CommittedOperation =
   | { type: "column-pin"; sourceId: string; column: number; targetIndex: number }
   | { type: "empty-row-maximize"; sourceId: string; newSpan: number; targetIndex: number }
   | { type: "resize-toggle"; id: string; newSpan: number }
+  | {
+      type: "external-add";
+      widgetType: string;
+      colSpan: number;
+      targetIndex: number;
+      columnStart?: number;
+      config?: Record<string, unknown>;
+    }
+  | { type: "trash"; sourceId: string }
   | { type: "cancelled" };
 
 /**
@@ -127,6 +154,7 @@ export interface DragEngineConfig {
   canDrop: (sourceId: string, targetIndex: number) => boolean;
   getWidgetConstraints: (id: string) => { minSpan: number; maxSpan: number };
   onCommit?: (nextState: DashboardState, prevState: DashboardState, source: CommitSource) => void;
+  getTrashRect?: () => { left: number; top: number; right: number; bottom: number } | null;
 }
 
 export interface DragEngineSnapshot {

@@ -35,8 +35,10 @@ function defaultConfig(
   return {
     swapDwellMs: 300,
     resizeDwellMs: 800,
+    emptyRowMaximizeDwellMs: 600,
     maxColumns: 2,
     isPositionLocked: () => false,
+    isResizeLocked: () => false,
     canDrop: () => true,
     getWidgetConstraints: () => ({ minSpan: 1, maxSpan: 2 }),
     ...overrides,

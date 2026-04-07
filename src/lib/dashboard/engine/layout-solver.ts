@@ -146,10 +146,6 @@ export interface LayoutSolverConfig {
   gap: number;
 }
 
-// ---------------------------------------------------------------------------
-// Internal helpers
-// ---------------------------------------------------------------------------
-
 /**
  * Splice the source widget out of the visible list and re-insert at
  * `targetIndex`, then reassign sequential order values.
@@ -175,10 +171,6 @@ function reorderVisible(
   const hidden = widgets.filter(w => !w.visible);
   return { reordered: ordered, hidden };
 }
-
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
 
 export function solveBaseLayout(
   widgets: WidgetState[],
