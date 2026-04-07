@@ -20,6 +20,7 @@ export function buildDragState(snapshot: DragEngineSnapshot): DragState {
       longPressTargetId: null,
       isExternalDrag: false,
       externalWidgetType: null,
+      intentType: snapshot.intent?.type ?? null,
     };
   }
 
@@ -33,6 +34,7 @@ export function buildDragState(snapshot: DragEngineSnapshot): DragState {
       longPressTargetId: null,
       isExternalDrag: false,
       externalWidgetType: null,
+      intentType: "reorder",
     };
   }
 
@@ -46,6 +48,7 @@ export function buildDragState(snapshot: DragEngineSnapshot): DragState {
       longPressTargetId: null,
       isExternalDrag: true,
       externalWidgetType: phase.widgetType,
+      intentType: snapshot.intent?.type ?? null,
     };
   }
 
@@ -59,6 +62,7 @@ export function buildDragState(snapshot: DragEngineSnapshot): DragState {
       longPressTargetId: phase.pointerType === "touch" ? phase.sourceId : null,
       isExternalDrag: false,
       externalWidgetType: null,
+      intentType: null,
     };
   }
 
@@ -71,6 +75,7 @@ export function buildDragState(snapshot: DragEngineSnapshot): DragState {
     longPressTargetId: null,
     isExternalDrag: false,
     externalWidgetType: null,
+    intentType: null,
   };
 }
 

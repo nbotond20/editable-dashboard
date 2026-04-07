@@ -1,6 +1,9 @@
-import { motion } from "motion/react";
+import { useRef, useLayoutEffect } from "react";
+import { motion, useMotionValue, useSpring } from "motion/react";
 import { useWidgetSlot, useDragFollow, type WidgetState, type DragHandleProps } from "../../lib/dashboard/index.ts";
 import { SPRINGS, SETTLE_EASING, SETTLE_DURATION } from "../animation-config.ts";
+
+const WIDTH_SPRING = { stiffness: SPRINGS.layout.stiffness, damping: SPRINGS.layout.damping, mass: SPRINGS.layout.mass };
 
 interface WidgetSlotProps {
   widget: WidgetState;
@@ -28,6 +31,33 @@ export function WidgetSlot({ widget, animated = true, children }: WidgetSlotProp
       : false,
   });
 
+  const widthMV = useMotionValue(slot.position?.width ?? 0);
+  const springWidth = useSpring(widthMV, WIDTH_SPRING);
+  const prevColSpanRef = useRef(slot.position?.colSpan);
+  const prevWidthRef = useRef(slot.position?.width);
+  const prevXRef = useRef(slot.position?.x);
+  const prevYRef = useRef(slot.position?.y);
+
+  useLayoutEffect(() => {
+    if (!slot.position) return;
+    const isInitial = prevWidthRef.current == null;
+    const widthChanged = slot.position.width !== prevWidthRef.current;
+    const colSpanChanged = slot.position.colSpan !== prevColSpanRef.current;
+    const moved = slot.position.x !== prevXRef.current || slot.position.y !== prevYRef.current;
+
+    if (isInitial || widthChanged || colSpanChanged) {
+      widthMV.set(slot.position.width);
+      if (isInitial || !colSpanChanged || moved) {
+        springWidth.jump(slot.position.width);
+      }
+    }
+
+    prevWidthRef.current = slot.position.width;
+    prevColSpanRef.current = slot.position.colSpan;
+    prevXRef.current = slot.position.x;
+    prevYRef.current = slot.position.y;
+  });
+
   if (!slot.position) return null;
 
   const { position, isDragging } = slot;
@@ -48,7 +78,7 @@ export function WidgetSlot({ widget, animated = true, children }: WidgetSlotProp
         position: "absolute",
         left: position.x,
         top: position.y,
-        width: position.width,
+        width: animated ? springWidth : position.width,
         zIndex: dragActive ? 50 : 1,
         ...(!animated && isDragging ? {
           opacity: 0.95,

@@ -14,6 +14,7 @@ export interface DragState {
   longPressTargetId: string | null;
   isExternalDrag: boolean;
   externalWidgetType: string | null;
+  intentType: "none" | "reorder" | "swap" | "auto-resize" | "column-pin" | "empty-row-maximize" | null;
 }
 
 /** Resolved drop target information produced by the drag engine. */

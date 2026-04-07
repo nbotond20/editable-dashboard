@@ -661,12 +661,13 @@ Complete internal state of the dashboard, including layout configuration and tra
 
 ### `DragState`
 
-| Field             | Type                     | Description                                                   |
-| ----------------- | ------------------------ | ------------------------------------------------------------- |
-| `activeId`        | `string \| null`         | ID of the dragged widget.                                     |
-| `dropTargetIndex` | `number \| null`         | Target insertion index.                                       |
-| `previewColSpan`  | `number \| null`         | Dragged widget's span in the preview (if resize is involved). |
-| `previewLayout`   | `ComputedLayout \| null` | Full layout for the tentative drop position.                  |
+| Field             | Type                     | Description                                                                                                       |
+| ----------------- | ------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| `activeId`        | `string \| null`         | ID of the dragged widget.                                                                                         |
+| `dropTargetIndex` | `number \| null`         | Target insertion index.                                                                                           |
+| `previewColSpan`  | `number \| null`         | Dragged widget's span in the preview (if resize is involved).                                                     |
+| `previewLayout`   | `ComputedLayout \| null` | Full layout for the tentative drop position.                                                                      |
+| `intentType`      | `string \| null`         | Current drag intent: `"reorder"`, `"swap"`, `"auto-resize"`, `"column-pin"`, `"empty-row-maximize"`, or `"none"`. |
 
 ### `DropTarget`
 

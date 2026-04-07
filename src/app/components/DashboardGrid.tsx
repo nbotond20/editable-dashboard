@@ -54,6 +54,9 @@ export function DashboardGrid({ className, style, ghostClassName, animated = tru
     ? dragState.previewLayout.positions.get(ghostId)
     : null;
 
+  const isResizeIntent = dragState.intentType === "auto-resize"
+    || dragState.intentType === "empty-row-maximize";
+
   const ghostElement = ghostPos && (
     animated ? (
       <motion.div
@@ -64,7 +67,13 @@ export function DashboardGrid({ className, style, ghostClassName, animated = tru
         data-ghost-y={ghostPos.y}
         data-ghost-width={ghostPos.width}
         data-ghost-height={ghostPos.height}
-        initial={{ opacity: 0 }}
+        initial={{
+          opacity: 0,
+          x: ghostPos.x,
+          y: ghostPos.y,
+          width: ghostPos.width,
+          height: ghostPos.height,
+        }}
         animate={{
           opacity: 1,
           x: ghostPos.x,
@@ -73,7 +82,10 @@ export function DashboardGrid({ className, style, ghostClassName, animated = tru
           height: ghostPos.height,
         }}
         exit={{ opacity: 0 }}
-        transition={SPRINGS.layout}
+        transition={{
+          ...SPRINGS.layout,
+          width: isResizeIntent ? SPRINGS.layout : { duration: 0 },
+        }}
         style={{
           position: "absolute",
           left: 0,

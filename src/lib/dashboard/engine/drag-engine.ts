@@ -1337,7 +1337,7 @@ export class DragEngine {
       const currentWidgetSide =
         this.currentZone?.type === "widget" ? this.currentZone.side : undefined;
 
-      const computedZone = resolveZone(
+      let computedZone = resolveZone(
         pointerPos,
         layout,
         state.widgets,
@@ -1347,6 +1347,27 @@ export class DragEngine {
         this.phase.sourceId,
         currentWidgetSide,
       );
+
+      if (computedZone.type === "outside") {
+        const phantomPos = layout.positions.get(`__phantom_${this.phase.sourceId}`);
+        if (
+          phantomPos &&
+          pointerPos.x >= phantomPos.x &&
+          pointerPos.x < phantomPos.x + phantomPos.width &&
+          pointerPos.y >= phantomPos.y &&
+          pointerPos.y < phantomPos.y + phantomPos.height
+        ) {
+          const colWidth =
+            state.maxColumns > 1
+              ? (this.containerWidth - state.gap * (state.maxColumns - 1)) / state.maxColumns
+              : this.containerWidth;
+          const column = Math.min(
+            Math.max(0, Math.floor(phantomPos.x / (colWidth + state.gap))),
+            state.maxColumns - 1,
+          );
+          computedZone = { type: "empty", column };
+        }
+      }
 
       if (!zonesEqual(computedZone, this.currentZone)) {
         if (zonesEqual(computedZone, this.pendingZone)) {
