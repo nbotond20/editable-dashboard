@@ -118,3 +118,7 @@ TypeScript 5.9, React 18+ (peer dep), Vite 8, Vitest, Playwright, ESLint
 ## Comments
 
 - Only add short and concise JSDoc comments on the public facing APIs. Remove every other comment. The code should be self-explanatory. If you find yourself writing a comment to explain what the code is doing, refactor the code until it's clear without comments. (Use the strip-comments.sh script if needed)
+
+## Change log
+
+Always update the changelog.md file with a concise summary of the change, categorized by type (Added, Changed, Fixed, etc.). Follow the existing format for consistency.
