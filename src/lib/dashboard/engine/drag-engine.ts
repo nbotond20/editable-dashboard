@@ -1348,13 +1348,13 @@ export class DragEngine {
         currentWidgetSide,
       );
 
-      if (computedZone.type === "outside") {
+      if (computedZone.type === "outside" || computedZone.type === "gap") {
         const phantomPos = layout.positions.get(`__phantom_${this.phase.sourceId}`);
         if (
           phantomPos &&
           pointerPos.x >= phantomPos.x &&
           pointerPos.x < phantomPos.x + phantomPos.width &&
-          pointerPos.y >= phantomPos.y &&
+          pointerPos.y >= phantomPos.y - state.gap &&
           pointerPos.y < phantomPos.y + phantomPos.height
         ) {
           const colWidth =
@@ -1441,18 +1441,23 @@ export class DragEngine {
         const sideStrength = halfWidth > 0
           ? Math.abs(this.phase.pointerPos.x - centerX) / halfWidth
           : 0;
+        const srcPos = this.baseLayout.positions.get(this.phase.sourceId);
+        const tgtPos = this.baseLayout.positions.get(targetId);
+        const isCrossRow = srcPos && tgtPos && Math.abs(srcPos.y - tgtPos.y) >= 1;
+
         const wasSideCollapsed = this.sideCollapsed;
+        const target = this.widgetById.get(targetId);
+        const crossRowResizePossible = isCrossRow && target != null && target.colSpan > 1;
         if (this.sideCollapsed) {
           if (sideStrength < 0.1) {
             this.sideCollapsed = false;
           }
         } else {
-          if (sideStrength > 0.2) {
+          if (sideStrength > 0.2 && (!isCrossRow || crossRowResizePossible)) {
             this.sideCollapsed = true;
           }
         }
         if (this.sideCollapsed) {
-          const target = this.widgetById.get(targetId);
           const spansExceedMax = target
             ? source.colSpan + target.colSpan > state.maxColumns
             : false;
