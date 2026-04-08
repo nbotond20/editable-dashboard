@@ -739,6 +739,61 @@ test.describe("2-col: A B / C / D", () => {
     await dragByIdToId(page, "b", "a");
     await assertLayout(page, [["b", "a"], ["c"], ["d"]]);
   });
+
+  test("case 109: D -> C (swap)", async ({ page }) => {
+    await setupDashboard(page, ["A B", "C", "D"]);
+    await dragByIdToId(page, "d", "c");
+    await assertLayout(page, [["a", "b"], ["d"], ["c"]]);
+  });
+
+  test("case 110: D -> <C (side left)", async ({ page }) => {
+    await setupDashboard(page, ["A B", "C", "D"]);
+    await dragByIdToSide(page, "d", "c", "left");
+    await assertLayout(page, [["a", "b"], ["d"], ["c"]]);
+  });
+
+  test("case 111: D -> C> (side right)", async ({ page }) => {
+    await setupDashboard(page, ["A B", "C", "D"]);
+    await dragByIdToSide(page, "d", "c", "right");
+    await assertLayout(page, [["a", "b"], ["d"], ["c"]]);
+  });
+});
+
+// ── 2-col: A B / C C / D — cross-row swap preserves uninvolved order (tests 112–114) ──
+
+test.describe("2-col: A B / C C / D", () => {
+  test("case 112: C -> A (swap)", async ({ page }) => {
+    await setupDashboardRaw(page, [
+      { id: "a", colSpan: 1, order: 0, type: "stats" },
+      { id: "b", colSpan: 1, order: 1, type: "calendar" },
+      { id: "c", colSpan: 2, order: 2, type: "chart" },
+      { id: "d", colSpan: 1, order: 3, type: "notes", columnStart: 0 },
+    ], 2);
+    await dragByIdToId(page, "c", "a");
+    await assertLayout(page, [["c", "c"], ["a", "b"], ["d"]]);
+  });
+
+  test("case 113: C ->| <A (swap left side, short dwell)", async ({ page }) => {
+    await setupDashboardRaw(page, [
+      { id: "a", colSpan: 1, order: 0, type: "stats" },
+      { id: "b", colSpan: 1, order: 1, type: "calendar" },
+      { id: "c", colSpan: 2, order: 2, type: "chart" },
+      { id: "d", colSpan: 1, order: 3, type: "notes", columnStart: 0 },
+    ], 2);
+    await dragByIdToSide(page, "c", "a", "left", { dwellMs: 350 });
+    await assertLayout(page, [["c", "c"], ["a", "b"], ["d"]]);
+  });
+
+  test("case 114: C ->| A> (swap right side, short dwell)", async ({ page }) => {
+    await setupDashboardRaw(page, [
+      { id: "a", colSpan: 1, order: 0, type: "stats" },
+      { id: "b", colSpan: 1, order: 1, type: "calendar" },
+      { id: "c", colSpan: 2, order: 2, type: "chart" },
+      { id: "d", colSpan: 1, order: 3, type: "notes", columnStart: 0 },
+    ], 2);
+    await dragByIdToSide(page, "c", "a", "right", { dwellMs: 350 });
+    await assertLayout(page, [["c", "c"], ["a", "b"], ["d"]]);
+  });
 });
 
 // ── 2-col: A / B B / C (tests 83–84) ──────────────────────────────

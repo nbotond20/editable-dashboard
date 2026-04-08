@@ -21,6 +21,7 @@ import {
   stabilizeUninvolvedWidgets,
   pinToGreedyColumns,
   findColumnPinInsertionIndex,
+  preserveTargetRowOrder,
 } from "./layout-solver.ts";
 import { computeLayout } from "../layout/compute-layout.ts";
 import type { LayoutSolverConfig } from "./layout-solver.ts";
@@ -775,7 +776,7 @@ export class DragEngine {
         ...newState,
         widgets: newState.widgets.map(w => {
           if (samePinCol && (w.id === committed.sourceId || w.id === committed.targetId)) {
-            return { ...w, columnStart: undefined };
+            return { ...w, columnStart: srcCol };
           }
           if (w.id === committed.sourceId && tgtCol != null) {
             return { ...w, columnStart: tgtCol };
@@ -787,6 +788,11 @@ export class DragEngine {
         }),
       };
     }
+
+    newState = {
+      ...newState,
+      widgets: preserveTargetRowOrder(newState.widgets, this.baseLayout, committed.sourceId, committed.targetId, cfg.maxColumns),
+    };
 
     const srcPos = this.baseLayout.positions.get(committed.sourceId);
     const tgtPos = this.baseLayout.positions.get(committed.targetId);
@@ -881,6 +887,19 @@ export class DragEngine {
               return { ...w, columnStart: tgtCol };
             }
             if (w.id === committed.targetId && srcCol != null) {
+              return { ...w, columnStart: srcCol };
+            }
+            return w;
+          }),
+        };
+      }
+
+      const spansUnchanged = committed.sourceSpan === preSrc?.colSpan && committed.targetSpan === preTgt?.colSpan;
+      if (!needsSwap && spansUnchanged && srcCol != null && tgtCol != null && srcCol === tgtCol) {
+        newState = {
+          ...newState,
+          widgets: newState.widgets.map(w => {
+            if (w.id === committed.sourceId || w.id === committed.targetId) {
               return { ...w, columnStart: srcCol };
             }
             return w;

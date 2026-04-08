@@ -4,6 +4,50 @@ import { computeLayout } from "../layout/compute-layout.ts";
 import { DEFAULT_WIDGET_HEIGHT } from "../constants.ts";
 import { getPinnedIds } from "./utils.ts";
 
+/**
+ * After a cross-row swap where the source fills the target's entire row,
+ * the target's row-mates are displaced. Preserve their relative column
+ * order with the target so the greedy layout doesn't reverse them.
+ */
+export function preserveTargetRowOrder(
+  widgets: WidgetState[],
+  baseLayout: ComputedLayout,
+  sourceId: string,
+  targetId: string,
+  maxColumns: number,
+): WidgetState[] {
+  const sourceWidget = widgets.find(w => w.id === sourceId);
+  if (!sourceWidget || sourceWidget.colSpan < maxColumns) return widgets;
+
+  const tgtPos = baseLayout.positions.get(targetId);
+  if (!tgtPos) return widgets;
+
+  const visible = widgets.filter(w => w.visible).sort((a, b) => a.order - b.order);
+  const targetWidget = visible.find(w => w.id === targetId);
+  if (!targetWidget) return widgets;
+
+  for (const w of visible) {
+    if (w.id === targetId || w.id === sourceId) continue;
+    const pos = baseLayout.positions.get(w.id);
+    if (!pos || Math.abs(pos.y - tgtPos.y) >= 1) continue;
+
+    const targetWasLeft = tgtPos.x < pos.x;
+    const targetIsFirst = targetWidget.order < w.order;
+
+    if (targetWasLeft && !targetIsFirst) {
+      const tgtOrder = targetWidget.order;
+      const mateOrder = w.order;
+      return widgets.map(ww => {
+        if (ww.id === targetId) return { ...ww, order: mateOrder };
+        if (ww.id === w.id) return { ...ww, order: tgtOrder };
+        return ww;
+      });
+    }
+  }
+
+  return widgets;
+}
+
 export function pinToGreedyColumns(
   widgets: WidgetState[],
   maxColumns: number,
@@ -291,7 +335,7 @@ export function solvePreviewLayout(
 
       let swapped = widgets.map(w => {
         if (samePinCol && (w.id === sourceId || w.id === intent.targetId)) {
-          return { ...w, order: w.id === sourceId ? targetWidget.order : sourceWidget.order, columnStart: undefined };
+          return { ...w, order: w.id === sourceId ? targetWidget.order : sourceWidget.order };
         }
         if (w.id === sourceId) {
           return { ...w, order: targetWidget.order, columnStart: tgtCol };
@@ -303,6 +347,7 @@ export function solvePreviewLayout(
       });
 
       if (baseLayout) {
+        swapped = preserveTargetRowOrder(swapped, baseLayout, sourceId, intent.targetId, config.maxColumns);
         const srcPos = baseLayout.positions.get(sourceId);
         const tgtPos = baseLayout.positions.get(intent.targetId);
         if (srcPos && tgtPos && Math.abs(srcPos.y - tgtPos.y) < 1) {
@@ -375,14 +420,16 @@ export function solvePreviewLayout(
         }
       }
 
+      const spansUnchanged = intent.sourceSpan === sourceWidget?.colSpan && intent.targetSpan === targetWidget?.colSpan;
+      const samePinCol = !needsSwap && spansUnchanged && srcCol != null && tgtCol != null && srcCol === tgtCol;
       const previewWidgets = reordered.map((w, i) => ({
         ...w,
         order: i,
         ...(w.id === sourceId
-          ? { columnStart: needsSwap && tgtCol != null ? tgtCol : undefined }
+          ? { columnStart: needsSwap && tgtCol != null ? tgtCol : (samePinCol ? srcCol : undefined) }
           : {}),
         ...(w.id === intent.targetId
-          ? { columnStart: needsSwap && srcCol != null ? srcCol : undefined }
+          ? { columnStart: needsSwap && srcCol != null ? srcCol : (samePinCol ? tgtCol : undefined) }
           : {}),
       }));
       const hidden = widgets.filter(w => !w.visible);
