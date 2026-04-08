@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- E2E tests: reorganized drag, touch, and lock tests with data-driven scenario runner (`defineScenarios`), merged duplicate describe blocks by layout, removed 3 duplicate test cases, consolidated lock tests into 3 groups
 - Widget width now animates smoothly on colSpan changes (grow/shrink) but snaps instantly on position changes
 - Ghost fades in at the correct position instead of animating from the origin
 

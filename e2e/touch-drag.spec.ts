@@ -1,115 +1,67 @@
-import { test } from "@playwright/test";
-import { setupDashboard } from "./helpers/setup";
-import { assertLayout } from "./helpers/layout-utils";
-import {
-  touchDragByIdToId,
-  touchDragByIdToSide,
-  touchDragCancelById,
-} from "./helpers/drag";
+import { defineScenarios, type ScenarioGroup } from "./helpers/scenario-runner";
 
-// All tests use 2-col layouts to avoid header overflow on mobile viewport.
+const groups: ScenarioGroup[] = [
+  {
+    group: "Touch: basic swaps",
+    scenarios: [
+      { name: "A -> B in A B / C", layout: ["A B", "C"], action: { do: "touchSwap", source: "a", target: "b" }, expected: [["b", "a"], ["c"]] },
+      { name: "A -> B in A B", layout: ["A B"], action: { do: "touchSwap", source: "a", target: "b" }, expected: [["b", "a"]] },
+      { name: "B -> C in A B / C", layout: ["A B", "C"], action: { do: "touchSwap", source: "b", target: "c" }, expected: [["a", "c"], ["b"]] },
+    ],
+  },
 
-// ── Touch: basic swaps ──────────────────────────────────────────
+  {
+    group: "Touch: cross-row swaps",
+    scenarios: [
+      { name: "A -> C in A B / C", layout: ["A B", "C"], action: { do: "touchSwap", source: "a", target: "c" }, expected: [["c", "b"], ["a"]] },
+      { name: "A -> C in A B / C D", layout: ["A B", "C D"], action: { do: "touchSwap", source: "a", target: "c" }, expected: [["c", "b"], ["a", "d"]] },
+      { name: "A -> D in A B / C D", layout: ["A B", "C D"], action: { do: "touchSwap", source: "a", target: "d" }, expected: [["d", "b"], ["c", "a"]] },
+    ],
+  },
 
-test.describe("Touch: basic swaps", () => {
-  test("case 1: A -> B in A B / C", async ({ page }) => {
-    await setupDashboard(page, ["A B", "C"]);
-    await touchDragByIdToId(page, "a", "b");
-    await assertLayout(page, [["b", "a"], ["c"]]);
-  });
+  {
+    group: "Touch: multi-span swaps",
+    scenarios: [
+      { name: "A -> B in A A / B (wide swap)", layout: ["A A", "B"], action: { do: "touchSwap", source: "a", target: "b" }, expected: [["b"], ["a", "a"]] },
+      { name: "A -> B in A A / B B (same-span)", layout: ["A A", "B B"], action: { do: "touchSwap", source: "a", target: "b" }, expected: [["b", "b"], ["a", "a"]] },
+      { name: "A -> B in A A / B C (wide-narrow)", layout: ["A A", "B C"], action: { do: "touchSwap", source: "a", target: "b" }, expected: [["b"], ["a", "a"], ["c"]] },
+    ],
+  },
 
-  test("case 16: A -> B in A B", async ({ page }) => {
-    await setupDashboard(page, ["A B"]);
-    await touchDragByIdToId(page, "a", "b");
-    await assertLayout(page, [["b", "a"]]);
-  });
+  {
+    group: "Touch: auto-resize",
+    scenarios: [
+      { name: "B ->| A> in A A / B (resize right)", layout: ["A A", "B"], action: { do: "touchResize", source: "b", target: "a", side: "right" }, expected: [["a", "b"]] },
+      { name: "B ->| <A in A A / B (resize left)", layout: ["A A", "B"], action: { do: "touchResize", source: "b", target: "a", side: "left" }, expected: [["b", "a"]] },
+      { name: "B ->| A> in A A / B B (resize right)", layout: ["A A", "B B"], action: { do: "touchResize", source: "b", target: "a", side: "right" }, expected: [["a", "b"]] },
+    ],
+  },
 
-  test("case 5: B -> C in A B / C", async ({ page }) => {
-    await setupDashboard(page, ["A B", "C"]);
-    await touchDragByIdToId(page, "b", "c");
-    await assertLayout(page, [["a", "c"], ["b"]]);
-  });
-});
+  {
+    group: "Touch: multi-step",
+    scenarios: [
+      {
+        name: "D -> A then B -> C in A B / C D",
+        layout: ["A B", "C D"],
+        steps: [
+          { action: { do: "touchSwap", source: "d", target: "a" } },
+          { action: { do: "touchSwap", source: "b", target: "c" }, expected: [["d", "c"], ["b", "a"]] },
+        ],
+      },
+    ],
+  },
 
-// ── Touch: cross-row swaps ──────────────────────────────────────
+  {
+    group: "Touch: cancel",
+    scenarios: [
+      {
+        name: "fast move before activation preserves layout",
+        layout: ["A B", "C"],
+        action: { do: "touchCancel", source: "a", distance: 30 },
+        expected: [["a", "b"], ["c"]],
+      },
+    ],
+  },
+];
 
-test.describe("Touch: cross-row swaps", () => {
-  test("case 3: A -> C in A B / C", async ({ page }) => {
-    await setupDashboard(page, ["A B", "C"]);
-    await touchDragByIdToId(page, "a", "c");
-    await assertLayout(page, [["c", "b"], ["a"]]);
-  });
-
-  test("case 17: A -> C in A B / C D", async ({ page }) => {
-    await setupDashboard(page, ["A B", "C D"]);
-    await touchDragByIdToId(page, "a", "c");
-    await assertLayout(page, [["c", "b"], ["a", "d"]]);
-  });
-
-  test("case 6: A -> D in A B / C D", async ({ page }) => {
-    await setupDashboard(page, ["A B", "C D"]);
-    await touchDragByIdToId(page, "a", "d");
-    await assertLayout(page, [["d", "b"], ["c", "a"]]);
-  });
-});
-
-// ── Touch: multi-span swaps ─────────────────────────────────────
-
-test.describe("Touch: multi-span swaps", () => {
-  test("case 9: A -> B in A A / B (wide swap)", async ({ page }) => {
-    await setupDashboard(page, ["A A", "B"]);
-    await touchDragByIdToId(page, "a", "b");
-    await assertLayout(page, [["b"], ["a", "a"]]);
-  });
-
-  test("case 25: A -> B in A A / B B (same-span swap)", async ({ page }) => {
-    await setupDashboard(page, ["A A", "B B"]);
-    await touchDragByIdToId(page, "a", "b");
-    await assertLayout(page, [["b", "b"], ["a", "a"]]);
-  });
-
-  test("case 20: A -> B in A A / B C (wide-narrow swap)", async ({ page }) => {
-    await setupDashboard(page, ["A A", "B C"]);
-    await touchDragByIdToId(page, "a", "b");
-    await assertLayout(page, [["b"], ["a", "a"], ["c"]]);
-  });
-});
-
-// ── Touch: auto-resize ──────────────────────────────────────────
-
-test.describe("Touch: auto-resize", () => {
-  test("case 10: B ->| A> in A A / B (resize right)", async ({ page }) => {
-    await setupDashboard(page, ["A A", "B"]);
-    await touchDragByIdToSide(page, "b", "a", "right");
-    await assertLayout(page, [["a", "b"]]);
-  });
-
-  test("case 11: B ->| <A in A A / B (resize left)", async ({ page }) => {
-    await setupDashboard(page, ["A A", "B"]);
-    await touchDragByIdToSide(page, "b", "a", "left");
-    await assertLayout(page, [["b", "a"]]);
-  });
-
-  test("case 26: B ->| A> in A A / B B (resize right)", async ({ page }) => {
-    await setupDashboard(page, ["A A", "B B"]);
-    await touchDragByIdToSide(page, "b", "a", "right");
-    await assertLayout(page, [["a", "b"]]);
-  });
-});
-
-// ── Touch: multi-step ───────────────────────────────────────────
-
-test("Touch multi-step: D -> A then B -> C in A B / C D", async ({ page }) => {
-  await setupDashboard(page, ["A B", "C D"]);
-  await touchDragByIdToId(page, "d", "a");
-  await touchDragByIdToId(page, "b", "c");
-  await assertLayout(page, [["d", "c"], ["b", "a"]]);
-});
-
-// ── Touch: cancel (scroll intent) ──────────────────────────────
-
-test("Touch cancel: fast move before activation preserves layout", async ({ page }) => {
-  await setupDashboard(page, ["A B", "C"]);
-  await touchDragCancelById(page, "a", 30);
-  await assertLayout(page, [["a", "b"], ["c"]]);
-});
+defineScenarios(groups);

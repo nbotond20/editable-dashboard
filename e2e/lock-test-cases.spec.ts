@@ -43,78 +43,68 @@ async function unlockRemove(page: import("@playwright/test").Page, id: string) {
   await page.waitForTimeout(100);
 }
 
-// ── Position lock: widget cannot be dragged ─────────────────────
+// ═══════════════════════════════════════════════════════════════════
+//  Position lock
+// ═══════════════════════════════════════════════════════════════════
 
-test.describe("position-locked widget cannot be dragged", () => {
-  test("position-locked A cannot be dragged to B", async ({ page }) => {
+test.describe("position lock", () => {
+  test("locked widget cannot be dragged (A B)", async ({ page }) => {
     await setupDashboard(page, ["A B"]);
     await lockPosition(page, "a");
     await attemptBlockedDragByIdToId(page, "a", "b");
     await assertLayout(page, [["a", "b"]]);
   });
 
-  test("position-locked A cannot be dragged to C in A B / C", async ({ page }) => {
+  test("locked widget cannot be dragged cross-row (A B / C)", async ({ page }) => {
     await setupDashboard(page, ["A B", "C"]);
     await lockPosition(page, "a");
     await attemptBlockedDragByIdToId(page, "a", "c");
     await assertLayout(page, [["a", "b"], ["c"]]);
   });
-});
 
-// ── Position lock: cannot swap onto a position-locked widget ────
-
-test.describe("cannot swap onto a position-locked widget", () => {
-  test("B cannot swap onto position-locked A in A B", async ({ page }) => {
+  test("cannot swap onto locked widget (A B)", async ({ page }) => {
     await setupDashboard(page, ["A B"]);
     await lockPosition(page, "a");
     await attemptBlockedDragByIdToId(page, "b", "a");
     await assertLayout(page, [["a", "b"]]);
   });
 
-  test("C cannot swap onto position-locked A in A B / C", async ({ page }) => {
+  test("cannot swap onto locked widget cross-row (A B / C)", async ({ page }) => {
     await setupDashboard(page, ["A B", "C"]);
     await lockPosition(page, "a");
     await attemptBlockedDragByIdToId(page, "c", "a");
     await assertLayout(page, [["a", "b"], ["c"]]);
   });
 
-  test("B cannot auto-resize onto position-locked A in A A / B", async ({ page }) => {
+  test("cannot auto-resize onto locked widget (A A / B)", async ({ page }) => {
     await setupDashboard(page, ["A A", "B"]);
     await lockPosition(page, "a");
     await attemptBlockedDragByIdToId(page, "b", "a");
     await assertLayout(page, [["a", "a"], ["b"]]);
   });
-});
 
-// ── Position lock: stays in place while others are dragged ──────
-
-test.describe("position-locked widget stays in place during other drags", () => {
-  test("lock A, drag B -> C: A stays, B and C swap", async ({ page }) => {
+  test("stays in place: lock A, drag B -> C (A B / C)", async ({ page }) => {
     await setupDashboard(page, ["A B", "C"]);
     await lockPosition(page, "a");
     await dragByIdToId(page, "b", "c");
     await assertLayout(page, [["a", "c"], ["b"]]);
   });
 
-  test("lock B, drag A -> C: B stays, A and C swap", async ({ page }) => {
+  test("stays in place: lock B, drag A -> C (A B / C)", async ({ page }) => {
     await setupDashboard(page, ["A B", "C"]);
     await lockPosition(page, "b");
     await dragByIdToId(page, "a", "c");
     await assertLayout(page, [["c", "b"], ["a"]]);
   });
 
-  test("lock A in A B C, drag B -> C: A stays", async ({ page }) => {
+  test("stays in place: lock A, drag B -> C (A B C)", async ({ page }) => {
     await setupDashboard(page, ["A B C"]);
     await lockPosition(page, "a");
     await dragByIdToId(page, "b", "c");
     await assertLayout(page, [["a", "c", "b"]]);
   });
-});
 
-// ── Position lock: CAN still be resized ─────────────────────────
-
-test.describe("position-locked widget can still be resized", () => {
-  test("position-locked A can be resized in A B", async ({ page }) => {
+  test("locked widget can still be resized (A B)", async ({ page }) => {
     await setupDashboard(page, ["A B"]);
     await lockPosition(page, "a");
     const resizeBtn = widgetResizeButtonById(page, "a", 2);
@@ -122,12 +112,8 @@ test.describe("position-locked widget can still be resized", () => {
     await page.waitForTimeout(200);
     await assertLayout(page, [["a", "a"], ["b"]]);
   });
-});
 
-// ── Position lock: CAN still be removed ─────────────────────────
-
-test.describe("position-locked widget can still be removed", () => {
-  test("position-locked A can be removed in A B", async ({ page }) => {
+  test("locked widget can still be removed (A B)", async ({ page }) => {
     await setupDashboard(page, ["A B"]);
     await lockPosition(page, "a");
     const removeBtn = widgetById(page, "a").getByRole("button", { name: "Remove", exact: true });
@@ -135,12 +121,8 @@ test.describe("position-locked widget can still be removed", () => {
     await page.waitForTimeout(200);
     await assertLayout(page, [["b"]]);
   });
-});
 
-// ── Unlock position restores normal behavior ────────────────────
-
-test.describe("unlock position restores drag", () => {
-  test("lock then unlock position on A, drag A -> B succeeds", async ({ page }) => {
+  test("unlock restores drag (A B)", async ({ page }) => {
     await setupDashboard(page, ["A B"]);
     await lockPosition(page, "a");
     await attemptBlockedDragByIdToId(page, "a", "b");
@@ -152,34 +134,27 @@ test.describe("unlock position restores drag", () => {
   });
 });
 
-// ── Resize lock: widget cannot be resized ───────────────────────
+// ═══════════════════════════════════════════════════════════════════
+//  Resize lock
+// ═══════════════════════════════════════════════════════════════════
 
-test.describe("resize-locked widget cannot be resized", () => {
-  test("resize-locked A cannot be resized in A B", async ({ page }) => {
+test.describe("resize lock", () => {
+  test("locked widget cannot be resized (A B)", async ({ page }) => {
     await setupDashboard(page, ["A B"]);
     await lockResize(page, "a");
-    // Resize buttons should be hidden when resize-locked
     const resizeBtn = widgetResizeButtonById(page, "a", 2);
     expect(await resizeBtn.count()).toBe(0);
     await assertLayout(page, [["a", "b"]]);
   });
-});
 
-// ── Resize lock: CAN still be dragged ───────────────────────────
-
-test.describe("resize-locked widget can still be dragged", () => {
-  test("resize-locked A can be dragged to B", async ({ page }) => {
+  test("locked widget can still be dragged (A B)", async ({ page }) => {
     await setupDashboard(page, ["A B"]);
     await lockResize(page, "a");
     await dragByIdToId(page, "a", "b");
     await assertLayout(page, [["b", "a"]]);
   });
-});
 
-// ── Unlock resize restores resize ───────────────────────────────
-
-test.describe("unlock resize restores resize", () => {
-  test("lock then unlock resize on A, resize succeeds", async ({ page }) => {
+  test("unlock restores resize (A B)", async ({ page }) => {
     await setupDashboard(page, ["A B"]);
     await lockResize(page, "a");
     expect(await widgetResizeButtonById(page, "a", 2).count()).toBe(0);
@@ -192,33 +167,27 @@ test.describe("unlock resize restores resize", () => {
   });
 });
 
-// ── Remove lock: remove button is hidden ────────────────────────
+// ═══════════════════════════════════════════════════════════════════
+//  Remove lock
+// ═══════════════════════════════════════════════════════════════════
 
-test.describe("remove-locked widget cannot be removed", () => {
-  test("remove-locked A: remove button is hidden", async ({ page }) => {
+test.describe("remove lock", () => {
+  test("locked widget: remove button is hidden (A B)", async ({ page }) => {
     await setupDashboard(page, ["A B"]);
     await lockRemove(page, "a");
     const removeBtn = widgetById(page, "a").getByRole("button", { name: "Remove", exact: true });
     expect(await removeBtn.count()).toBe(0);
     await assertLayout(page, [["a", "b"]]);
   });
-});
 
-// ── Remove lock: CAN still be dragged ───────────────────────────
-
-test.describe("remove-locked widget can still be dragged", () => {
-  test("remove-locked A can be dragged to B", async ({ page }) => {
+  test("locked widget can still be dragged (A B)", async ({ page }) => {
     await setupDashboard(page, ["A B"]);
     await lockRemove(page, "a");
     await dragByIdToId(page, "a", "b");
     await assertLayout(page, [["b", "a"]]);
   });
-});
 
-// ── Remove lock: CAN still be resized ───────────────────────────
-
-test.describe("remove-locked widget can still be resized", () => {
-  test("remove-locked A can be resized in A B", async ({ page }) => {
+  test("locked widget can still be resized (A B)", async ({ page }) => {
     await setupDashboard(page, ["A B"]);
     await lockRemove(page, "a");
     const resizeBtn = widgetResizeButtonById(page, "a", 2);
@@ -226,12 +195,8 @@ test.describe("remove-locked widget can still be resized", () => {
     await page.waitForTimeout(200);
     await assertLayout(page, [["a", "a"], ["b"]]);
   });
-});
 
-// ── Unlock remove restores removal ──────────────────────────────
-
-test.describe("unlock remove restores removal", () => {
-  test("lock then unlock remove on A, remove succeeds", async ({ page }) => {
+  test("unlock restores removal (A B)", async ({ page }) => {
     await setupDashboard(page, ["A B"]);
     await lockRemove(page, "a");
     let removeBtn = widgetById(page, "a").getByRole("button", { name: "Remove", exact: true });
