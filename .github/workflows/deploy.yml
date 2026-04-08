@@ -25,7 +25,31 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           fetch-tags: true
+
+      - name: Debug git state
+        run: |
+          echo "=== git log (last 10) ==="
+          git log --oneline -10
+          echo ""
+          echo "=== git tag -l ==="
+          git tag -l
+          echo ""
+          echo "=== git describe --tags --abbrev=0 ==="
+          git describe --tags --abbrev=0 || echo "FAILED: no tags reachable"
+          echo ""
+          TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          echo "=== tag resolved to: '$TAG' ==="
+          if [ -n "$TAG" ]; then
+            echo "=== git rev-list ${TAG}..HEAD --count ==="
+            git rev-list "${TAG}..HEAD" --count
+          else
+            echo "No tag found, commitsSince will be 0"
+          fi
+          echo ""
+          echo "=== fetch-depth check ==="
+          git rev-parse --is-shallow-repository
 
       - name: Set up Node
         uses: actions/setup-node@v4
