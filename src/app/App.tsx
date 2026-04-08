@@ -89,7 +89,15 @@ function DashboardContent({ maxColumns: controlledMaxColumns, onMaxColumnsChange
   return (
     <div style={{ minHeight: "100vh" }}>
       <header className="dash-header">
-        <h1 className="dash-heading-md">Dashboard</h1>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+          <h1 className="dash-heading-md">Dashboard</h1>
+          <span style={{ fontSize: 12, color: "#888" }}>
+            v{__APP_VERSION__}
+            {__COMMITS_SINCE_RELEASE__ > 0 && (
+              <> +{__COMMITS_SINCE_RELEASE__} commit{__COMMITS_SINCE_RELEASE__ !== 1 ? "s" : ""} ({__GIT_SHORT_HASH__})</>
+            )}
+          </span>
+        </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{ display: "flex", gap: 4 }}>
             <button

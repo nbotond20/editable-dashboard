@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Version info display in demo app header (version, commits since release, git hash)
 - `intentType` field on `DragState` exposing the current drag operation intent type
 
 ### Fixed
