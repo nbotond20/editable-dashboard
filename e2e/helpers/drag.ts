@@ -22,7 +22,7 @@ export async function dragWidgetToWidget(
   const endX = targetBox.x + targetBox.width / 2;
   const endY = targetBox.y + targetBox.height / 2;
 
-  await performDrag(page, startX, startY, endX, endY, options);
+  return performDrag(page, startX, startY, endX, endY, options);
 }
 
 export async function dragWidgetToPosition(
@@ -40,7 +40,7 @@ export async function dragWidgetToPosition(
   const startX = handleBox.x + handleBox.width / 2;
   const startY = handleBox.y + handleBox.height / 2;
 
-  await performDrag(page, startX, startY, targetX, targetY, options);
+  return performDrag(page, startX, startY, targetX, targetY, options);
 }
 
 async function performDrag(
@@ -50,7 +50,7 @@ async function performDrag(
   endX: number,
   endY: number,
   options?: { steps?: number; dwellMs?: number }
-) {
+): Promise<(string | null)[][] | null> {
   const dwellMs = options?.dwellMs ?? 500;
 
   await page.mouse.move(startX, startY);
@@ -102,6 +102,8 @@ async function performDrag(
     `Preview: ${JSON.stringify(previewGrid)}\n` +
     `Final:   ${JSON.stringify(finalGrid)}`,
   ).toEqual(previewGrid);
+
+  return previewGrid;
 }
 
 export async function startDragWithoutDrop(
@@ -273,6 +275,8 @@ export async function performMultiZoneDrag(
     `Preview: ${JSON.stringify(previewGrid)}\n` +
     `Final:   ${JSON.stringify(finalGrid)}`,
   ).toEqual(previewGrid);
+
+  return previewGrid;
 }
 
 export async function getGapBeforeWidget(
@@ -461,7 +465,7 @@ export async function dragByIdToId(
   const endX = targetBox.x + targetBox.width / 2;
   const endY = targetBox.y + targetBox.height / 2;
 
-  await performDrag(page, startX, startY, endX, endY, {
+  return performDrag(page, startX, startY, endX, endY, {
     steps: options?.steps ?? 60,
     dwellMs: options?.dwellMs ?? 350,
   });
@@ -497,7 +501,7 @@ export async function dragByIdToSide(
       : targetBox.x + targetBox.width * 0.75;
   const endY = targetBox.y + targetBox.height / 2;
 
-  await performDrag(page, startX, startY, endX, endY, {
+  return performDrag(page, startX, startY, endX, endY, {
     steps: options?.steps ?? 60,
     dwellMs: options?.dwellMs ?? 800,
   });
@@ -545,7 +549,7 @@ export async function dragByIdToEmptyCell(
   const endX = gridBox.x + targetCol * (colWidth + gap) + colWidth / 2;
   const endY = lowestBottom + gap + 20;
 
-  await performDrag(page, startX, startY, endX, endY, {
+  return performDrag(page, startX, startY, endX, endY, {
     steps: options?.steps ?? 60,
     dwellMs: options?.dwellMs ?? 350,
   });
@@ -600,7 +604,7 @@ export async function dragByIdToAdjacentEmpty(
   }
   const endY = widgetBox.y + widgetBox.height / 2;
 
-  await performDrag(page, startX, startY, endX, endY, {
+  return performDrag(page, startX, startY, endX, endY, {
     steps: options?.steps ?? 60,
     dwellMs: options?.dwellMs ?? 350,
   });
@@ -642,7 +646,7 @@ export async function dragByIdToColumn(
   const endX = gridBox.x + targetCol * (colWidth + gap) + colWidth / 2;
   const endY = widgetBox.y + widgetBox.height / 2;
 
-  await performDrag(page, startX, startY, endX, endY, {
+  return performDrag(page, startX, startY, endX, endY, {
     steps: options?.steps ?? 60,
     dwellMs: options?.dwellMs ?? 350,
   });
@@ -706,7 +710,7 @@ export async function dragByIdToCoords(
   const startX = handleBox.x + handleBox.width / 2;
   const startY = handleBox.y + handleBox.height / 2;
 
-  await performDrag(page, startX, startY, targetX, targetY, {
+  return performDrag(page, startX, startY, targetX, targetY, {
     steps: options?.steps ?? 60,
     dwellMs: options?.dwellMs ?? 350,
   });
@@ -742,7 +746,7 @@ export async function dragByIdToColumnAtWidget(
   const targetX = gridBox.x + targetCol * (colWidth + gap) + colWidth / 2;
   const targetY = refBox.y + refBox.height / 2;
 
-  await dragByIdToCoords(page, sourceId, targetX, targetY, options);
+  return dragByIdToCoords(page, sourceId, targetX, targetY, options);
 }
 
 // ── ID-based touch drag helpers ───────────────────────────────────
@@ -802,7 +806,7 @@ async function performTouchDrag(
   endX: number,
   endY: number,
   options?: { steps?: number; dwellMs?: number },
-) {
+): Promise<(string | null)[][] | null> {
   const dwellMs = options?.dwellMs ?? 350;
 
   const start = await touchStartDragById(page, sourceId);
@@ -838,6 +842,8 @@ async function performTouchDrag(
     `Preview: ${JSON.stringify(previewGrid)}\n` +
     `Final:   ${JSON.stringify(finalGrid)}`,
   ).toEqual(previewGrid);
+
+  return previewGrid;
 }
 
 /** Touch drag one widget onto another by ID (swap). */
@@ -851,7 +857,7 @@ export async function touchDragByIdToId(
   const targetBox = await target.boundingBox();
   if (!targetBox) throw new Error(`Widget "${targetId}" not found`);
 
-  await performTouchDrag(page, sourceId, targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, {
+  return performTouchDrag(page, sourceId, targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, {
     steps: options?.steps ?? 40,
     dwellMs: options?.dwellMs ?? 350,
   });
@@ -873,7 +879,7 @@ export async function touchDragByIdToSide(
     ? targetBox.x + targetBox.width * 0.25
     : targetBox.x + targetBox.width * 0.75;
 
-  await performTouchDrag(page, sourceId, endX, targetBox.y + targetBox.height / 2, {
+  return performTouchDrag(page, sourceId, endX, targetBox.y + targetBox.height / 2, {
     steps: options?.steps ?? 40,
     dwellMs: options?.dwellMs ?? 800,
   });
@@ -902,7 +908,7 @@ export async function touchDragByIdToAdjacentEmpty(
     ? widgetBox.x - colWidth / 2
     : widgetBox.x + widgetBox.width + colWidth / 2;
 
-  await performTouchDrag(page, sourceId, endX, widgetBox.y + widgetBox.height / 2, {
+  return performTouchDrag(page, sourceId, endX, widgetBox.y + widgetBox.height / 2, {
     steps: options?.steps ?? 40,
     dwellMs: options?.dwellMs ?? 350,
   });
@@ -929,7 +935,7 @@ export async function touchDragByIdToColumn(
 
   const endX = gridBox.x + targetCol * (colWidth + gap) + colWidth / 2;
 
-  await performTouchDrag(page, sourceId, endX, widgetBox.y + widgetBox.height / 2, {
+  return performTouchDrag(page, sourceId, endX, widgetBox.y + widgetBox.height / 2, {
     steps: options?.steps ?? 40,
     dwellMs: options?.dwellMs ?? 350,
   });

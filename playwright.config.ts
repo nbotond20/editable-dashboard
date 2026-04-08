@@ -16,7 +16,7 @@ export default defineConfig({
     {
       name: "chromium",
       use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 1200 } },
-      testMatch: ["drag-test-cases.spec.ts", "keyboard-drag.spec.ts", "resize-test-cases.spec.ts", "lock-test-cases.spec.ts", "auto-scroll.spec.ts"],
+      testMatch: ["drag-test-cases.spec.ts", "keyboard-drag.spec.ts", "resize-test-cases.spec.ts", "lock-test-cases.spec.ts", "auto-scroll.spec.ts", "ghost-preview.spec.ts"],
     },
     {
       name: "mobile-chrome",

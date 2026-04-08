@@ -1,4 +1,4 @@
-import { test } from "@playwright/test";
+import { test, expect } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import { setupDashboard, setupDashboardRaw, type TestWidget } from "./setup";
 import { assertLayout } from "./layout-utils";
@@ -31,6 +31,7 @@ type ScenarioAction =
 
 interface ScenarioStep {
   action: ScenarioAction;
+  preview?: Grid;
   expected?: Grid;
 }
 
@@ -45,6 +46,7 @@ interface Scenario {
   maxColumns?: number;
   rawLayout?: RawLayout;
   action?: ScenarioAction;
+  preview?: Grid;
   expected?: Grid;
   steps?: ScenarioStep[];
 }
@@ -56,38 +58,68 @@ interface ScenarioGroup {
   scenarios: Scenario[];
 }
 
-async function executeAction(page: Page, action: ScenarioAction): Promise<void> {
+async function executeAction(page: Page, action: ScenarioAction): Promise<(string | null)[][] | null> {
   switch (action.do) {
     case "swap":
-      await dragByIdToId(page, action.source, action.target, { dwellMs: action.dwellMs });
-      break;
+      return dragByIdToId(page, action.source, action.target, { dwellMs: action.dwellMs });
     case "autoResize":
-      await dragByIdToSide(page, action.source, action.target, action.side, { dwellMs: action.dwellMs });
-      break;
+      return dragByIdToSide(page, action.source, action.target, action.side, { dwellMs: action.dwellMs });
     case "dragToEmpty":
-      await dragByIdToAdjacentEmpty(page, action.source, action.direction, { side: action.side });
-      break;
+      return dragByIdToAdjacentEmpty(page, action.source, action.direction, { side: action.side });
     case "dragToColumn":
-      await dragByIdToColumn(page, action.source, action.col);
-      break;
+      return dragByIdToColumn(page, action.source, action.col);
     case "dragToColumnAt":
-      await dragByIdToColumnAtWidget(page, action.source, action.col, action.ref);
-      break;
+      return dragByIdToColumnAtWidget(page, action.source, action.col, action.ref);
     case "dragToEmptyCell":
-      await dragByIdToEmptyCell(page, action.source, action.col, { dwellMs: action.dwellMs });
-      break;
+      return dragByIdToEmptyCell(page, action.source, action.col, { dwellMs: action.dwellMs });
     case "blockedDrag":
       await attemptBlockedDragByIdToId(page, action.source, action.target);
-      break;
+      return null;
     case "touchSwap":
-      await touchDragByIdToId(page, action.source, action.target);
-      break;
+      return touchDragByIdToId(page, action.source, action.target);
     case "touchResize":
-      await touchDragByIdToSide(page, action.source, action.target, action.side);
-      break;
+      return touchDragByIdToSide(page, action.source, action.target, action.side);
     case "touchCancel":
       await touchDragCancelById(page, action.source, action.distance);
-      break;
+      return null;
+  }
+}
+
+async function assertPreviewGrid(
+  page: Page,
+  captured: (string | null)[][] | null,
+  expected: Grid,
+) {
+  expect(
+    captured,
+    "Ghost preview must be captured during drag",
+  ).not.toBeNull();
+
+  const maxColumns = await page.$eval(
+    '[data-testid="dashboard-grid"]',
+    (el) => Number((el as HTMLElement).dataset.maxColumns),
+  );
+
+  const padded = expected.map((row) => {
+    const r = [...row];
+    while (r.length < maxColumns) r.push(null);
+    return r;
+  });
+
+  expect(
+    captured!.length,
+    `Preview: expected ${padded.length} rows, got ${captured!.length}.\n` +
+    `Captured: ${JSON.stringify(captured)}\n` +
+    `Expected: ${JSON.stringify(padded)}`,
+  ).toBe(padded.length);
+
+  for (let r = 0; r < padded.length; r++) {
+    expect(
+      captured![r],
+      `Preview row ${r} mismatch.\n` +
+      `Captured: ${JSON.stringify(captured)}\n` +
+      `Expected: ${JSON.stringify(padded)}`,
+    ).toEqual(padded[r]);
   }
 }
 
@@ -107,13 +139,19 @@ export function defineScenarios(groups: ScenarioGroup[]): void {
 
           if (s.steps) {
             for (const step of s.steps) {
-              await executeAction(page, step.action);
+              const previewGrid = await executeAction(page, step.action);
+              if (step.preview) {
+                await assertPreviewGrid(page, previewGrid, step.preview);
+              }
               if (step.expected) {
                 await assertLayout(page, step.expected);
               }
             }
           } else if (s.action) {
-            await executeAction(page, s.action);
+            const previewGrid = await executeAction(page, s.action);
+            if (s.preview) {
+              await assertPreviewGrid(page, previewGrid, s.preview);
+            }
             if (s.expected) {
               await assertLayout(page, s.expected);
             }
