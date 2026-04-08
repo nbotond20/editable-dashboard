@@ -2,12 +2,22 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { execSync } from 'child_process'
+import { readFileSync } from 'fs'
+
+function git(cmd: string): string | null {
+  try {
+    return execSync(cmd, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim()
+  } catch {
+    return null
+  }
+}
 
 function getVersionInfo() {
-  const tag = execSync('git describe --tags --abbrev=0', { encoding: 'utf-8' }).trim()
-  const version = tag.replace(/^v/, '')
-  const commitsSince = Number(execSync(`git rev-list ${tag}..HEAD --count`, { encoding: 'utf-8' }).trim())
-  const shortHash = execSync('git rev-parse --short HEAD', { encoding: 'utf-8' }).trim()
+  const pkg = JSON.parse(readFileSync('package.json', 'utf-8'))
+  const version: string = pkg.version
+  const tag = git('git describe --tags --abbrev=0')
+  const commitsSince = tag ? Number(git(`git rev-list ${tag}..HEAD --count`) ?? 0) : 0
+  const shortHash = git('git rev-parse --short HEAD') ?? ''
   return { version, commitsSince, shortHash }
 }
 
