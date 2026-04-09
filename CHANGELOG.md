@@ -7,22 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-- Version info display in demo app header (version, commits since release, git hash)
-- `intentType` field on `DragState` exposing the current drag operation intent type
-
-### Fixed
-
-- Ghost preview now appears when hovering over the widget's original position during drag
-- Widget expands to fill its own empty row after 600ms dwell during drag
-
-### Changed
-
-- E2E tests: reorganized drag, touch, and lock tests with data-driven scenario runner (`defineScenarios`), merged duplicate describe blocks by layout, removed 3 duplicate test cases, consolidated lock tests into 3 groups
-- Widget width now animates smoothly on colSpan changes (grow/shrink) but snaps instantly on position changes
-- Ghost fades in at the correct position instead of animating from the origin
-
+## [4.3.0] - 2026-04-09
 ## [4.2.0] - 2026-04-07
 ## [4.1.0] - 2026-04-06
 ## [4.0.0] - 2026-04-06
