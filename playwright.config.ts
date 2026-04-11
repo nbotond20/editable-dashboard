@@ -23,6 +23,11 @@ export default defineConfig({
       use: { ...devices["Pixel 5"] },
       testMatch: ["touch-drag.spec.ts"],
     },
+    {
+      name: "randomized",
+      use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 1200 } },
+      testMatch: ["randomized/runner.spec.ts", "randomized/suite.spec.ts"],
+    },
   ],
   webServer: {
     command: "pnpm dev --port 4174",
