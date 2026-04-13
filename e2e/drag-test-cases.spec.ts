@@ -523,11 +523,30 @@ const threeColGroups: ScenarioGroup[] = [
   },
 
   {
+    group: "3-col: A B C / x D",
+    layout: ["A B C", "x D"],
+    scenarios: [
+      { name: "A -> empty col 0 at D's row", action: { do: "dragToColumnAt", source: "a", col: 0, ref: "d" }, expected: [["b", "c"], ["a", "d"]] },
+    ],
+  },
+
+  {
     group: "3-col: A B x / C D D / x x E",
     layout: ["A B x", "C D D", "x x E"],
     scenarios: [
       { name: "E -> empty col at row 0", action: { do: "dragToColumnAt", source: "e", col: 2, ref: "a" }, expected: [["a", "b", "e"], ["c", "d", "d"]] },
       { name: "E ->| B> (auto-resize right of B)", action: { do: "autoResize", source: "e", target: "b", side: "right" }, expected: [["a", "b", "e"], ["c", "d", "d"]] },
+      { name: "D(span-2) -> empty col 2 at A's row", action: { do: "dragToColumnAt", source: "d", col: 2, ref: "a" }, expected: [["a", "b", "d"], ["c", null, "e"]] },
+    ],
+  },
+
+  {
+    group: "3-col: A A x / B — column-pin to empty col",
+    layout: ["A A x", "B"],
+    scenarios: [
+      { name: "B -> x (left)", action: { do: "dragToColumnAt", source: "b", col: 2, ref: "a", side: "left" }, expected: [["a", "a", "b"]] },
+      { name: "B -> x (center)", action: { do: "dragToColumnAt", source: "b", col: 2, ref: "a" }, expected: [["a", "a", "b"]] },
+      { name: "B -> x (right)", action: { do: "dragToColumnAt", source: "b", col: 2, ref: "a", side: "right" }, expected: [["a", "a", "b"]] },
     ],
   },
 ];
@@ -574,46 +593,11 @@ defineScenarios(featureGroups);
 //  Standalone tests (require custom logic beyond the scenario runner)
 // ═══════════════════════════════════════════════════════════════════
 
-test("A -> empty col 0 in A B C / x D (custom coords)", async ({ page }) => {
-  await setupDashboard(page, ["A B C", "x D"]);
-
-  const dWidget = widgetById(page, "d");
-  const dBox = await dWidget.boundingBox();
-  const grid = page.locator('[data-testid="dashboard-grid"]');
-  const gridBox = await grid.boundingBox();
-  const maxCols = Number(await grid.evaluate((el) => (el as HTMLElement).dataset.maxColumns));
-  const gap = Number(await grid.evaluate((el) => (el as HTMLElement).dataset.gap));
-  const colWidth = (gridBox!.width - gap * (maxCols - 1)) / maxCols;
-
-  const targetX = gridBox!.x + colWidth / 2;
-  const targetY = dBox!.y + dBox!.height / 2;
-
-  await dragByIdToCoords(page, "a", targetX, targetY);
-  await assertLayout(page, [["b", "c"], ["a", "d"]]);
-});
-
 test("D -> D small move within own space in A B C / x x D (custom coords)", async ({ page }) => {
   await setupDashboard(page, ["A B C", "x x D"]);
   const dBox = await widgetById(page, "d").boundingBox();
   await dragByIdToCoords(page, "d", dBox!.x + dBox!.width / 2 + 15, dBox!.y + dBox!.height / 2 + 10);
   await assertLayout(page, [["a", "b", "c"], [null, null, "d"]]);
-});
-
-test("D -> empty col (span-2 to empty) in A B x / C x x / x D D / x E (custom coords)", async ({ page }) => {
-  await setupDashboard(page, ["A B x", "C x x", "x D D", "x E"]);
-
-  const aBox = await widgetById(page, "a").boundingBox();
-  const grid = page.locator('[data-testid="dashboard-grid"]');
-  const gridBox = await grid.boundingBox();
-  const maxCols = Number(await grid.evaluate((el) => (el as HTMLElement).dataset.maxColumns));
-  const gap = Number(await grid.evaluate((el) => (el as HTMLElement).dataset.gap));
-  const colWidth = (gridBox!.width - gap * (maxCols - 1)) / maxCols;
-
-  const targetX = gridBox!.x + 2 * (colWidth + gap) + colWidth / 2;
-  const targetY = aBox!.y + aBox!.height / 2;
-
-  await dragByIdToCoords(page, "d", targetX, targetY);
-  await assertLayout(page, [["a", "b", "d"], ["c", "e"]]);
 });
 
 test("C ->| A> with trackpad tremor near center in A A / B C / D", async ({ page }) => {
@@ -672,3 +656,4 @@ test("C ->| A> with trackpad tremor near center in A A / B C / D", async ({ page
 
   await assertLayout(page, [["a", "c"], ["b", "d"]]);
 });
+

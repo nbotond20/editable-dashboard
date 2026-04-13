@@ -318,7 +318,7 @@ describe("resolveZone", () => {
       expect(zone).toEqual({ type: "widget", targetId: "w1", side: "right" });
     });
 
-    it("returns gap after the widget when pointer is to its right", () => {
+    it("returns empty zone when pointer is in an empty column to the right", () => {
       const specs: WidgetSpec[] = [
         { id: "w1", x: 0, y: 0, width: 188, height: 100, colSpan: 1 },
       ];
@@ -328,10 +328,8 @@ describe("resolveZone", () => {
       const zone = resolveZone(pt(300, 50), layout, widgets, STD.gap, STD.maxColumns, STD.containerWidth, "none");
 
       expect(zone).toEqual({
-        type: "gap",
-        beforeId: "w1",
-        afterId: null,
-        index: 1,
+        type: "empty",
+        column: 1,
       });
     });
   });

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Column-pin to entirely empty columns (e.g., `A A x / B`, B → x) now correctly detected as an empty zone instead of a gap, enabling proper column-pin behavior
+
 ## [4.3.1] - 2026-04-13
 ## [4.3.0] - 2026-04-09
 ## [4.2.0] - 2026-04-07

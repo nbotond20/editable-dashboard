@@ -249,6 +249,10 @@ function resolveEmptyZone(
     }
   }
 
+  if (colBottoms[col] === 0 && pointer.y < layout.totalHeight) {
+    return { type: "empty", column: col };
+  }
+
   return null;
 }
 

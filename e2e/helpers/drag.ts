@@ -725,7 +725,7 @@ export async function dragByIdToColumnAtWidget(
   sourceId: string,
   targetCol: number,
   refWidgetId: string,
-  options?: { steps?: number; dwellMs?: number },
+  options?: { steps?: number; dwellMs?: number; side?: "left" | "right" },
 ) {
   const refWidget = widgetById(page, refWidgetId);
   const refBox = await refWidget.boundingBox();
@@ -743,7 +743,8 @@ export async function dragByIdToColumnAtWidget(
   );
   const colWidth = (gridBox.width - gap * (maxColumns - 1)) / maxColumns;
 
-  const targetX = gridBox.x + targetCol * (colWidth + gap) + colWidth / 2;
+  const xOffset = options?.side === "left" ? 0.25 : options?.side === "right" ? 0.75 : 0.5;
+  const targetX = gridBox.x + targetCol * (colWidth + gap) + colWidth * xOffset;
   const targetY = refBox.y + refBox.height / 2;
 
   return dragByIdToCoords(page, sourceId, targetX, targetY, options);

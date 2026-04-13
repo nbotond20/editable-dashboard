@@ -22,7 +22,7 @@ type ScenarioAction =
   | { do: "autoResize"; source: string; target: string; side: "left" | "right"; dwellMs?: number }
   | { do: "dragToEmpty"; source: string; direction: "left" | "right"; side?: "left" | "right" }
   | { do: "dragToColumn"; source: string; col: number }
-  | { do: "dragToColumnAt"; source: string; col: number; ref: string }
+  | { do: "dragToColumnAt"; source: string; col: number; ref: string; side?: "left" | "right" }
   | { do: "dragToEmptyCell"; source: string; col: number; dwellMs?: number }
   | { do: "blockedDrag"; source: string; target: string }
   | { do: "touchSwap"; source: string; target: string }
@@ -69,7 +69,7 @@ async function executeAction(page: Page, action: ScenarioAction): Promise<(strin
     case "dragToColumn":
       return dragByIdToColumn(page, action.source, action.col);
     case "dragToColumnAt":
-      return dragByIdToColumnAtWidget(page, action.source, action.col, action.ref);
+      return dragByIdToColumnAtWidget(page, action.source, action.col, action.ref, { side: action.side });
     case "dragToEmptyCell":
       return dragByIdToEmptyCell(page, action.source, action.col, { dwellMs: action.dwellMs });
     case "blockedDrag":
