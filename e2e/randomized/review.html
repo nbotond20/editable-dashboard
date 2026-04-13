@@ -9,19 +9,8 @@
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: #0a0a0a; color: #e0e0e0; padding: 24px; max-width: 960px; margin: 0 auto; }
 
   .toolbar { display: flex; gap: 12px; align-items: center; margin-bottom: 14px; }
-  .toolbar label { font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 4px; }
   .counter { font-size: 13px; color: #888; }
   .spacer { flex: 1; }
-  .btn { background: #1a1a1a; border: 1px solid #333; color: #ccc; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 13px; }
-  .btn:hover { background: #252525; }
-  .btn-primary { background: #1a5cff; border-color: #1a5cff; color: #fff; }
-
-  .nav { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
-  .nav-pos { font-size: 14px; font-variant-numeric: tabular-nums; min-width: 60px; text-align: center; }
-  .nav-arrow { width: 36px; height: 36px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #ccc; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; }
-  .nav-arrow:hover:not(:disabled) { background: #252525; }
-  .nav-arrow:disabled { opacity: 0.25; cursor: default; }
-  .kbd { font-size: 10px; color: #555; background: #141414; border: 1px solid #333; border-radius: 3px; padding: 1px 4px; }
 
   /* ── Card ── */
   .card { background: #111; border-radius: 12px; overflow: hidden; }
@@ -80,6 +69,25 @@
   .verdict-btn.selected-bug { border-color: #ef4444; background: #450a0a; color: #fff; }
   .verdict-btn.selected-bad-test { border-color: #666; background: #262626; color: #fff; }
 
+  /* ── Groups ── */
+  .group { margin-bottom: 16px; }
+  .group-header { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: #141414; border-radius: 8px; cursor: pointer; user-select: none; }
+  .group-header:hover { background: #1a1a1a; }
+  .group-chevron { font-size: 10px; color: #555; width: 14px; }
+  .group-label { font-size: 14px; font-weight: 600; flex: 1; }
+  .group-count { font-size: 13px; color: #666; font-variant-numeric: tabular-nums; }
+  .group-body { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+
+  /* ── Compact row ── */
+  .card-row { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-radius: 8px; cursor: pointer; background: #111; border: 1px solid transparent; }
+  .card-row:hover { background: #161616; }
+  .card-row.unverified { border-color: #f59e0b15; }
+  .card-row.pass { border-color: #22c55e15; }
+  .card-row.bug { border-color: #ef444415; }
+  .card-row.bad-test { border-color: #66666615; }
+  .card-row-name { font-size: 13px; font-weight: 500; flex: 1; font-family: monospace; }
+  .card-row-meta { font-size: 12px; color: #555; }
+
   .drop-zone { border: 2px dashed #333; border-radius: 12px; padding: 48px; text-align: center; color: #555; cursor: pointer; margin-bottom: 20px; }
   .drop-zone:hover, .drop-zone.dragover { border-color: #1a5cff; color: #888; }
   .drop-zone input { display: none; }
@@ -100,7 +108,8 @@ const COLORS = {
   f:'#ec4899', g:'#14b8a6', h:'#f97316', i:'#06b6d4', j:'#84cc16',
 };
 
-let scenarios = [], showAll = false, currentIdx = 0;
+let scenarioMap = {}, expandedHash = null;
+function scenarioList() { return Object.values(scenarioMap); }
 function escHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
 // ── File loading ──
@@ -116,8 +125,8 @@ function loadFile(file) {
   const reader = new FileReader();
   reader.onload = () => {
     try {
-      scenarios = (JSON.parse(reader.result)).scenarios || [];
-      currentIdx = 0;
+      scenarioMap = (JSON.parse(reader.result)).scenarios || {};
+      expandedHash = null;
       dropZone.style.display = 'none';
       render();
     } catch { alert('Invalid JSON'); }
@@ -125,26 +134,19 @@ function loadFile(file) {
   reader.readAsText(file);
 }
 
-// ── Keyboard ──
-document.addEventListener('keydown', e => {
-  if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return;
-  if (!getFiltered().length) return;
-  if (e.key === 'ArrowLeft')  { e.preventDefault(); go(-1); }
-  if (e.key === 'ArrowRight') { e.preventDefault(); go(1); }
-  if (e.key === '1') { e.preventDefault(); vote('pass'); }
-  if (e.key === '2') { e.preventDefault(); vote('bug'); }
-  if (e.key === '3') { e.preventDefault(); vote('bad-test'); }
-});
+function toggleExpand(hash) {
+  expandedHash = expandedHash === hash ? null : hash;
+  render();
+  if (expandedHash) {
+    const el = document.getElementById('card-' + hash);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+}
 
-function getFiltered() { return showAll ? scenarios : scenarios.filter(s => s.status === 'unverified'); }
-function go(d) { const f = getFiltered(); const n = currentIdx + d; if (n >= 0 && n < f.length) { currentIdx = n; render(); } }
-function vote(newStatus) {
-  const filtered = getFiltered();
-  const s = filtered[currentIdx];
+function vote(hash, newStatus) {
+  const s = scenarioMap[hash];
   if (!s) return;
   s.status = s.status === newStatus ? 'unverified' : newStatus;
-  const nextFiltered = getFiltered();
-  if (currentIdx >= nextFiltered.length) currentIdx = Math.max(0, nextFiltered.length - 1);
   save();
   render();
 }
@@ -153,9 +155,17 @@ function save() {
   fetch('/api/save', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ scenarios }, null, 2),
-  }).catch(() => {}); // silent — server might not be running
+    body: JSON.stringify({ scenarios: scenarioMap }, null, 2),
+  }).catch(() => {});
 }
+
+const GROUPS = [
+  { key: 'unverified', label: 'Pending', icon: '\u23f3' },
+  { key: 'bug', label: 'Bugs', icon: '\ud83d\udc1b' },
+  { key: 'bad-test', label: 'Bad Tests', icon: '\ud83d\uddd1' },
+  { key: 'pass', label: 'Verified', icon: '\u2705' },
+];
+const collapsedGroups = new Set();
 
 // ── Masonry grid rendering ──
 const CELL_W = 52;
@@ -276,78 +286,96 @@ function getHighlights(action) {
   return h;
 }
 
-// ── Main render ──
-function render() {
-  const filtered = getFiltered();
-  const unverifiedCount = scenarios.filter(s => s.status === 'unverified').length;
-  const passCount = scenarios.filter(s => s.status === 'pass').length;
-  const bugCount = scenarios.filter(s => s.status === 'bug').length;
-  const badCount = scenarios.filter(s => s.status === 'bad-test').length;
-  if (currentIdx >= filtered.length) currentIdx = Math.max(0, filtered.length - 1);
-  const s = filtered[currentIdx];
+function renderCard(s, expanded) {
+  const hash = s.hash;
+  const fail = s.failedAtStep ?? -1;
+  const si = fail >= 0 ? fail : s.steps.length - 1;
+  const step = s.steps[si];
+  const before = fail === 0 ? s.initialGrid : (s.steps[si-1]?.actual ?? s.initialGrid);
 
-  let h = `
-    <div class="toolbar">
-      <label><input type="checkbox" id="showAllToggle" ${showAll?'checked':''}> Show all</label>
-      <div class="counter">${unverifiedCount} pending \u00b7 ${passCount} verified \u00b7 ${bugCount} bugs \u00b7 ${badCount} bad</div>
-      <div class="spacer"></div>
-      <span style="font-size:12px;color:#555">auto-saves</span>
-    </div>
-    <div class="nav">
-      <button class="nav-arrow" onclick="go(-1)" ${currentIdx<=0?'disabled':''}>\u2190</button>
-      <div class="nav-pos">${filtered.length ? currentIdx+1 : 0} / ${filtered.length}</div>
-      <button class="nav-arrow" onclick="go(1)" ${currentIdx>=filtered.length-1?'disabled':''}>\u2192</button>
-      <span class="kbd">\u2190 \u2192</span>
-      <div class="spacer"></div>
-      <span style="font-size:11px;color:#555">1 verified \u00b7 2 bug \u00b7 3 bad test</span>
-    </div>`;
-
-  if (!s) { h += '<div class="empty-state">No tests to show</div>'; }
-  else {
-    const fail = s.failedAtStep ?? -1;
-    const si = fail >= 0 ? fail : s.steps.length - 1;
-    const step = s.steps[si];
-    const before = fail === 0 ? s.initialGrid : (s.steps[si-1]?.actual ?? s.initialGrid);
-    h += `
-      <div class="card ${s.status}">
-        <div class="card-header">
-          <div class="status-dot ${s.status}"></div>
-          <div class="card-title">${s.name} <span class="step-info">\u00b7 step ${si}/${s.steps.length-1}</span></div>
-          <span class="status-badge ${s.status}">${s.status}</span>
-        </div>
-        ${step ? actionBanner(step.action) : ''}
-        ${s.failureReason ? `<div style="padding:8px 18px;font-size:12px;color:#f87171;background:#1a0a0a;border-top:1px solid #1a1a1a;border-bottom:1px solid #1a1a1a;font-family:monospace;white-space:pre-wrap;overflow-x:auto;max-height:60px;overflow-y:auto">${escHtml(s.failureReason)}</div>` : ''}
-        <div class="panels">
-          <div class="panel">
-            <div class="panel-label">Before</div>
-            ${grid(before, s.maxColumns, step ? getHighlights(step.action) : {}, s.widgetHeights)}
-          </div>
-          <div class="panel">
-            <div class="panel-label" style="color:#22c55e">Expected</div>
-            ${step ? grid(step.expected, s.maxColumns, {}, s.widgetHeights) : ''}
-          </div>
-          <div class="panel">
-            <div class="panel-label" style="color:#ef4444">Actual</div>
-            ${step ? grid(step.actual, s.maxColumns, {}, s.widgetHeights) : ''}
-          </div>
-        </div>
-        <div class="verdict-row">
-          <button class="verdict-btn ${s.status==='pass'?'selected-pass':''}" onclick="vote('pass')" title="Good test, engine correct \u2014 add to regression suite">
-            \u2705 Verified <span class="kbd">1</span>
-          </button>
-          <button class="verdict-btn ${s.status==='bug'?'selected-bug':''}" onclick="vote('bug')" title="Good test, engine wrong \u2014 this is a bug to fix">
-            \ud83d\udc1b Bug <span class="kbd">2</span>
-          </button>
-          <button class="verdict-btn ${s.status==='bad-test'?'selected-bad-test':''}" onclick="vote('bad-test')" title="Bad test \u2014 scenario is invalid, discard">
-            \ud83d\uddd1 Bad test <span class="kbd">3</span>
-          </button>
-        </div>
+  if (!expanded) {
+    return `
+      <div class="card-row ${s.status}" onclick="toggleExpand('${hash}')">
+        <div class="status-dot ${s.status}"></div>
+        <span class="card-row-name">${escHtml(s.name)}</span>
+        <span class="card-row-meta">${s.steps.length} steps &middot; ${s.maxColumns}col</span>
       </div>`;
   }
 
-  document.getElementById('app').innerHTML = h;
-  document.getElementById('showAllToggle')?.addEventListener('change', e => { showAll = e.target.checked; currentIdx = 0; render(); });
-  document.activeElement?.blur();
+  return `
+    <div class="card ${s.status}" id="card-${hash}">
+      <div class="card-header" style="cursor:pointer" onclick="toggleExpand('${hash}')">
+        <div class="status-dot ${s.status}"></div>
+        <div class="card-title">${escHtml(s.name)} <span class="step-info">&middot; step ${si}/${s.steps.length-1}</span></div>
+        <span class="status-badge ${s.status}">${escHtml(s.status)}</span>
+      </div>
+      ${step ? actionBanner(step.action) : ''}
+      ${s.failureReason ? `<div style="padding:8px 18px;font-size:12px;color:#f87171;background:#1a0a0a;border-top:1px solid #1a1a1a;border-bottom:1px solid #1a1a1a;font-family:monospace;white-space:pre-wrap;overflow-x:auto;max-height:60px;overflow-y:auto">${escHtml(s.failureReason)}</div>` : ''}
+      <div class="panels">
+        <div class="panel">
+          <div class="panel-label">Before</div>
+          ${grid(before, s.maxColumns, step ? getHighlights(step.action) : {}, s.widgetHeights)}
+        </div>
+        <div class="panel">
+          <div class="panel-label" style="color:#22c55e">Expected</div>
+          ${step ? grid(step.expected, s.maxColumns, {}, s.widgetHeights) : ''}
+        </div>
+        <div class="panel">
+          <div class="panel-label" style="color:#ef4444">Actual</div>
+          ${step ? grid(step.actual, s.maxColumns, {}, s.widgetHeights) : ''}
+        </div>
+      </div>
+      <div class="verdict-row">
+        <button class="verdict-btn ${s.status==='pass'?'selected-pass':''}" onclick="event.stopPropagation();vote('${hash}','pass')">
+          Verified
+        </button>
+        <button class="verdict-btn ${s.status==='bug'?'selected-bug':''}" onclick="event.stopPropagation();vote('${hash}','bug')">
+          Bug
+        </button>
+        <button class="verdict-btn ${s.status==='bad-test'?'selected-bad-test':''}" onclick="event.stopPropagation();vote('${hash}','bad-test')">
+          Bad test
+        </button>
+      </div>
+    </div>`;
+}
+
+// ── Main render ──
+function render() {
+  const app = document.getElementById('app');
+  const all = scenarioList();
+  if (!all.length) {
+    app.textContent = 'No scenarios loaded';
+    app.className = 'empty-state';
+    return;
+  }
+  app.className = '';
+
+  const grouped = {};
+  for (const g of GROUPS) grouped[g.key] = [];
+  for (const s of all) (grouped[s.status] || grouped['unverified']).push(s);
+
+  let h = `<div class="toolbar">
+    <div class="counter">${all.length} total</div>
+    <div class="spacer"></div>
+    <span style="font-size:12px;color:#555">auto-saves</span>
+  </div>`;
+
+  for (const g of GROUPS) {
+    const items = grouped[g.key];
+    if (!items.length) continue;
+    const collapsed = collapsedGroups.has(g.key);
+    h += `<div class="group">
+        <div class="group-header" onclick="collapsedGroups.has('${g.key}')?collapsedGroups.delete('${g.key}'):collapsedGroups.add('${g.key}');render()">
+          <span class="group-chevron">${collapsed ? '\u25b6' : '\u25bc'}</span>
+          <span class="status-dot ${g.key}"></span>
+          <span class="group-label">${g.label}</span>
+          <span class="group-count">${items.length}</span>
+        </div>
+        ${collapsed ? '' : `<div class="group-body">${items.map(s => renderCard(s, expandedHash === s.hash)).join('')}</div>`}
+      </div>`;
+  }
+
+  app.innerHTML = h;
 }
 
 
@@ -356,8 +384,8 @@ function render() {
   try {
     const resp = await fetch('./suite/scenarios.json');
     if (resp.ok) {
-      scenarios = (await resp.json()).scenarios || [];
-      currentIdx = 0;
+      scenarioMap = (await resp.json()).scenarios || {};
+      expandedHash = null;
       dropZone.style.display = 'none';
       render();
     } else {

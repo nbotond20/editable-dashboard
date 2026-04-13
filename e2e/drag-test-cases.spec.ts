@@ -499,6 +499,14 @@ const threeColGroups: ScenarioGroup[] = [
   },
 
   {
+    group: "3-col: A B B / C D",
+    layout: ["A B B", "C D"],
+    scenarios: [
+      { name: "D ->| <B (short dwell)", action: { do: "autoResize", source: "d", target: "b", side: "left", dwellMs: 350 }, expected: [["a", "d"], ["c", "b", "b"]] },
+    ],
+  },
+
+  {
     group: "3-col: A A B / C D x",
     layout: ["A A B", "C D x"],
     scenarios: [

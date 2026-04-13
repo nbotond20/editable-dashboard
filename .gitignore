@@ -23,6 +23,7 @@ dist-ssr
 *.sln
 *.sw?
 
+e2e/randomized/suite/.tmp
 playwright-report
 coverage
 test-results

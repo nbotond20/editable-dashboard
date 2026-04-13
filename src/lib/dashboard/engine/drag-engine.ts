@@ -19,6 +19,7 @@ import {
   solveDragLayout,
   solvePreviewLayout,
   stabilizeUninvolvedWidgets,
+  stabilizeCrossRowSwapMates,
   pinToGreedyColumns,
   findColumnPinInsertionIndex,
   preserveTargetRowOrder,
@@ -809,6 +810,14 @@ export class DragEngine {
           cfg.gap,
         ),
       };
+    } else if (srcPos && tgtPos) {
+      newState = {
+        ...newState,
+        widgets: stabilizeCrossRowSwapMates(
+          newState.widgets, this.baseLayout, committed.sourceId, committed.targetId,
+          this.containerWidth, cfg.maxColumns, cfg.gap,
+        ),
+      };
     }
 
     const pinned = getPinnedIds(newState.widgets);
@@ -1504,6 +1513,24 @@ export class DragEngine {
       layout,
       pointerY: this.phase.type === "dragging" ? this.phase.pointerPos.y : undefined,
     });
+
+    // Cross-row auto-resize that shrinks the target solely because of
+    // row-mates (not because source+target exceed maxColumns) should
+    // fall back to swap so the target keeps its original span.
+    if (newIntent.type === "auto-resize") {
+      const srcBasePos = this.baseLayout.positions.get(sourceId);
+      const tgtBasePos = this.baseLayout.positions.get(newIntent.targetId);
+      if (srcBasePos && tgtBasePos && Math.abs(srcBasePos.y - tgtBasePos.y) >= 1) {
+        const target = this.widgetById.get(newIntent.targetId);
+        if (
+          target &&
+          newIntent.targetSpan < target.colSpan &&
+          source.colSpan + target.colSpan <= state.maxColumns
+        ) {
+          newIntent = { type: "swap", targetId: newIntent.targetId };
+        }
+      }
+    }
 
     if (
       newIntent.type === "none" &&

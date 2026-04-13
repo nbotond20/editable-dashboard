@@ -1,6 +1,8 @@
-# CLAUDE.md
+# editable-dashboard
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+## Style
+
+Always be very concise and to the point. Sacrifice grammar and readability for the sake of concision.
 
 ## What This Is
 
@@ -17,9 +19,13 @@ npm run build:lib        # Library-only build
 npm run typecheck:lib    # Typecheck library without emitting
 npm run lint             # ESLint
 npm run test             # Vitest unit tests (single run)
+npm run test:watch       # Vitest in watch mode
 npx vitest run src/lib/dashboard/engine/__tests__/some-file.test.ts  # Single test file
 npm run test:e2e         # Playwright e2e tests (needs dev server running)
 npm run test:e2e:ui      # Playwright with UI
+npm run test:e2e:debug   # Playwright with debugger
+npm run preview          # Preview production build
+npm run review           # Launch e2e randomized test review server
 ```
 
 ## Architecture
@@ -27,13 +33,14 @@ npm run test:e2e:ui      # Playwright with UI
 ### Two build targets
 
 - **Library** (`src/lib/dashboard/`): Published package. Built via `vite.config.lib.ts` into dual ESM/CJS. Entry at `src/lib/dashboard/index.ts`.
-- **Demo app** (`src/app/`): Development playground. Built via `vite.config.ts`. Not published.
+- **Demo app** (`src/app/`): Development playground. Built via `vite.config.ts`.
 
 ### Library layers (src/lib/dashboard/)
 
 ```
 engine/        → Framework-agnostic drag state machine. The core of the library.
                  Manages zones, intents, operations, dwell timers, hysteresis.
+drag/          → React drag hooks: auto-scroll, drag announcements (a11y).
 layout/        → Bin-packing layout algorithm (compute-layout.ts), ResizeObserver
                  cache (measure-cache.ts), responsive columns.
 state/         → Reducer (dashboard-reducer.ts), undo history, memoized actions.
@@ -42,6 +49,10 @@ react/         → React integration hooks. DashboardProvider is the root contex
 types/         → All type definitions, organized by domain.
 persistence/   → Serialization with versioned format (v1→v2 migration).
 ```
+
+Top-level files: `constants.ts`, `locks.ts`, `validation.ts`, `types.ts`.
+
+Two entry points: `index.ts` (main) and `engine-entry.ts` (re-exports main + `DragEngine` class, engine types, drag hooks, undo history). Maps to the `./engine` sub-export in package.json.
 
 ### Key patterns
 
@@ -117,7 +128,7 @@ TypeScript 5.9, React 18+ (peer dep), Vite 8, Vitest, Playwright, ESLint
 
 ## Comments
 
-- Only add short and concise JSDoc comments on the public facing APIs. Remove every other comment. The code should be self-explanatory. If you find yourself writing a comment to explain what the code is doing, refactor the code until it's clear without comments. (Use the strip-comments.sh script if needed)
+- Only add short and concise JSDoc comments on the public facing APIs. Remove every other comment. The code should be self-explanatory. If you find yourself writing a comment to explain what the code is doing, refactor the code until it's clear without comments. (Use `scripts/strip-comments.sh` if needed)
 
 ## Change log
 
@@ -126,3 +137,11 @@ Always update the changelog.md file with a concise summary of the change, catego
 ## Docs
 
 Always update the README.md file with usage instructions and examples for any new features or changes. The README should serve as the primary documentation for users of the library. Keep it clear and concise, with code snippets where helpful.
+
+## Debugging
+
+Always use the playwright mcp to debug e2e tests. If everything fails add debug console logs and use that information to debug it.
+
+## LSP
+
+Use the TypeScript LSP for code intelligence: go-to-definition, find-references, hover for type info. Prefer LSP over grepping when navigating types, tracing call sites, or understanding interfaces.

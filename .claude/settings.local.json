@@ -29,7 +29,8 @@
       "Bash(pnpm test:*)",
       "mcp__playwright__browser_drag",
       "mcp__playwright__browser_file_upload",
-      "mcp__playwright__browser_press_key"
+      "mcp__playwright__browser_press_key",
+      "Bash(RAND_SEED=100 npx playwright:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

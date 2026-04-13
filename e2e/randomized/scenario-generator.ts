@@ -12,12 +12,15 @@ import { createHash } from "node:crypto";
 
 function xorshift32(seed: number): () => number {
   let state = seed | 0 || 1;
-  return () => {
+  const next = () => {
     state ^= state << 13;
     state ^= state >> 17;
     state ^= state << 5;
     return (state >>> 0) / 0xffffffff;
   };
+  // Warm up: discard initial values to avoid bias with sequential seeds
+  for (let i = 0; i < 8; i++) next();
+  return next;
 }
 
 // ─── Types ─────────────────────────────────────────────────────────
@@ -190,7 +193,7 @@ function generateWidgets(
 
 export function generateScenario(seed: number): GeneratedScenario {
   const rand = xorshift32(seed);
-  const maxColumns = Math.floor(rand() * 3) + 2; // 2–4
+  const maxColumns = rand() < 0.5 ? 2 : 3;
   const widgetCount = Math.floor(rand() * 5) + 2; // 2–6
   const actionCount = Math.floor(rand() * 3) + 3; // 3–5
 
@@ -244,12 +247,12 @@ export function deduplicateScenarios(
 // ─── Persistence ───────────────────────────────────────────────────
 
 export interface SuiteFile {
-  scenarios: PersistedScenario[];
+  scenarios: Record<string, PersistedScenario>;
 }
 
 export function loadSuite(json: string): SuiteFile {
   try { return JSON.parse(json) as SuiteFile; }
-  catch { return { scenarios: [] }; }
+  catch { return { scenarios: {} }; }
 }
 
 export function saveRecordedScenario(

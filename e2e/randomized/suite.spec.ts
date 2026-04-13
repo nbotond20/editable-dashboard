@@ -29,7 +29,7 @@ let suiteScenarios: PersistedScenario[] = [];
 if (existsSync(SUITE_PATH)) {
   try {
     const suite: SuiteFile = JSON.parse(readFileSync(SUITE_PATH, "utf-8"));
-    suiteScenarios = suite.scenarios;
+    suiteScenarios = Object.values(suite.scenarios);
   } catch { /* empty suite */ }
 }
 

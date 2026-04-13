@@ -127,6 +127,82 @@ export function stabilizeUninvolvedWidgets(
   return changed ? result : widgets;
 }
 
+export function stabilizeCrossRowSwapMates(
+  widgets: WidgetState[],
+  baseLayout: ComputedLayout,
+  sourceId: string,
+  targetId: string,
+  containerWidth: number,
+  maxColumns: number,
+  gap: number,
+): WidgetState[] {
+  if (maxColumns <= 1) return widgets;
+
+  const targetWidget = widgets.find(w => w.id === targetId);
+  if (!targetWidget) return widgets;
+
+  const colWidth = (containerWidth - gap * (maxColumns - 1)) / maxColumns;
+  const step = colWidth + gap;
+
+  // Determine logical row via column occupancy from base layout positions.
+  // Masonry layout means same-row widgets can have different Y values,
+  // so we derive row from the greedy column assignment of the base layout.
+  const rowUsed = new Array(maxColumns).fill(0);
+  const widgetRow = new Map<string, number>();
+
+  // Process widgets in base-layout order (sorted by position)
+  const entries = [...baseLayout.positions.entries()]
+    .filter(([id]) => !id.startsWith("__phantom_"))
+    .sort((a, b) => {
+      const ay = a[1].y, by = b[1].y;
+      if (Math.abs(ay - by) > 1) return ay - by;
+      return a[1].x - b[1].x;
+    });
+
+  for (const [id, pos] of entries) {
+    const w = widgets.find(ww => ww.id === id);
+    if (!w || !w.visible) continue;
+    const span = Math.max(1, Math.min(w.colSpan, maxColumns));
+    const col = Math.max(0, Math.min(Math.round(pos.x / step), maxColumns - span));
+    let row = 0;
+    for (let c = col; c < col + span; c++) {
+      row = Math.max(row, rowUsed[c]);
+    }
+    widgetRow.set(id, row);
+    for (let c = col; c < col + span; c++) {
+      rowUsed[c] = row + 1;
+    }
+  }
+
+  const srcRow = widgetRow.get(sourceId);
+  if (srcRow == null) return widgets;
+
+  let mateSpanSum = 0;
+  const srcRowMateIds: string[] = [];
+  for (const [id, row] of widgetRow) {
+    if (id === sourceId || id === targetId) continue;
+    if (row === srcRow) {
+      srcRowMateIds.push(id);
+      const w = widgets.find(ww => ww.id === id);
+      if (w) mateSpanSum += Math.min(w.colSpan, maxColumns);
+    }
+  }
+
+  if (srcRowMateIds.length === 0 || mateSpanSum + targetWidget.colSpan < maxColumns) {
+    return widgets;
+  }
+
+  let changed = false;
+  const result = widgets.map(w => {
+    if (!srcRowMateIds.includes(w.id)) return w;
+    const pos = baseLayout.positions.get(w.id);
+    if (!pos) return w;
+    changed = true;
+    return { ...w, columnStart: Math.round(pos.x / step) };
+  });
+  return changed ? result : widgets;
+}
+
 /**
  * Find the optimal insertion index for a column-pinned widget.
  *
@@ -352,6 +428,8 @@ export function solvePreviewLayout(
         const tgtPos = baseLayout.positions.get(intent.targetId);
         if (srcPos && tgtPos && Math.abs(srcPos.y - tgtPos.y) < 1) {
           swapped = stabilizeUninvolvedWidgets(swapped, baseLayout, new Set([sourceId, intent.targetId]), containerWidth, config.maxColumns, config.gap);
+        } else if (srcPos && tgtPos) {
+          swapped = stabilizeCrossRowSwapMates(swapped, baseLayout, sourceId, intent.targetId, containerWidth, config.maxColumns, config.gap);
         }
       }
 

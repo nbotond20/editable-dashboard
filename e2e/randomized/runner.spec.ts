@@ -8,7 +8,7 @@
  */
 
 import { test } from "@playwright/test";
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { setupDashboardRaw } from "../helpers/setup";
@@ -26,16 +26,17 @@ import {
   deduplicateScenarios,
   loadSuite,
   saveRecordedScenario,
-  type GeneratedScenario,
   type ScenarioAction,
   type Grid,
-  type SuiteFile,
 } from "./scenario-generator";
 
 // ─── Config ────────────────────────────────────────────────────────
 
 const SCENARIO_COUNT = 50;
-const SUITE_PATH = join(dirname(fileURLToPath(import.meta.url)), "suite", "scenarios.json");
+const SUITE_DIR = join(dirname(fileURLToPath(import.meta.url)), "suite");
+const SUITE_PATH = join(SUITE_DIR, "scenarios.json");
+const HASHES_PATH = join(SUITE_DIR, "hashes.json");
+const TMP_DIR = join(SUITE_DIR, ".tmp");
 
 // Seed: use RAND_SEED env var, or auto-derive from current timestamp
 // so each run produces different scenarios.
@@ -74,19 +75,19 @@ async function executeAction(
 const scenarios = generateScenarios(MASTER_SEED, SCENARIO_COUNT);
 
 let existingHashes = new Set<string>();
-if (existsSync(SUITE_PATH)) {
-  existingHashes = new Set(loadSuite(readFileSync(SUITE_PATH, "utf-8")).scenarios.map(s => s.hash));
+if (existsSync(HASHES_PATH)) {
+  try { existingHashes = new Set(JSON.parse(readFileSync(HASHES_PATH, "utf-8"))); } catch { /* ignore */ }
+} else if (existsSync(SUITE_PATH)) {
+  existingHashes = new Set(Object.keys(loadSuite(readFileSync(SUITE_PATH, "utf-8")).scenarios));
 }
 const newScenarios = deduplicateScenarios(scenarios, existingHashes);
 
 // ─── Record ────────────────────────────────────────────────────────
 
-const recorded: { scenario: GeneratedScenario; initialGrid: Grid; stepGrids: Grid[]; widgetHeights: Record<string, number> }[] = [];
+// Each test writes its result to a temp file so tests run in parallel.
+mkdirSync(TMP_DIR, { recursive: true });
 
 test.describe(`Record randomized tests (seed=${MASTER_SEED}, ${newScenarios.length} new / ${scenarios.length - newScenarios.length} skipped)`, () => {
-  // Must be serial: recorded[] is shared module state, afterAll writes to a single file
-  test.describe.configure({ mode: "serial" });
-
   if (newScenarios.length === 0) {
     test("all scenarios already recorded", () => { test.skip(); });
     return;
@@ -107,7 +108,6 @@ test.describe(`Record randomized tests (seed=${MASTER_SEED}, ${newScenarios.leng
 
       const initialGrid = await getGridRepresentation(page);
 
-      // Capture actual widget heights from the DOM
       const widgetHeights: Record<string, number> = await page.$$eval(
         "[data-widget-id]",
         els => Object.fromEntries(els.map(el => [
@@ -122,29 +122,13 @@ test.describe(`Record randomized tests (seed=${MASTER_SEED}, ${newScenarios.leng
         try {
           await executeAction(page, action);
         } catch {
-          // Drag failed (e.g. ghost not visible for impossible drags) — record as no-op
+          // Drag failed — record as no-op
         }
         stepGrids.push(await getGridRepresentation(page));
       }
 
-      recorded.push({ scenario, initialGrid, stepGrids, widgetHeights });
+      const persisted = saveRecordedScenario(scenario, initialGrid, stepGrids, widgetHeights);
+      writeFileSync(join(TMP_DIR, `${scenario.hash}.json`), JSON.stringify(persisted));
     });
   }
-
-  test.afterAll(() => {
-    let suite: SuiteFile = { scenarios: [] };
-    if (existsSync(SUITE_PATH)) {
-      suite = loadSuite(readFileSync(SUITE_PATH, "utf-8"));
-    }
-
-    const existing = new Set(suite.scenarios.map(s => s.hash));
-    for (const r of recorded) {
-      if (!existing.has(r.scenario.hash)) {
-        suite.scenarios.push(saveRecordedScenario(r.scenario, r.initialGrid, r.stepGrids, r.widgetHeights));
-        existing.add(r.scenario.hash);
-      }
-    }
-
-    writeFileSync(SUITE_PATH, JSON.stringify(suite, null, 2) + "\n");
-  });
 });
