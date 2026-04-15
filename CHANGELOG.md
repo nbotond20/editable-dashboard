@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Column-pin to entirely empty columns (e.g., `A A x / B`, B → x) now correctly detected as an empty zone instead of a gap, enabling proper column-pin behavior
+- Auto-resize neighbor computation now uses the base layout instead of a greedy simulation that overcounts neighbors when the source is removed
+- Cross-row auto-resize post-processing now allows target shrink when real row-mates require it
+- Dragging to empty cells adjacent to a widget no longer blocked by cross-row gap detection extending into occupied columns
 
 ## [4.3.1] - 2026-04-13
 ## [4.3.0] - 2026-04-09

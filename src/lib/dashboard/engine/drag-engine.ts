@@ -1511,12 +1511,14 @@ export class DragEngine {
       canDrop: this.config.canDrop,
       getWidgetConstraints: this.config.getWidgetConstraints,
       layout,
+      baseLayout: this.baseLayout,
       pointerY: this.phase.type === "dragging" ? this.phase.pointerPos.y : undefined,
     });
 
-    // Cross-row auto-resize that shrinks the target solely because of
-    // row-mates (not because source+target exceed maxColumns) should
-    // fall back to swap so the target keeps its original span.
+    // Cross-row auto-resize that shrinks the target when source+target
+    // already fit should fall back to swap — unless the target has real
+    // row-mates that require the shrink AND the dwell has reached the
+    // full resize threshold.
     if (newIntent.type === "auto-resize") {
       const srcBasePos = this.baseLayout.positions.get(sourceId);
       const tgtBasePos = this.baseLayout.positions.get(newIntent.targetId);
@@ -1527,7 +1529,22 @@ export class DragEngine {
           newIntent.targetSpan < target.colSpan &&
           source.colSpan + target.colSpan <= state.maxColumns
         ) {
-          newIntent = { type: "swap", targetId: newIntent.targetId };
+          const belowFullDwell = dwellMs < this.config.resizeDwellMs;
+          if (belowFullDwell) {
+            newIntent = { type: "swap", targetId: newIntent.targetId };
+          } else {
+            let rowMateSpans = 0;
+            for (const w of visible) {
+              if (w.id === sourceId || w.id === newIntent.targetId) continue;
+              const pos = this.baseLayout.positions.get(w.id);
+              if (pos && Math.abs(pos.y - tgtBasePos.y) < 1) {
+                rowMateSpans += Math.min(w.colSpan, state.maxColumns);
+              }
+            }
+            if (rowMateSpans === 0) {
+              newIntent = { type: "swap", targetId: newIntent.targetId };
+            }
+          }
         }
       }
     }

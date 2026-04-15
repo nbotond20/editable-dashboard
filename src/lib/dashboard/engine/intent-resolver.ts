@@ -11,6 +11,7 @@ export interface IntentResolverConfig {
   canDrop: (sourceId: string, targetIndex: number) => boolean;
   getWidgetConstraints: (id: string) => { minSpan: number; maxSpan: number };
   layout?: ComputedLayout;
+  baseLayout?: ComputedLayout;
   pointerY?: number;
 }
 
@@ -73,7 +74,7 @@ export function resolveIntent(
         config.maxColumns
       ) {
         const otherRowSpans = computeTargetRowNeighborSpans(
-          widgets, sourceWidget.id, zone.targetId, config.maxColumns,
+          widgets, sourceWidget.id, zone.targetId, config.maxColumns, config.baseLayout,
         );
         if (sourceWidget.colSpan + targetWidget.colSpan + otherRowSpans > config.maxColumns) {
           const targetConstraints = config.getWidgetConstraints(zone.targetId);
@@ -205,8 +206,25 @@ function computeTargetRowNeighborSpans(
   sourceId: string,
   targetId: string,
   maxColumns: number,
+  layout?: ComputedLayout,
 ): number {
   const visible = visibleSorted;
+
+  if (layout) {
+    const tgtPos = layout.positions.get(targetId);
+    if (!tgtPos) return 0;
+
+    let neighborSpans = 0;
+    for (const w of visible) {
+      if (w.id === sourceId || w.id === targetId) continue;
+      const pos = layout.positions.get(w.id);
+      if (!pos) continue;
+      if (Math.abs(pos.y - tgtPos.y) < 1) {
+        neighborSpans += Math.max(1, Math.min(w.colSpan, maxColumns));
+      }
+    }
+    return neighborSpans;
+  }
 
   const rowUsed = new Array(maxColumns).fill(0);
   const widgetRow = new Map<string, number>();

@@ -503,6 +503,7 @@ const threeColGroups: ScenarioGroup[] = [
     layout: ["A B B", "C D"],
     scenarios: [
       { name: "D ->| <B (short dwell)", action: { do: "autoResize", source: "d", target: "b", side: "left", dwellMs: 350 }, expected: [["a", "d"], ["c", "b", "b"]] },
+      { name: "A ->| <B (no resize needed)", action: { do: "autoResize", source: "a", target: "b", side: "left" }, expected: [["b", "b", "a"], ["c", "d"]] },
     ],
   },
 
@@ -527,6 +528,14 @@ const threeColGroups: ScenarioGroup[] = [
     layout: ["A B C", "x D"],
     scenarios: [
       { name: "A -> empty col 0 at D's row", action: { do: "dragToColumnAt", source: "a", col: 0, ref: "d" }, expected: [["b", "c"], ["a", "d"]] },
+    ],
+  },
+
+  {
+    group: "3-col: A B x / C D D",
+    layout: ["A B x", "C D D"],
+    scenarios: [
+      { name: "B -> x (drag right into empty)", action: { do: "dragToEmpty", source: "b", direction: "right" }, expected: [["a", null, "b"], ["c", "d", "d"]] },
     ],
   },
 

@@ -43,10 +43,25 @@ export function resolveZone(
     }
   }
 
+  const step = colWidth + gap;
+  const pointerCol = Math.min(
+    Math.max(0, Math.floor(pointer.x / step)),
+    maxColumns - 1,
+  );
+
   for (let i = 0; i < rects.length - 1; i++) {
     const current = rects[i];
     const next = rects[i + 1];
     if (isInGapBetween(pointer, current, next, inset, containerWidth)) {
+      const curEndCol = Math.ceil((current.x + current.width) / step);
+      if (pointerCol >= curEndCol) {
+        const colOccupied = Array.from(layout.positions.values()).some(pos => {
+          const posCol = Math.round(pos.x / step);
+          const posSpan = Math.max(1, Math.round((pos.width + gap) / step));
+          return pointerCol >= posCol && pointerCol < posCol + posSpan;
+        });
+        if (colOccupied) continue;
+      }
       return {
         type: "gap",
         beforeId: current.id,
