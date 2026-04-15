@@ -23,7 +23,11 @@ dist-ssr
 *.sln
 *.sw?
 
+.env
+.env.*
 e2e/randomized/suite/.tmp
+e2e/randomized/suite/.eval-tmp
+e2e/randomized/parsed-tests-cache.json
 playwright-report
 coverage
 test-results

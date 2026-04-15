@@ -38,7 +38,8 @@
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:debug": "playwright test --debug",
     "prepublishOnly": "npm run build:lib",
-    "review": "node e2e/randomized/review-server.mjs & sleep 1 && open http://localhost:3334"
+    "review": "node e2e/randomized/review-server.mjs & sleep 1 && open http://localhost:3334",
+    "test:e2e:evaluate": "export $(grep -v '^#' .env | grep -v '^$' | xargs) && npx tsx e2e/randomized/evaluate.ts"
   },
   "keywords": [
     "react",
@@ -95,6 +96,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
+    "@google/generative-ai": "^0.24.1",
     "@playwright/test": "^1.58.2",
     "@types/node": "^24.12.0",
     "@types/react": "^19.2.14",

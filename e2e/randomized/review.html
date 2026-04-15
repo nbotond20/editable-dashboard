@@ -92,6 +92,34 @@
   .drop-zone:hover, .drop-zone.dragover { border-color: #1a5cff; color: #888; }
   .drop-zone input { display: none; }
   .empty-state { text-align: center; color: #444; padding: 60px 20px; }
+
+  /* ── AI Confidence ── */
+  .confidence-badge { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; font-variant-numeric: tabular-nums; }
+  .confidence-badge.high { background: #14532d; color: #4ade80; }
+  .confidence-badge.medium { background: #422006; color: #fbbf24; }
+  .confidence-badge.low { background: #450a0a; color: #f87171; }
+  .confidence-badge.none { background: #1a1a1a; color: #555; }
+
+  .ai-reasoning { padding: 12px 18px; font-size: 12px; color: #aaa; background: #0d0d0d; border-top: 1px solid #1a1a1a; line-height: 1.5; }
+  .ai-reasoning summary { cursor: pointer; color: #888; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+  .invariant-errors { padding: 8px 18px; font-size: 12px; color: #f87171; background: #1a0808; border-top: 1px solid #2a1010; font-family: monospace; }
+
+  /* ── Feedback Controls ── */
+  .feedback-row { display: flex; align-items: center; gap: 12px; padding: 12px 18px; border-top: 1px solid #1a1a1a; background: #0a0a0a; }
+  .feedback-btn { width: 36px; height: 36px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; }
+  .feedback-btn:hover { background: #222; }
+  .feedback-btn.selected-agree { border-color: #22c55e; background: #14532d; }
+  .feedback-btn.selected-disagree { border-color: #ef4444; background: #450a0a; }
+  .feedback-input { flex: 1; height: 36px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #e0e0e0; padding: 0 12px; font-size: 13px; font-family: inherit; }
+  .feedback-input::placeholder { color: #555; }
+  .feedback-send { height: 36px; padding: 0 16px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #e0e0e0; cursor: pointer; font-size: 13px; }
+  .feedback-send:hover { background: #222; }
+
+  /* ── Batch & Sort ── */
+  .batch-btn { height: 32px; padding: 0 14px; border-radius: 6px; border: 1px solid #333; background: #1a1a1a; color: #ccc; cursor: pointer; font-size: 12px; }
+  .batch-btn:hover { background: #222; }
+  select.sort-select { height: 28px; border-radius: 5px; border: 1px solid #333; background: #1a1a1a; color: #888; font-size: 11px; padding: 0 8px; }
 </style>
 </head>
 <body>
@@ -108,9 +136,69 @@ const COLORS = {
   f:'#ec4899', g:'#14b8a6', h:'#f97316', i:'#06b6d4', j:'#84cc16',
 };
 
+let currentSort = 'default';
+
 let scenarioMap = {}, expandedHash = null;
 function scenarioList() { return Object.values(scenarioMap); }
 function escHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+function confidenceClass(c) {
+  if (c === null || c === undefined) return 'none';
+  if (c >= 70) return 'high';
+  if (c >= 40) return 'medium';
+  return 'low';
+}
+
+function confidenceBadge(c) {
+  if (c === null || c === undefined) return '<span class="confidence-badge none">no AI</span>';
+  return `<span class="confidence-badge ${confidenceClass(c)}">${c}%</span>`;
+}
+
+function giveFeedback(hash, verdict) {
+  const s = scenarioMap[hash];
+  if (!s) return;
+  if (!s.humanFeedback) s.humanFeedback = { verdict: null, comment: null, timestamp: null };
+  s.humanFeedback.verdict = s.humanFeedback.verdict === verdict ? null : verdict;
+  s.humanFeedback.timestamp = new Date().toISOString();
+  save();
+  render();
+}
+
+function submitFeedbackComment(hash) {
+  const input = document.getElementById('feedback-' + hash);
+  if (!input) return;
+  const comment = input.value.trim();
+  if (!comment) return;
+  const s = scenarioMap[hash];
+  if (!s || !s.humanFeedback) return;
+  s.humanFeedback.comment = comment;
+  save();
+  fetch('/api/feedback', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      hash,
+      aiConfidence: s.confidence,
+      aiReasoning: s.aiReasoning,
+      humanVerdict: 'disagree',
+      humanComment: comment,
+      scenarioSummary: { layout: s.layout, maxColumns: s.maxColumns, actionDo: s.steps?.[0]?.action?.do || 'unknown' },
+      timestamp: new Date().toISOString(),
+    }),
+  }).catch(() => {});
+  render();
+}
+
+function batchApproveHighConfidence() {
+  const high = scenarioList().filter(s =>
+    s.status === 'unverified' && s.confidence !== null && s.confidence >= 70 && s.invariantResult === 'pass'
+  );
+  if (!high.length) return alert('No high-confidence scenarios to approve.');
+  if (!confirm('Approve ' + high.length + ' scenarios with confidence >= 70%?')) return;
+  for (const s of high) s.status = 'pass';
+  save();
+  render();
+}
 
 // ── File loading ──
 const dropZone = document.getElementById('dropZone');
@@ -161,6 +249,7 @@ function save() {
 
 const GROUPS = [
   { key: 'unverified', label: 'Pending', icon: '\u23f3' },
+  { key: 'ai-confident', label: 'AI Confident (70+)', icon: '\ud83e\udd16' },
   { key: 'bug', label: 'Bugs', icon: '\ud83d\udc1b' },
   { key: 'bad-test', label: 'Bad Tests', icon: '\ud83d\uddd1' },
   { key: 'pass', label: 'Verified', icon: '\u2705' },
@@ -298,6 +387,7 @@ function renderCard(s, expanded) {
       <div class="card-row ${s.status}" onclick="toggleExpand('${hash}')">
         <div class="status-dot ${s.status}"></div>
         <span class="card-row-name">${escHtml(s.name)}</span>
+        ${confidenceBadge(s.confidence)}
         <span class="card-row-meta">${s.steps.length} steps &middot; ${s.maxColumns}col</span>
       </div>`;
   }
@@ -306,36 +396,44 @@ function renderCard(s, expanded) {
     <div class="card ${s.status}" id="card-${hash}">
       <div class="card-header" style="cursor:pointer" onclick="toggleExpand('${hash}')">
         <div class="status-dot ${s.status}"></div>
-        <div class="card-title">${escHtml(s.name)} <span class="step-info">&middot; step ${si}/${s.steps.length-1}</span></div>
+        <div class="card-title">${escHtml(s.name)}${s.steps.length > 1 ? ` <span class="step-info">&middot; step ${si}/${s.steps.length-1}</span>` : ''}</div>
+        ${confidenceBadge(s.confidence)}
         <span class="status-badge ${s.status}">${escHtml(s.status)}</span>
       </div>
       ${step ? actionBanner(step.action) : ''}
       ${s.failureReason ? `<div style="padding:8px 18px;font-size:12px;color:#f87171;background:#1a0a0a;border-top:1px solid #1a1a1a;border-bottom:1px solid #1a1a1a;font-family:monospace;white-space:pre-wrap;overflow-x:auto;max-height:60px;overflow-y:auto">${escHtml(s.failureReason)}</div>` : ''}
-      <div class="panels">
+      ${s.invariantErrors?.length ? `<div class="invariant-errors">${s.invariantErrors.map(escHtml).join('<br>')}</div>` : ''}
+      <div class="panels" style="grid-template-columns:${step?.aiProposed ? '1fr 1fr 1fr' : '1fr 1fr 1fr'}">
         <div class="panel">
           <div class="panel-label">Before</div>
           ${grid(before, s.maxColumns, step ? getHighlights(step.action) : {}, s.widgetHeights)}
         </div>
         <div class="panel">
-          <div class="panel-label" style="color:#22c55e">Expected</div>
+          <div class="panel-label" style="color:#60a5fa">Engine Result</div>
           ${step ? grid(step.expected, s.maxColumns, {}, s.widgetHeights) : ''}
         </div>
         <div class="panel">
-          <div class="panel-label" style="color:#ef4444">Actual</div>
-          ${step ? grid(step.actual, s.maxColumns, {}, s.widgetHeights) : ''}
+          <div class="panel-label" style="color:${step?.aiProposed ? '#f59e0b' : '#555'}">${step?.aiProposed ? 'AI Proposed' : 'AI Proposed'}</div>
+          ${step?.aiProposed ? grid(step.aiProposed, s.maxColumns, {}, s.widgetHeights) : '<div style="color:#444;font-size:12px;padding-top:8px">No alternative proposed</div>'}
         </div>
       </div>
+      ${s.aiReasoning ? `<div class="ai-reasoning"><details><summary>AI Reasoning</summary><p style="margin-top:8px">${escHtml(s.aiReasoning)}</p></details></div>` : ''}
       <div class="verdict-row">
-        <button class="verdict-btn ${s.status==='pass'?'selected-pass':''}" onclick="event.stopPropagation();vote('${hash}','pass')">
-          Verified
-        </button>
-        <button class="verdict-btn ${s.status==='bug'?'selected-bug':''}" onclick="event.stopPropagation();vote('${hash}','bug')">
-          Bug
-        </button>
-        <button class="verdict-btn ${s.status==='bad-test'?'selected-bad-test':''}" onclick="event.stopPropagation();vote('${hash}','bad-test')">
-          Bad test
-        </button>
+        <button class="verdict-btn ${s.status==='pass'?'selected-pass':''}" onclick="event.stopPropagation();vote('${hash}','pass')">Verified</button>
+        <button class="verdict-btn ${s.status==='bug'?'selected-bug':''}" onclick="event.stopPropagation();vote('${hash}','bug')">Bug</button>
+        <button class="verdict-btn ${s.status==='bad-test'?'selected-bad-test':''}" onclick="event.stopPropagation();vote('${hash}','bad-test')">Bad test</button>
       </div>
+      ${s.aiReasoning ? `
+        <div class="feedback-row">
+          <button class="feedback-btn ${s.humanFeedback?.verdict==='agree'?'selected-agree':''}" onclick="event.stopPropagation();giveFeedback('${hash}','agree')" title="AI was right">\ud83d\udc4d</button>
+          <button class="feedback-btn ${s.humanFeedback?.verdict==='disagree'?'selected-disagree':''}" onclick="event.stopPropagation();giveFeedback('${hash}','disagree')" title="AI was wrong">\ud83d\udc4e</button>
+          ${s.humanFeedback?.verdict === 'disagree' ? `
+            <input class="feedback-input" id="feedback-${hash}" placeholder="Why was the AI wrong?" value="${escHtml(s.humanFeedback?.comment || '')}" onkeydown="if(event.key==='Enter'){event.stopPropagation();submitFeedbackComment('${hash}')}">
+            <button class="feedback-send" onclick="event.stopPropagation();submitFeedbackComment('${hash}')">Send</button>
+          ` : ''}
+          ${s.humanFeedback?.comment ? `<span style="font-size:11px;color:#666">Feedback sent</span>` : ''}
+        </div>
+      ` : ''}
     </div>`;
 }
 
@@ -350,15 +448,34 @@ function render() {
   }
   app.className = '';
 
-  const grouped = {};
-  for (const g of GROUPS) grouped[g.key] = [];
-  for (const s of all) (grouped[s.status] || grouped['unverified']).push(s);
-
   let h = `<div class="toolbar">
     <div class="counter">${all.length} total</div>
+    <select class="sort-select" onchange="currentSort=this.value;render()">
+      <option value="default" ${currentSort==='default'?'selected':''}>Default</option>
+      <option value="confidence-asc" ${currentSort==='confidence-asc'?'selected':''}>Confidence (low first)</option>
+      <option value="confidence-desc" ${currentSort==='confidence-desc'?'selected':''}>Confidence (high first)</option>
+    </select>
     <div class="spacer"></div>
+    <button class="batch-btn" onclick="batchApproveHighConfidence()">Approve all high-confidence</button>
     <span style="font-size:12px;color:#555">auto-saves</span>
   </div>`;
+
+  const grouped = {};
+  for (const g of GROUPS) grouped[g.key] = [];
+  for (const s of all) {
+    if (s.status === 'unverified' && s.confidence !== null && s.confidence >= 70 && s.invariantResult === 'pass') {
+      grouped['ai-confident'].push(s);
+    } else {
+      (grouped[s.status] || grouped['unverified']).push(s);
+    }
+  }
+
+  const sortFn = currentSort === 'confidence-asc'
+    ? (a, b) => (a.confidence ?? 999) - (b.confidence ?? 999)
+    : currentSort === 'confidence-desc'
+    ? (a, b) => (b.confidence ?? -1) - (a.confidence ?? -1)
+    : null;
+  if (sortFn) for (const key in grouped) grouped[key].sort(sortFn);
 
   for (const g of GROUPS) {
     const items = grouped[g.key];

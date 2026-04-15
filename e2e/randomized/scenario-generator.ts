@@ -57,6 +57,13 @@ export interface PersistedStep {
   action: ScenarioAction;
   expected: Grid;
   actual?: Grid;
+  aiProposed?: Grid;
+}
+
+export interface HumanFeedback {
+  verdict: "agree" | "disagree" | null;
+  comment: string | null;
+  timestamp: string | null;
 }
 
 export interface PersistedScenario extends Omit<GeneratedScenario, "actions"> {
@@ -67,6 +74,13 @@ export interface PersistedScenario extends Omit<GeneratedScenario, "actions"> {
   failedAtStep?: number;
   failureReason?: string;
   runDate: string;
+  // AI evaluation fields
+  confidence: number | null;
+  aiReasoning: string | null;
+  suspiciousSteps: number[];
+  invariantResult: "pass" | "fail" | null;
+  invariantErrors: string[];
+  humanFeedback: HumanFeedback | null;
 }
 
 // ─── Layout Notation ───────────────────────────────────────────────
@@ -135,14 +149,8 @@ function pickAction(
     return [a, b] as const;
   };
 
-  const roll = rand();
-  let type: string;
-  if (roll < 0.40) type = "swap";
-  else if (roll < 0.65) type = "autoResize";
-  else if (roll < 0.78) type = "dragToColumn";
-  else if (roll < 0.86) type = "dragToEmptyCell";
-  else if (roll < 0.93) type = "dragToEmpty";
-  else type = "dragToColumnAt";
+  const types = ["swap", "autoResize", "dragToColumn", "dragToColumnAt", "dragToEmpty", "dragToEmptyCell"] as const;
+  const type = types[Math.floor(rand() * types.length)];
 
   switch (type) {
     case "swap": {
@@ -157,18 +165,17 @@ function pickAction(
     case "dragToColumn": {
       return { do: "dragToColumn", source: pick(), col: Math.floor(rand() * maxColumns) };
     }
-    case "dragToEmptyCell": {
-      return { do: "dragToEmptyCell", source: pick(), col: Math.floor(rand() * maxColumns) };
-    }
-    case "dragToEmpty": {
-      return { do: "dragToEmpty", source: pick(), direction: rand() < 0.5 ? "left" : "right" };
-    }
     case "dragToColumnAt": {
       const [s, ref] = pickTwo();
       return { do: "dragToColumnAt", source: s, col: Math.floor(rand() * maxColumns), ref };
     }
+    case "dragToEmpty": {
+      return { do: "dragToEmpty", source: pick(), direction: rand() < 0.5 ? "left" : "right" };
+    }
+    case "dragToEmptyCell": {
+      return { do: "dragToEmptyCell", source: pick(), col: Math.floor(rand() * maxColumns) };
+    }
   }
-  return null;
 }
 
 // ─── Scenario Generation ───────────────────────────────────────────
@@ -193,23 +200,18 @@ function generateWidgets(
 
 export function generateScenario(seed: number): GeneratedScenario {
   const rand = xorshift32(seed);
-  const maxColumns = rand() < 0.5 ? 2 : 3;
+  const maxColumns = rand() < 0.30 ? 2 : 3;
   const widgetCount = Math.floor(rand() * 5) + 2; // 2–6
-  const actionCount = Math.floor(rand() * 3) + 3; // 3–5
 
   const widgets = generateWidgets(rand, maxColumns, widgetCount);
   const layout = widgetsToNotation(widgets, maxColumns);
-  const actions: ScenarioAction[] = [];
 
-  for (let i = 0; i < actionCount; i++) {
-    const action = pickAction(rand, widgets, maxColumns);
-    if (action) actions.push(action);
+  // Single action per scenario for easier AI evaluation
+  let action = pickAction(rand, widgets, maxColumns);
+  if (!action && widgets.length >= 2) {
+    action = { do: "swap", source: widgets[0].id, target: widgets[1].id };
   }
-
-  // Fallback: ensure at least one action
-  if (actions.length === 0 && widgets.length >= 2) {
-    actions.push({ do: "swap", source: widgets[0].id, target: widgets[1].id });
-  }
+  const actions = action ? [action] : [];
 
   return {
     seed,
@@ -274,5 +276,11 @@ export function saveRecordedScenario(
     widgetHeights,
     status: "unverified" as const,
     runDate: new Date().toISOString(),
+    confidence: null,
+    aiReasoning: null,
+    suspiciousSteps: [],
+    invariantResult: null,
+    invariantErrors: [],
+    humanFeedback: null,
   };
 }

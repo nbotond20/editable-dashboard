@@ -44,3 +44,4 @@ writeFileSync(HASHES_PATH, JSON.stringify(Object.keys(suite.scenarios), null, 2)
 rmSync(TMP_DIR, { recursive: true });
 
 console.log(`Merged ${added} new scenarios (${Object.keys(suite.scenarios).length} total).`);
+console.log(`Run "npm run test:e2e:evaluate" to run AI evaluation.`);

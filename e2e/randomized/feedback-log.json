@@ -1,0 +1,19 @@
+[
+  {
+    "hash": "44f7864112acbdc8",
+    "aiConfidence": 20,
+    "aiReasoning": "A: fail. Expected widget set {a, b, c}. Found {a, b, c}. Widget 'a' was supposed to be removed and replaced by 'c'. Widget 'c' was supposed to be removed and replaced by 'a'. This is a widget preservation violation. B: fail. Widget 'a' colSpan changed from 3 to 2. Widget 'c' colSpan changed from 1 to 2. C: pass. D: pass. E: pass. F: pass. G: fail. The operation was dragToColumn(a, col=2). Widget 'a' should have moved to column 2. Instead, the grid appears unchanged, which is not a no-op scenario as the operation is possible.",
+    "humanVerdict": "disagree",
+    "humanComment": "When dragging a full width item to any of the columns in the same row results in the item not being moved",
+    "scenarioSummary": {
+      "layout": [
+        "A A A",
+        "B B B",
+        "C x x"
+      ],
+      "maxColumns": 3,
+      "actionDo": "dragToColumn"
+    },
+    "timestamp": "2026-04-15T07:53:21.546Z"
+  }
+]

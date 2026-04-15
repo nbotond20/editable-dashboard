@@ -33,6 +33,30 @@ const server = createServer((req, res) => {
     return;
   }
 
+  // POST /api/feedback — append to feedback-log.json
+  if (req.method === "POST" && req.url === "/api/feedback") {
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      try {
+        const entry = JSON.parse(body);
+        const FEEDBACK_PATH = join(DIR, "feedback-log.json");
+        let log = [];
+        if (existsSync(FEEDBACK_PATH)) {
+          try { log = JSON.parse(readFileSync(FEEDBACK_PATH, "utf-8")); } catch { log = []; }
+        }
+        log.push(entry);
+        writeFileSync(FEEDBACK_PATH, JSON.stringify(log, null, 2));
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end('{"ok":true}');
+      } catch (e) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(`{"error":"${e.message}"}`);
+      }
+    });
+    return;
+  }
+
   // GET — static files
   let filePath = join(DIR, req.url === "/" ? "/review.html" : req.url);
   if (!existsSync(filePath)) {
