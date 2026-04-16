@@ -34,7 +34,10 @@
       "Bash(ls -la e2e/randomized/*.ts e2e/randomized/*.md e2e/randomized/*.json e2e/randomized/*.mjs e2e/randomized/*.html)",
       "Bash(node:*)",
       "WebSearch",
-      "Bash(ollama --version)"
+      "Bash(ollama --version)",
+      "Bash(git check-ignore:*)",
+      "Bash(git worktree:*)",
+      "Bash(npm install:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

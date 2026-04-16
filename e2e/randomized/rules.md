@@ -2,6 +2,22 @@
 
 Concrete rules for evaluating drag-and-drop test results. Each rule includes a worked example.
 
+## Core Principles
+
+The engine prioritizes PREDICTABLE response to user actions over best-effort "figure out what they probably meant". Use these principles to disambiguate edge cases.
+
+1. **Predictability over magic** — engine never silently moves widgets to "make it work". If the user's action cannot be cleanly applied, the engine returns the grid unchanged (no-op).
+
+2. **Drop type semantics** — drag duration determines intent class:
+   - **Quick drop (~350ms)**: swap, place, reorder. NEVER triggers resize.
+   - **Hold (~600ms+)**: triggers dwell-based intents (autoResize, empty-row maximize).
+
+3. **No-op when impossible** — if source cannot fit at the requested location without violating invariants, the result is the unchanged grid. This is correct behavior, not a failure.
+
+4. **Empty space stays empty** — gaps do not "pull in" widgets via gravity. They are filled only by explicit operations and by bin-pack compaction after a widget is removed from a row.
+
+5. **Identity preservation** — widgets keep their colSpan unless the operation class is resize (autoResize, empty-row-maximize). All other operations preserve colSpan exactly.
+
 ## Grid Format
 
 - 2D array: rows × columns
@@ -48,6 +64,9 @@ c .              a .
 ```
 Widget `a` (span 2) and `c` (span 1) swap. `a` moves to where `c` was. `c` takes `a`'s row. ColSpans are preserved.
 
+**No-op cases**:
+- `source === target` (same widget) — engine returns grid unchanged.
+
 ### autoResize
 `{ do: "autoResize", source, target, side }`
 
@@ -85,6 +104,19 @@ a b c                a c b
 ```
 Widget `b` moves to col 2. `c` shifts left to fill the gap.
 
+**No-op cases** (engine returns unchanged grid):
+- Source already starts at column `col` in its current row.
+- Source's colSpan would extend past `maxColumns` if placed at `col` (e.g., colSpan-3 widget cannot start at col 1 in a 3-col grid).
+- Source occupies the entire width of its row and there is no other position it can legally take at `col`.
+
+Example no-op (3-col):
+```
+Before:              Action: dragToColumn(a, col=2)
+a a a                Result: unchanged
+b b b                (`a` has colSpan 3 — cannot start at col 2 because 2+3 > 3)
+c . .
+```
+
 ### dragToColumnAt
 `{ do: "dragToColumnAt", source, col, ref }`
 
@@ -98,6 +130,11 @@ b c                  c d
 d e                  a e    (a moved to row of d, col 1; d stays at col 0 of its row)
 ```
 
+**No-op cases**:
+- Source already at column `col` in `ref`'s row.
+- Source's colSpan would not fit at `col` in `ref`'s row given the other widgets occupying that row.
+- `ref` is the source widget itself.
+
 ### dragToEmpty
 `{ do: "dragToEmpty", source, direction }`
 
@@ -109,7 +146,9 @@ Before:              After dragToEmpty(a, right):
 a . .                . . a   (moves right as far as it can)
 ```
 
-If no adjacent empty space exists, the operation is a no-op (grid unchanged).
+**No-op cases**:
+- No empty cell exists adjacent to source in the specified `direction`.
+- Source already touches the wall in that direction.
 
 ### dragToEmptyCell
 `{ do: "dragToEmptyCell", source, col }`
@@ -122,6 +161,9 @@ Before:              After dragToEmptyCell(b, col=0):
 a b                  a .
                      b .
 ```
+
+**No-op cases**:
+- Source's colSpan would not fit starting at `col` (e.g., colSpan-2 widget cannot start at col 2 in a 3-col grid).
 
 ## No-op Rule
 

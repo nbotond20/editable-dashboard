@@ -36,6 +36,9 @@ export default defineConfig({
     outDir: 'dist/app',
   },
   test: {
-    include: ['src/**/__tests__/**/*.test.ts'],
+    include: [
+      'src/**/__tests__/**/*.test.ts',
+      'e2e/randomized/__tests__/**/*.test.ts',
+    ],
   },
 })

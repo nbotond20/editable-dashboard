@@ -99,8 +99,7 @@ export async function evaluateScenarios(options?: {
       try {
         const prompt = buildPrompt(scenario, approved);
         const result = await provider.evaluate(prompt);
-        // Drop proposed layouts identical to the engine's result —
-        // these contradict the AI's own "wrong" verdict
+
         const realProposals: Record<number, (string | null)[][]> = {};
         for (const [stepIdx, proposed] of Object.entries(result.proposedLayouts)) {
           const idx = Number(stepIdx);
@@ -110,31 +109,14 @@ export async function evaluateScenarios(options?: {
           realProposals[idx] = proposed;
         }
 
-        // If AI flagged suspicious but provided no actual corrections (all were identical),
-        // the engine was likely correct — flip to high confidence
-        let confidence = result.confidence;
-        let suspicious = result.suspiciousSteps;
-        if (
-          confidence < 70 &&
-          suspicious.length > 0 &&
-          Object.keys(result.proposedLayouts).length > 0 &&
-          Object.keys(realProposals).length === 0
-        ) {
-          confidence = 85;
-          suspicious = [];
-        }
-
-        scenario.confidence = confidence;
+        scenario.confidence = result.confidence;
         scenario.aiReasoning = result.reasoning;
-        // Enforce self-consistency: high confidence means no suspicions
-        suspicious = confidence >= 70 ? [] : suspicious;
-        scenario.suspiciousSteps = suspicious;
-        const suspiciousSet = new Set(suspicious);
+        scenario.suspiciousSteps = result.suspiciousSteps;
+        scenario.perStep = result.perStep;
+
         for (const [stepIdx, proposed] of Object.entries(realProposals)) {
           const idx = Number(stepIdx);
-          if (suspiciousSet.has(idx)) {
-            scenario.steps[idx].aiProposed = proposed;
-          }
+          scenario.steps[idx].aiProposed = proposed;
         }
         llmEvaluated++;
         console.log(`  [${i + 1}/${llmCandidates.length}] ${scenario.name}: confidence=${result.confidence}`);
@@ -144,6 +126,7 @@ export async function evaluateScenarios(options?: {
         scenario.confidence = null;
         scenario.aiReasoning = `LLM evaluation failed: ${err}`;
         scenario.suspiciousSteps = [];
+        scenario.perStep = undefined;
       }
       // Rate limit between calls
       if (i < llmCandidates.length - 1) await new Promise(r => setTimeout(r, 3000));

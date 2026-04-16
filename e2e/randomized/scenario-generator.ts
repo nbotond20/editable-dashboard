@@ -7,6 +7,7 @@
  */
 
 import { createHash } from "node:crypto";
+import type { PerStepResult } from "./llm-provider";
 
 // ─── PRNG (xorshift32) ────────────────────────────────────────────
 
@@ -78,6 +79,7 @@ export interface PersistedScenario extends Omit<GeneratedScenario, "actions"> {
   confidence: number | null;
   aiReasoning: string | null;
   suspiciousSteps: number[];
+  perStep?: PerStepResult[];
   invariantResult: "pass" | "fail" | null;
   invariantErrors: string[];
   humanFeedback: HumanFeedback | null;

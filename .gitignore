@@ -32,3 +32,4 @@ playwright-report
 coverage
 test-results
 .playwright-mcp
+.worktrees/

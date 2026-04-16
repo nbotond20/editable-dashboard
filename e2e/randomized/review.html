@@ -352,10 +352,10 @@ function actionBanner(action) {
       detail = `Drag ${w(action.source)} ${arrow} column <strong>${action.col}</strong>`;
       break;
     case 'dragToColumnAt':
-      detail = `Drag ${w(action.source)} ${arrow} column <strong>${action.col}</strong> at ${w(action.ref)}'s row`;
+      detail = `Drag ${w(action.source)} ${arrow} column <strong>${action.col}</strong> at ${w(action.ref)}'s row <em>(quick drop)</em>`;
       break;
     case 'dragToEmptyCell':
-      detail = `Drag ${w(action.source)} ${arrow} empty area, column <strong>${action.col}</strong>`;
+      detail = `Drag ${w(action.source)} ${arrow} new bottom row, column <strong>${action.col}</strong>`;
       break;
     case 'dragToEmpty':
       detail = `Drag ${w(action.source)} ${arrow} <strong>${action.direction}</strong> into empty space`;

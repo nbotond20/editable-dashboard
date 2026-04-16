@@ -696,12 +696,17 @@
             ],
             [
               "c",
+              "d",
+              "d"
+            ],
+            [
               "e",
-              "e"
+              "e",
+              "f"
             ],
             [
               "d",
-              "f",
+              null,
               null
             ]
           ]
@@ -732,16 +737,76 @@
         "e": 431.96875,
         "f": 281.75
       },
-      "status": "unverified",
+      "status": "pass",
       "runDate": "2026-04-15T05:17:17.101Z",
       "confidence": 0,
-      "aiReasoning": "A: fail. Initial grid widget set is {'a', 'b', 'c', 'd', 'e', 'f'}. Result grid widget set is {'a', 'b', 'c', 'e', 'f', 'd'}. Widget 'd' appears in the initial grid with colSpan 1 at row 1, col 1. In the result, widget 'd' appears with colSpan 2 at row 1, col 0 and row 2, col 0. This is a violation of widget preservation as widget 'd' has changed its properties and effectively been duplicated or altered in a way that doesn't preserve the original instance.",
+      "aiReasoning": "Step 0: dragToEmptyCell(d, col=0): move widget d to a new row at column 0. | invariants: fail: vertical compaction, e | diffs: row 1 col 1: predicted d, engine e; row 1 col 2: predicted d, engine e; row 2 col 0: predicted e, engine f; row 2 col 1: predicted e, engine null; row 2 col 2: predicted f, engine d; row 3 col 0: predicted d, engine d; row 3 col 1: predicted null, engine d; row 3 col 2: predicted null, engine null",
       "suspiciousSteps": [
         0
       ],
       "invariantResult": "pass",
       "invariantErrors": [],
-      "humanFeedback": null
+      "humanFeedback": {
+        "verdict": "disagree",
+        "comment": "Dragging an item to a new empty row at any given column should put that item onto that row starting from the column specified except if it doesn't fit",
+        "timestamp": "2026-04-15T12:43:00.499Z"
+      },
+      "perStep": [
+        {
+          "intent": "dragToEmptyCell(d, col=0): move widget d to a new row at column 0.",
+          "prediction": [
+            [
+              "a",
+              "a",
+              "b"
+            ],
+            [
+              "c",
+              "d",
+              "d"
+            ],
+            [
+              "e",
+              "e",
+              "f"
+            ]
+          ],
+          "differences": [
+            "row 1 col 1: predicted d, engine e",
+            "row 1 col 2: predicted d, engine e",
+            "row 2 col 0: predicted e, engine f",
+            "row 2 col 1: predicted e, engine null",
+            "row 2 col 2: predicted f, engine d",
+            "row 3 col 0: predicted d, engine d",
+            "row 3 col 1: predicted null, engine d",
+            "row 3 col 2: predicted null, engine null"
+          ],
+          "invariants": "fail: vertical compaction, e",
+          "confidence": 0,
+          "proposal": [
+            [
+              "a",
+              "a",
+              "b"
+            ],
+            [
+              "c",
+              "d",
+              "d"
+            ],
+            [
+              "e",
+              "e",
+              "f"
+            ],
+            [
+              "d",
+              null,
+              null
+            ]
+          ]
+        }
+      ]
     },
     "22ab8a15c3d5e631": {
       "seed": 217,
@@ -842,28 +907,6 @@
               "e",
               "e"
             ]
-          ],
-          "aiProposed": [
-            [
-              "a",
-              "a",
-              "b"
-            ],
-            [
-              "c",
-              "c",
-              "c"
-            ],
-            [
-              "d",
-              "d",
-              null
-            ],
-            [
-              "e",
-              "e",
-              "e"
-            ]
           ]
         }
       ],
@@ -896,16 +939,49 @@
         "d": 333.1875,
         "e": 431.96875
       },
-      "status": "unverified",
+      "status": "bug",
       "runDate": "2026-04-15T05:17:26.114Z",
-      "confidence": 10,
-      "aiReasoning": "A: fail. Original widget IDs: {a, b, c, d, e}. Result widget IDs: {a, b, c, d, e}. Widget preservation check fails as the widget `b` is missing in the result.\nB: fail. ColSpan preservation check fails. Widget `b` (colSpan 3) is present in the initial state but missing in the result.\nC: pass. All widgets are within the bounds of the 3 columns.\nD: pass. Widget cells are contiguous within their rows.\nE: pass. No fully-empty rows between occupied rows.\nG: fail. Operation semantics check fails. The action is `autoResize(b, c, left)`. The `source` widget `b` is expected to be on the left side of the `target` widget `c`. In the `Result`, widget `b` is missing, and widget `c` is in the first row, which is not the expected outcome of an `autoResize` operation where source and target end up on the same row.\nH: fail. The result does not resemble any of the verified examples and violates fundamental invariants.",
-      "suspiciousSteps": [
-        0
-      ],
+      "confidence": 100,
+      "aiReasoning": "Step 0: autoResize(b, target=c, side=left): resize widget b to fit on the same row as c, to the left of c. Attempt to preserve colSpans if possible, else shrink proportionally. | invariants: all pass",
+      "suspiciousSteps": [],
       "invariantResult": "pass",
       "invariantErrors": [],
-      "humanFeedback": null
+      "humanFeedback": {
+        "verdict": "disagree",
+        "comment": "When dragging and holding an item next to a full width item it should make space for it and add it to that row on the side it was dragged to from the middle of the stationary item",
+        "timestamp": "2026-04-15T12:41:11.283Z"
+      },
+      "perStep": [
+        {
+          "intent": "autoResize(b, target=c, side=left): resize widget b to fit on the same row as c, to the left of c. Attempt to preserve colSpans if possible, else shrink proportionally.",
+          "prediction": [
+            [
+              "a",
+              "a",
+              "b"
+            ],
+            [
+              "c",
+              "c",
+              null
+            ],
+            [
+              "d",
+              "d",
+              null
+            ],
+            [
+              "e",
+              "e",
+              null
+            ]
+          ],
+          "differences": [],
+          "invariants": "all pass",
+          "confidence": 100,
+          "proposal": null
+        }
+      ]
     },
     "26b20bfd67c2eae7": {
       "seed": 220,
@@ -1383,23 +1459,6 @@
               null,
               null
             ]
-          ],
-          "aiProposed": [
-            [
-              "b",
-              "b",
-              "b"
-            ],
-            [
-              "c",
-              "c",
-              "c"
-            ],
-            [
-              "a",
-              "a",
-              "a"
-            ]
           ]
         }
       ],
@@ -1427,18 +1486,42 @@
       },
       "status": "pass",
       "runDate": "2026-04-15T05:17:32.286Z",
-      "confidence": 20,
-      "aiReasoning": "A: fail. Expected widget set {a, b, c}. Found {a, b, c}. Widget 'a' was supposed to be removed and replaced by 'c'. Widget 'c' was supposed to be removed and replaced by 'a'. This is a widget preservation violation. B: fail. Widget 'a' colSpan changed from 3 to 2. Widget 'c' colSpan changed from 1 to 2. C: pass. D: pass. E: pass. F: pass. G: fail. The operation was dragToColumn(a, col=2). Widget 'a' should have moved to column 2. Instead, the grid appears unchanged, which is not a no-op scenario as the operation is possible.",
-      "suspiciousSteps": [
-        0
-      ],
+      "confidence": 100,
+      "aiReasoning": "Step 0: dragToColumn(a, col=2): move widget 'a' (colSpan 3) to start at column 2, re-packing. | invariants: all pass",
+      "suspiciousSteps": [],
       "invariantResult": "pass",
       "invariantErrors": [],
       "humanFeedback": {
         "verdict": "disagree",
         "comment": "When dragging a full width item to any of the columns in the same row results in the item not being moved",
         "timestamp": "2026-04-15T07:52:27.875Z"
-      }
+      },
+      "perStep": [
+        {
+          "intent": "dragToColumn(a, col=2): move widget 'a' (colSpan 3) to start at column 2, re-packing.",
+          "prediction": [
+            [
+              "a",
+              "a",
+              "a"
+            ],
+            [
+              "b",
+              "b",
+              "b"
+            ],
+            [
+              "c",
+              null,
+              null
+            ]
+          ],
+          "differences": [],
+          "invariants": "all pass",
+          "confidence": 100,
+          "proposal": null
+        }
+      ]
     },
     "54e445b671e9681d": {
       "seed": 232,
@@ -1495,18 +1578,6 @@
               "b",
               null
             ]
-          ],
-          "aiProposed": [
-            [
-              "a",
-              "a",
-              "a"
-            ],
-            [
-              null,
-              null,
-              null
-            ]
           ]
         }
       ],
@@ -1526,16 +1597,39 @@
         "a": 281.75,
         "b": 315.1875
       },
-      "status": "unverified",
+      "status": "pass",
       "runDate": "2026-04-15T05:17:38.723Z",
-      "confidence": 0,
-      "aiReasoning": "A: fail. Initial grid widget set: {'a', 'b'}. Result grid widget set: {'a', 'b'}. However, in the initial grid, 'a' occupies 3 columns and 'b' occupies 2 columns. In the result grid, 'a' occupies 3 columns and 'b' occupies 2 columns. The widget IDs are preserved, but their presence implies their original colSpans. The result has 'a' occupying 3 cells and 'b' occupying 2 cells. B: fail. Initial colSpans: 'a': 3, 'b': 2. Result colSpans: 'a': 3, 'b': 2. The action is dragToColumn, which implies a potential shift. The specific rule states that \"ColSpans are preserved\". In the initial grid, 'a' has a colSpan of 3 and 'b' has a colSpan of 2. In the result, 'a' has a colSpan of 3 and 'b' has a colSpan of 2. This check would pass if colSpans were preserved. However, the issue lies in the operation semantics (G). The operation implies `b` moves to `col:1`. In the result, `b` starts at `col:1`. The colSpan of `b` is 2, so it occupies columns 1 and 2. The remaining cell in the row is at column 0. The operation states `a` should be preserved in its original state, which is 3 columns wide. If `b` moves to `col:1` with a span of 2, and `a` needs 3 columns, this layout is impossible within 3 columns. The layout engine attempts to make it work by shifting `a`. This indicates an issue with the operation's application or the result's validity. C: fail. maxColumns is 3. In the result, widget 'a' occupies columns 0, 1, 2. Widget 'b' occupies columns 1, 2. Widget 'b' overlaps with 'a'. The colSpan of 'b' is 2, starting at col 1, thus it should occupy columns 1 and 2. This means column 1 is occupied by both 'a' and 'b', and column 2 is occupied by both 'a' and 'b'. This violates the bounds and no partial overlaps rule. D: pass. 'a' cells (0,1,2) are contiguous. 'b' cells (1,2) are contiguous. E: pass. No fully-empty rows between occupied rows. F: fail. Cell at index 1 contains 'a' and 'b'. Cell at index 2 contains 'a' and 'b'. This is a clear violation of the \"No partial overlaps\" global invariant. G: fail. The action is `dragToColumn(source='b', col=1)`. The source widget 'b' should start at column 1. Its original colSpan is 2. This means it should occupy columns 1 and 2. The initial grid has 'a' occupying columns 0, 1, 2. If 'b' (span 2) moves to start at col 1, it would occupy columns 1 and 2. This would mean columns 1 and 2 are occupied by both 'a' and 'b'. The rule states \"Other widgets shift only as needed to make the new arrangement valid (bin-pack)\" for swap, and for `dragToColumn`, it states \"If the target column is already occupied at the destination row, other widgets shift.\" Here, widget 'a' should have shifted. However, `a` is 3 columns wide and must occupy columns 0, 1, 2. There is no space for `b` to occupy columns 1 and 2 without overlapping `a`. The resulting layout `a a a` on the first row and `. b .` on the second row is for `dragToColumn(source='b', col=1)` in a 3-column grid where `a` is 3 columns wide and `b` is 2 columns wide. In the provided `Result` grid, 'a' is 3 columns wide and 'b' is 2 columns wide. The layout `a a a` followed by `. b .` implies `b` has a colSpan of 1 and `a` is on the first row. This contradicts the initial state and the `dragToColumn` operation's intent to move `b` (span 2) to `col:1`. The `Result` provided in the prompt seems to be from a different scenario or interpretation. If `b` (span 2) is moved to `col:1`, it should occupy `col:1` and `col:2`. Since `a` is already 3 columns wide (0,1,2), `b` cannot fit. The expected result given `a a a` and `b . .` and `dragToColumn(b, col=1)` would be an impossible state or a no-op if `b` cannot fit without overlap. The provided result `a a a` and `. b .` implies `b` has a span of 1 and moved to column 1. This is inconsistent with `b`'s original span of 2, and also inconsistent with `a`'s span of 3. The actual layout shown in the result (`. b .`) implies `b` has a colSpan of 1, which contradicts its initial colSpan of 2. H: no. The provided verified examples and approved random scenarios do not directly match this specific outcome or problematic transformation. The operation's description for `dragToColumn` says \"If the target column is already occupied at the destination row, other widgets shift.\" Here, 'a' should shift, but it's already at its maximum span. The result `. b .` implies `b` has a span of 1, which is not preserved. The overall situation points to multiple invariant violations and semantic misunderstandings.",
-      "suspiciousSteps": [
-        0
-      ],
+      "confidence": 100,
+      "aiReasoning": "Step 0: dragToColumn(b, col=1): place widget b at column 1 in its current row, preserving colSpan 1. | invariants: all pass",
+      "suspiciousSteps": [],
       "invariantResult": "pass",
       "invariantErrors": [],
-      "humanFeedback": null
+      "humanFeedback": {
+        "verdict": "disagree",
+        "comment": "When dragging an item in it's own row to any columns should put the item there expect if it doesn't fit starting from that column",
+        "timestamp": "2026-04-15T12:44:29.817Z"
+      },
+      "perStep": [
+        {
+          "intent": "dragToColumn(b, col=1): place widget b at column 1 in its current row, preserving colSpan 1.",
+          "prediction": [
+            [
+              "a",
+              "a",
+              "a"
+            ],
+            [
+              null,
+              "b",
+              null
+            ]
+          ],
+          "differences": [],
+          "invariants": "all pass",
+          "confidence": 100,
+          "proposal": null
+        }
+      ]
     },
     "58a2d6e05077f069": {
       "seed": 248,
@@ -1939,7 +2033,11 @@
       ],
       "invariantResult": "pass",
       "invariantErrors": [],
-      "humanFeedback": null
+      "humanFeedback": {
+        "verdict": "disagree",
+        "comment": null,
+        "timestamp": "2026-04-15T12:48:45.883Z"
+      }
     },
     "5eade0f381162b7b": {
       "seed": 210,
