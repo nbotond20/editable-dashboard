@@ -1,9 +1,10 @@
 import { createServer } from "node:http";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
-import { join, dirname, extname } from "node:path";
+import { join, dirname, extname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const DIR = dirname(fileURLToPath(import.meta.url));
+const STATIC_ROOT = resolve(DIR);
 const SUITE_PATH = join(DIR, "suite", "scenarios.json");
 const PORT = Number(process.env.PORT) || 3334;
 
@@ -58,7 +59,14 @@ const server = createServer((req, res) => {
   }
 
   // GET — static files
-  let filePath = join(DIR, req.url === "/" ? "/review.html" : req.url);
+  const pathname = new URL(req.url || "/", "http://localhost").pathname;
+  const relativePath = pathname === "/" ? "review.html" : pathname.replace(/^\/+/, "");
+  const filePath = resolve(STATIC_ROOT, relativePath);
+  if (!(filePath === STATIC_ROOT || filePath.startsWith(STATIC_ROOT + sep))) {
+    res.writeHead(403);
+    res.end("Forbidden");
+    return;
+  }
   if (!existsSync(filePath)) {
     res.writeHead(404);
     res.end("Not found");
