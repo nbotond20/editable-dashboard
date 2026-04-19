@@ -181,6 +181,7 @@ export interface LayoutOptions {
     rowStart?: number;
   };
   excludeIds?: ReadonlySet<string>;
+  stableColumns?: boolean;
 }
 
 export { getVisibleSorted, distance, zonesEqual } from "./utils.ts";

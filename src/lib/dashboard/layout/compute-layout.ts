@@ -64,6 +64,8 @@ export function computeLayout(
   }
 
   let currentRowStart: number | undefined;
+  const stableColumns = options?.stableColumns ?? false;
+  let cursor = 0;
 
   for (const widget of visible) {
     if (widget.rowStart != null && widget.rowStart !== currentRowStart) {
@@ -75,6 +77,7 @@ export function computeLayout(
         }
       }
       currentRowStart = widget.rowStart;
+      if (stableColumns) cursor = 0;
     }
 
     const span = Math.max(1, Math.min(widget.colSpan, maxColumns));
@@ -87,14 +90,26 @@ export function computeLayout(
     let bestStartCol = 0;
     let bestY = Infinity;
 
-    for (let startCol = 0; startCol <= maxColumns - span; startCol++) {
-      let maxY = 0;
-      for (let c = startCol; c < startCol + span; c++) {
-        maxY = Math.max(maxY, columnHeights[c]);
+    if (stableColumns) {
+      if (cursor + span > maxColumns) {
+        cursor = 0;
       }
-      if (maxY < bestY) {
-        bestY = maxY;
-        bestStartCol = startCol;
+      bestStartCol = cursor;
+      bestY = 0;
+      for (let c = bestStartCol; c < bestStartCol + span; c++) {
+        bestY = Math.max(bestY, columnHeights[c]);
+      }
+      cursor += span;
+    } else {
+      for (let startCol = 0; startCol <= maxColumns - span; startCol++) {
+        let maxY = 0;
+        for (let c = startCol; c < startCol + span; c++) {
+          maxY = Math.max(maxY, columnHeights[c]);
+        }
+        if (maxY < bestY) {
+          bestY = maxY;
+          bestStartCol = startCol;
+        }
       }
     }
 
@@ -109,6 +124,7 @@ export function computeLayout(
       }
       bestStartCol = preferred;
       bestY = preferredY;
+      if (stableColumns) cursor = preferred + span;
     }
 
     const x = bestStartCol * (colWidth + gap);

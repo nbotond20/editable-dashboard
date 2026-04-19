@@ -314,7 +314,8 @@ export function solveBaseLayout(
     heights as Map<string, number>,
     containerWidth,
     config.maxColumns,
-    config.gap
+    config.gap,
+    { stableColumns: true }
   );
 }
 
