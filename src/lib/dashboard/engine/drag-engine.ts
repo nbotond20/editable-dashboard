@@ -1351,22 +1351,27 @@ export class DragEngine {
     const visible = this.visibleSortedCache;
     const layout = this.dragLayout ?? this.baseLayout;
 
-    const pointerPos = this.phase.pointerPos;
+    const rawPointerPos = this.phase.pointerPos;
+    const sourceLayout = this.baseLayout.positions.get(this.phase.sourceId);
+    const zonePointerPos = sourceLayout ? {
+      x: rawPointerPos.x - this.phase.grabOffset.x + sourceLayout.width / 2,
+      y: rawPointerPos.y,
+    } : rawPointerPos;
     const pointerMoved =
       !this.lastProcessedPointerPos ||
-      pointerPos.x !== this.lastProcessedPointerPos.x ||
-      pointerPos.y !== this.lastProcessedPointerPos.y;
+      rawPointerPos.x !== this.lastProcessedPointerPos.x ||
+      rawPointerPos.y !== this.lastProcessedPointerPos.y;
 
     if (pointerMoved || this.pendingZone !== null) {
       if (pointerMoved) {
-        this.lastProcessedPointerPos = { x: pointerPos.x, y: pointerPos.y };
+        this.lastProcessedPointerPos = { x: rawPointerPos.x, y: rawPointerPos.y };
       }
 
       const currentWidgetSide =
         this.currentZone?.type === "widget" ? this.currentZone.side : undefined;
 
       let computedZone = resolveZone(
-        pointerPos,
+        zonePointerPos,
         layout,
         state.widgets,
         state.gap,
@@ -1380,10 +1385,10 @@ export class DragEngine {
         const phantomPos = layout.positions.get(`__phantom_${this.phase.sourceId}`);
         if (
           phantomPos &&
-          pointerPos.x >= phantomPos.x &&
-          pointerPos.x < phantomPos.x + phantomPos.width &&
-          pointerPos.y >= phantomPos.y - state.gap &&
-          pointerPos.y < phantomPos.y + phantomPos.height
+          zonePointerPos.x >= phantomPos.x &&
+          zonePointerPos.x < phantomPos.x + phantomPos.width &&
+          zonePointerPos.y >= phantomPos.y - state.gap &&
+          zonePointerPos.y < phantomPos.y + phantomPos.height
         ) {
           const colWidth =
             state.maxColumns > 1
@@ -1438,13 +1443,13 @@ export class DragEngine {
       }
 
       if (this.lastZonePointerPos) {
-        const drift = distance(pointerPos, this.lastZonePointerPos);
+        const drift = distance(rawPointerPos, this.lastZonePointerPos);
         if (drift > 20) {
           this.zoneEnteredAt = timestamp;
-          this.lastZonePointerPos = { x: pointerPos.x, y: pointerPos.y };
+          this.lastZonePointerPos = { x: rawPointerPos.x, y: rawPointerPos.y };
         }
       } else {
-        this.lastZonePointerPos = { x: pointerPos.x, y: pointerPos.y };
+        this.lastZonePointerPos = { x: rawPointerPos.x, y: rawPointerPos.y };
       }
     }
 
@@ -1467,7 +1472,7 @@ export class DragEngine {
         const centerX = targetPos.x + targetPos.width / 2;
         const halfWidth = targetPos.width / 2;
         const sideStrength = halfWidth > 0
-          ? Math.abs(this.phase.pointerPos.x - centerX) / halfWidth
+          ? Math.abs(zonePointerPos.x - centerX) / halfWidth
           : 0;
         const srcPos = this.baseLayout.positions.get(this.phase.sourceId);
         const tgtPos = this.baseLayout.positions.get(targetId);
@@ -1494,8 +1499,6 @@ export class DragEngine {
               this.zoneEnteredAt = timestamp;
             }
             effectiveResizeDwellMs = Math.min(this.config.resizeDwellMs, 400);
-          } else {
-            effectiveResizeDwellMs = this.config.swapDwellMs;
           }
         }
       }
@@ -1512,7 +1515,7 @@ export class DragEngine {
       getWidgetConstraints: this.config.getWidgetConstraints,
       layout,
       baseLayout: this.baseLayout,
-      pointerY: this.phase.type === "dragging" ? this.phase.pointerPos.y : undefined,
+      pointerY: this.phase.type === "dragging" ? zonePointerPos.y : undefined,
     });
 
     // Cross-row auto-resize that shrinks the target when source+target
@@ -1566,10 +1569,10 @@ export class DragEngine {
     }
 
     if (newIntent.type === "column-pin" && this.phase.type === "dragging") {
-      newIntent = { ...newIntent, pointerY: this.phase.pointerPos.y };
+      newIntent = { ...newIntent, pointerY: zonePointerPos.y };
     }
     if (newIntent.type === "empty-row-maximize" && this.phase.type === "dragging") {
-      newIntent = { ...newIntent, pointerY: this.phase.pointerPos.y };
+      newIntent = { ...newIntent, pointerY: zonePointerPos.y };
     }
 
     if (!this.intentsEqual(newIntent, this.currentIntent)) {
