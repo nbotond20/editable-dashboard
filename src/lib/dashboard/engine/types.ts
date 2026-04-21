@@ -100,8 +100,8 @@ export type OperationIntent =
       targetSpan: number;
       targetIndex: number;
     }
-  | { type: "column-pin"; column: number; pointerY?: number }
-  | { type: "empty-row-maximize"; newSpan: number; pointerY?: number };
+  | { type: "column-pin"; column: number; pointerY?: number; _insertionIndex?: number }
+  | { type: "empty-row-maximize"; newSpan: number; pointerY?: number; _insertionIndex?: number };
 
 export type CommittedOperation =
   | { type: "reorder"; fromIndex: number; toIndex: number }

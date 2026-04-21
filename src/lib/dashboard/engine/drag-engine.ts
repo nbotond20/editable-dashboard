@@ -1198,10 +1198,18 @@ export class DragEngine {
     }
 
     if (newIntent.type === "column-pin") {
-      newIntent = { ...newIntent, pointerY: phase.pointerPos.y };
+      const idx = findColumnPinInsertionIndex(
+        visible, newIntent.column, phase.pointerPos.y,
+        state.maxColumns, state.gap, this.heights,
+      );
+      newIntent = { ...newIntent, pointerY: phase.pointerPos.y, _insertionIndex: idx };
     }
     if (newIntent.type === "empty-row-maximize") {
-      newIntent = { ...newIntent, pointerY: phase.pointerPos.y };
+      const idx = findColumnPinInsertionIndex(
+        visible, 0, phase.pointerPos.y,
+        state.maxColumns, state.gap, this.heights,
+      );
+      newIntent = { ...newIntent, pointerY: phase.pointerPos.y, _insertionIndex: idx };
     }
 
     if (!this.intentsEqual(newIntent, this.currentIntent)) {
@@ -1569,10 +1577,21 @@ export class DragEngine {
     }
 
     if (newIntent.type === "column-pin" && this.phase.type === "dragging") {
-      newIntent = { ...newIntent, pointerY: zonePointerPos.y };
+      const remaining = visible.filter(w => w.id !== sourceId);
+      const idx = findColumnPinInsertionIndex(
+        remaining, newIntent.column, zonePointerPos.y,
+        state.maxColumns, state.gap, this.heights,
+        this.baseLayout,
+      );
+      newIntent = { ...newIntent, pointerY: zonePointerPos.y, _insertionIndex: idx };
     }
     if (newIntent.type === "empty-row-maximize" && this.phase.type === "dragging") {
-      newIntent = { ...newIntent, pointerY: zonePointerPos.y };
+      const remaining = visible.filter(w => w.id !== sourceId);
+      const idx = findColumnPinInsertionIndex(
+        remaining, 0, zonePointerPos.y,
+        state.maxColumns, state.gap, this.heights,
+      );
+      newIntent = { ...newIntent, pointerY: zonePointerPos.y, _insertionIndex: idx };
     }
 
     if (!this.intentsEqual(newIntent, this.currentIntent)) {
@@ -1829,9 +1848,9 @@ export class DragEngine {
           a.targetIndex === (b as typeof a).targetIndex
         );
       case "column-pin":
-        return a.column === (b as typeof a).column;
+        return a.column === (b as typeof a).column && a._insertionIndex === (b as typeof a)._insertionIndex;
       case "empty-row-maximize":
-        return a.newSpan === (b as typeof a).newSpan;
+        return a.newSpan === (b as typeof a).newSpan && a._insertionIndex === (b as typeof a)._insertionIndex;
     }
   }
 

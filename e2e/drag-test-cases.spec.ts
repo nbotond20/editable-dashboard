@@ -314,6 +314,27 @@ const twoColGroups: ScenarioGroup[] = [
       },
     ],
   },
+
+  // Regression: column-pin preview must update when pointer moves
+  // vertically within the same column.  Before the fix, the preview
+  // was computed once (at the Y where column-pin first triggered) and
+  // never re-evaluated — so the ghost stayed near the bottom row.
+  {
+    group: "2-col: A x / B B / C D — column-pin vertical update",
+    layout: ["A x", "B B", "C D"],
+    scenarios: [
+      { name: "D -> col 1 at A's row", action: { do: "dragToColumnAt", source: "d", col: 1, ref: "a" }, expected: [["a", "d"], ["b", "b"], ["c"]] },
+      { name: "C -> col 0 at A's row", action: { do: "dragToColumnAt", source: "c", col: 0, ref: "a" }, expected: [["c", null], ["b", "b"], ["a", "d"]] },
+    ],
+  },
+  {
+    group: "2-col: A x / C C / B D — column-pin vertical update (variant)",
+    layout: ["A x", "C C", "B D"],
+    scenarios: [
+      { name: "D -> col 1 at A's row", action: { do: "dragToColumnAt", source: "d", col: 1, ref: "a" }, expected: [["a", "d"], ["c", "c"], ["b"]] },
+      { name: "B -> col 1 at A's row", action: { do: "dragToColumnAt", source: "b", col: 1, ref: "a" }, expected: [["a", "b"], ["c", "c"], [null, "d"]] },
+    ],
+  },
 ];
 
 // ═══════════════════════════════════════════════════════════════════
@@ -665,4 +686,17 @@ test("C ->| A> with trackpad tremor near center in A A / B C / D", async ({ page
 
   await assertLayout(page, [["a", "c"], ["b", "d"]]);
 });
+
+// ═══════════════════════════════════════════════════════════════════
+//  Regression: column-pin preview must update as pointer moves
+//  vertically within a continuous empty zone.
+//
+//  Layout "A x / B x / C D": column 1 is one uninterrupted empty
+//  zone from y=0 down to D's row.  When dragging D upward, the
+//  pointer enters this zone near the bottom (insertIdx=3) and stays
+//  in it all the way to row 0 (insertIdx=1).  Without the fix the
+//  preview never recomputed because intentsEqual only compared the
+//  column number, ignoring the insertion index.
+// ═══════════════════════════════════════════════════════════════════
+
 
