@@ -158,6 +158,17 @@ export function resolveIntent(
           return { type: "empty-row-maximize", newSpan: maxSpan, pointerY: config.pointerY };
         }
       }
+
+      const maxSpanAtCol = Math.max(1, config.maxColumns - zone.column);
+      if (sourceWidget.colSpan > maxSpanAtCol) {
+        if (config.isResizeLocked(sourceWidget.id)) {
+          return { type: "none" };
+        }
+        if (dwellMs < config.resizeDwellMs) {
+          return { type: "none" };
+        }
+      }
+
       return { type: "column-pin", column: zone.column };
     }
 

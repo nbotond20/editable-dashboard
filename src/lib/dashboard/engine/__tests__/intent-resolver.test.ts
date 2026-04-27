@@ -388,6 +388,63 @@ describe("resolveIntent - empty zone", () => {
       resolveIntent(zone, 5000, source, widgets, defaultConfig()),
     ).toEqual({ type: "column-pin", column: 1 });
   });
+
+  it("returns none when column-pin would shrink source (pre-resizeDwell)", () => {
+    const wideSource = makeWidget("src", { colSpan: 3 });
+    const wideWidgets = makeWidgets(["src", { colSpan: 3 }], ["a"]);
+    const config = defaultConfig({
+      maxColumns: 4,
+      getWidgetConstraints: () => ({ minSpan: 1, maxSpan: 4 }),
+    });
+    const zone: DropZone = { type: "empty", column: 2 };
+    expect(resolveIntent(zone, 0, wideSource, wideWidgets, config)).toEqual({
+      type: "none",
+    });
+    expect(
+      resolveIntent(zone, config.resizeDwellMs - 1, wideSource, wideWidgets, config),
+    ).toEqual({ type: "none" });
+  });
+
+  it("returns column-pin when shrink dwell elapsed", () => {
+    const wideSource = makeWidget("src", { colSpan: 3 });
+    const wideWidgets = makeWidgets(["src", { colSpan: 3 }], ["a"]);
+    const config = defaultConfig({
+      maxColumns: 4,
+      getWidgetConstraints: () => ({ minSpan: 1, maxSpan: 4 }),
+    });
+    const zone: DropZone = { type: "empty", column: 2 };
+    expect(
+      resolveIntent(zone, config.resizeDwellMs, wideSource, wideWidgets, config),
+    ).toEqual({ type: "column-pin", column: 2 });
+  });
+
+  it("returns none when shrink would be required but resize is locked", () => {
+    const wideSource = makeWidget("src", { colSpan: 3 });
+    const wideWidgets = makeWidgets(["src", { colSpan: 3 }], ["a"]);
+    const config = defaultConfig({
+      maxColumns: 4,
+      getWidgetConstraints: () => ({ minSpan: 1, maxSpan: 4 }),
+      isResizeLocked: (id) => id === "src",
+    });
+    const zone: DropZone = { type: "empty", column: 2 };
+    expect(
+      resolveIntent(zone, 5000, wideSource, wideWidgets, config),
+    ).toEqual({ type: "none" });
+  });
+
+  it("returns column-pin instantly when source already fits at the column", () => {
+    const source1 = makeWidget("src", { colSpan: 2 });
+    const wideWidgets = makeWidgets(["src", { colSpan: 2 }], ["a"]);
+    const config = defaultConfig({
+      maxColumns: 4,
+      getWidgetConstraints: () => ({ minSpan: 1, maxSpan: 4 }),
+    });
+    const zone: DropZone = { type: "empty", column: 2 };
+    expect(resolveIntent(zone, 0, source1, wideWidgets, config)).toEqual({
+      type: "column-pin",
+      column: 2,
+    });
+  });
 });
 
 describe("resolveIntent - outside zone", () => {

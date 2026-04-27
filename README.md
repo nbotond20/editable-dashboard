@@ -956,7 +956,7 @@ The drag system resolves a zone (what the pointer is over) and maps it to an ope
 | **Swap**             | Exchanges positions of the dragged widget and a target in a different row.        | Pointer dwells on a widget (`swapDwellMs`, default: immediate).                             |
 | **Side-drop**        | Resizes one peer and the dragged widget so they share a row.                      | Pointer dwells on a widget longer (`resizeDwellMs`) and combined spans exceed `maxColumns`. |
 | **Row squeeze**      | Resizes all widgets in a row to make room for the dragged widget.                 | Same as side-drop, but multiple peers are in the target row.                                |
-| **Column pin**       | Slides the widget to a different column within the same row (sets `columnStart`). | Pointer enters empty space in the grid.                                                     |
+| **Column pin**       | Slides the widget to a different column within the same row (sets `columnStart`). | Pointer enters empty space in the grid. If the source's `colSpan` cannot fit at the pinned column, activation waits for `resizeDwellMs` (the same dwell as auto-resize) before shrinking the widget. |
 
 A **2-frame hysteresis** on zone changes prevents the preview from flickering when the pointer oscillates near boundaries.
 

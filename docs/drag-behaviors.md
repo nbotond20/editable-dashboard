@@ -18,7 +18,7 @@ Five operation types are supported:
 | **Swap** | Exchange positions of two widgets | Pointer dwells on a widget in a different row (`swapDwellMs`) |
 | **Auto-resize (Side-drop)** | Resize one peer + dragged to share a row | Pointer dwells on a widget longer (`resizeDwellMs`) and combined spans exceed `maxColumns` |
 | **Auto-resize (Row squeeze)** | Resize all widgets in a row to fit | Same as side-drop but multiple peers are in the target row |
-| **Column pin** | Slide widget to a different column | Pointer enters empty space in the grid |
+| **Column pin** | Slide widget to a different column | Pointer enters empty space in the grid. If `colSpan` cannot fit at that column, the implicit shrink waits for `resizeDwellMs`. |
 
 ---
 

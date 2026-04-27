@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Column-pin no longer shrinks the source widget instantly when the pinned column can't accommodate its full `colSpan`. The shrink now waits for `resizeDwellMs` (matching other resize-style operations). If the source is `isResizeLocked`, column-pin to a too-narrow column is suppressed entirely.
+
 ## [4.4.2] - 2026-04-21
 ## [4.4.1] - 2026-04-21
 ## [4.4.0] - 2026-04-19
