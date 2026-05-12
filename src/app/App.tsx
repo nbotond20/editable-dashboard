@@ -37,6 +37,9 @@ const DRAG_CONFIG = {
   autoScrollEdgeSize: 80,
 } as const;
 
+type ProximityOption = "off" | 60 | 120 | 200;
+const PROXIMITY_OPTIONS: ProximityOption[] = ["off", 60, 120, 200];
+
 interface DashboardContentProps {
   /**
    * When provided, column selector is driven by the parent (controlled mode).
@@ -46,9 +49,11 @@ interface DashboardContentProps {
   onMaxColumnsChange?: (n: number) => void;
   dropMode?: "classic" | "lines" | "both";
   onDropModeChange?: (m: "classic" | "lines" | "both") => void;
+  lineProximity?: ProximityOption;
+  onLineProximityChange?: (p: ProximityOption) => void;
 }
 
-function DashboardContent({ maxColumns: controlledMaxColumns, onMaxColumnsChange, dropMode = "classic", onDropModeChange }: DashboardContentProps) {
+function DashboardContent({ maxColumns: controlledMaxColumns, onMaxColumnsChange, dropMode = "classic", onDropModeChange, lineProximity = 60, onLineProximityChange }: DashboardContentProps) {
   const { state, actions, definitions: defs, canUndo, canRedo } = useDashboardStable();
   const [catalogOpen, setCatalogOpen] = useState(false);
   const [animated, setAnimated] = useState(
@@ -146,6 +151,23 @@ function DashboardContent({ maxColumns: controlledMaxColumns, onMaxColumnsChange
               </button>
             ))}
           </div>
+          {dropMode !== "classic" && (
+            <div style={{ display: "flex", gap: 4 }} data-testid="line-proximity-selector">
+              <span style={{ fontSize: 12, color: "#666", alignSelf: "center" }}>Proximity:</span>
+              {PROXIMITY_OPTIONS.map((p) => (
+                <button
+                  key={String(p)}
+                  type="button"
+                  className={`dash-btn ${lineProximity === p ? "dash-btn--primary" : "dash-btn--outline"}`}
+                  data-line-proximity={String(p)}
+                  data-active={p === lineProximity ? "true" : "false"}
+                  onClick={() => onLineProximityChange?.(p)}
+                >
+                  {p === "off" ? "Off" : `${p}px`}
+                </button>
+              ))}
+            </div>
+          )}
           <button
             className={`dash-btn ${animated ? "dash-btn--outline" : "dash-btn--primary"}`}
             onClick={() => setAnimated((a) => !a)}
@@ -220,6 +242,7 @@ function saveState(widgets: WidgetState[], maxColumns: number, gap: number) {
 function UncontrolledApp({ saved }: { saved: { widgets: WidgetState[]; maxColumns: number } | undefined }) {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const [dropMode, setDropMode] = useState<"classic" | "lines" | "both">("classic");
+  const [lineProximity, setLineProximity] = useState<ProximityOption>(60);
 
   const handleChange = useCallback((state: DashboardState) => {
     clearTimeout(saveTimerRef.current);
@@ -234,11 +257,20 @@ function UncontrolledApp({ saved }: { saved: { widgets: WidgetState[]; maxColumn
       initialWidgets={saved?.widgets ?? initialWidgets}
       maxColumns={saved?.maxColumns ?? 2}
       gap={16}
-      dragConfig={{ ...DRAG_CONFIG, dropMode }}
+      dragConfig={{
+        ...DRAG_CONFIG,
+        dropMode,
+        ...(lineProximity !== "off" && { lineProximityRadius: lineProximity }),
+      }}
       enableExternalDrag
       onChange={handleChange}
     >
-      <DashboardContent dropMode={dropMode} onDropModeChange={setDropMode} />
+      <DashboardContent
+        dropMode={dropMode}
+        onDropModeChange={setDropMode}
+        lineProximity={lineProximity}
+        onLineProximityChange={setLineProximity}
+      />
     </DashboardProvider>
   );
 }
@@ -247,6 +279,7 @@ function ControlledApp({ saved }: { saved: { widgets: WidgetState[]; maxColumns:
   const [widgets, setWidgets] = useState<WidgetState[]>(saved?.widgets ?? initialWidgets);
   const [maxColumns, setMaxColumns] = useState(saved?.maxColumns ?? 2);
   const [dropMode, setDropMode] = useState<"classic" | "lines" | "both">("classic");
+  const [lineProximity, setLineProximity] = useState<ProximityOption>(60);
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => {
@@ -263,7 +296,11 @@ function ControlledApp({ saved }: { saved: { widgets: WidgetState[]; maxColumns:
       onStateChange={setWidgets}
       maxColumns={maxColumns}
       gap={16}
-      dragConfig={{ ...DRAG_CONFIG, dropMode }}
+      dragConfig={{
+        ...DRAG_CONFIG,
+        dropMode,
+        ...(lineProximity !== "off" && { lineProximityRadius: lineProximity }),
+      }}
       enableExternalDrag
     >
       <DashboardContent
@@ -271,6 +308,8 @@ function ControlledApp({ saved }: { saved: { widgets: WidgetState[]; maxColumns:
         onMaxColumnsChange={setMaxColumns}
         dropMode={dropMode}
         onDropModeChange={setDropMode}
+        lineProximity={lineProximity}
+        onLineProximityChange={setLineProximity}
       />
     </DashboardProvider>
   );

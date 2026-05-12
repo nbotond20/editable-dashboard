@@ -13,7 +13,7 @@ import type {
 } from "./types.ts";
 import { distance, getVisibleSorted, zonesEqual, getPinnedIds } from "./utils.ts";
 import { resolveZone } from "./zone-resolver.ts";
-import { computeInsertionLines } from "./insertion-lines.ts";
+import { computeInsertionLines, pointerLineDistance, pointerSegmentDistance } from "./insertion-lines.ts";
 import { resolveIntent, computeDwellProgress } from "./intent-resolver.ts";
 import { applyOperation } from "./operation-applier.ts";
 import {
@@ -136,6 +136,13 @@ export class DragEngine {
 
   private insertionLines: InsertionLine[] = [];
   private currentLineId: string | null = null;
+  private filteredLinesCache: {
+    source: InsertionLine[];
+    pointerX: number;
+    pointerY: number;
+    radius: number;
+    result: InsertionLine[];
+  } | null = null;
 
   constructor(
     initialState: DashboardState,
@@ -246,6 +253,8 @@ export class DragEngine {
         ? this.baseLayout.positions.get(phase.sourceId) ?? null
         : null;
 
+    const exposedInsertionLines = this.filterLinesByProximity(this.insertionLines);
+
     this.cachedSnapshot = {
       phase,
       layout: this.baseLayout,
@@ -267,7 +276,7 @@ export class DragEngine {
           : 0,
       canUndo: canUndo(this.history),
       canRedo: canRedo(this.history),
-      insertionLines: this.insertionLines,
+      insertionLines: exposedInsertionLines,
       sourceGhost,
     };
 
@@ -1859,6 +1868,59 @@ export class DragEngine {
     this.insertionLines = [];
   }
 
+  private filterLinesByProximity(lines: InsertionLine[]): InsertionLine[] {
+    const radius = this.config.lineProximityRadius;
+    if (radius == null || lines.length === 0) return lines;
+    const phase = this.phase;
+    const pointer =
+      phase.type === "dragging" || phase.type === "external-dragging"
+        ? phase.pointerPos
+        : null;
+    if (!pointer) return lines;
+    const cache = this.filteredLinesCache;
+    if (
+      cache &&
+      cache.source === lines &&
+      cache.pointerX === pointer.x &&
+      cache.pointerY === pointer.y &&
+      cache.radius === radius
+    ) {
+      return cache.result;
+    }
+    const result: InsertionLine[] = [];
+    for (const l of lines) {
+      if (l.isActive) {
+        result.push(l);
+        continue;
+      }
+      if (!l.segments || l.segments.length === 0) {
+        if (pointerLineDistance(pointer, l) <= radius) result.push(l);
+        continue;
+      }
+      const closeSegs = l.segments.filter(
+        (s) => pointerSegmentDistance(pointer, l.orientation, s) <= radius,
+      );
+      if (closeSegs.length === 0) continue;
+      if (closeSegs.length === l.segments.length) {
+        result.push(l);
+        continue;
+      }
+      const bx1 = Math.min(...closeSegs.map((s) => s.x1));
+      const by1 = Math.min(...closeSegs.map((s) => s.y1));
+      const bx2 = Math.max(...closeSegs.map((s) => s.x2));
+      const by2 = Math.max(...closeSegs.map((s) => s.y2));
+      result.push({ ...l, segments: closeSegs, x1: bx1, y1: by1, x2: bx2, y2: by2 });
+    }
+    this.filteredLinesCache = {
+      source: lines,
+      pointerX: pointer.x,
+      pointerY: pointer.y,
+      radius,
+      result,
+    };
+    return result;
+  }
+
   private recomputeInsertionLines(): void {
     if (this.phase.type !== "dragging" && this.phase.type !== "external-dragging") {
       this.insertionLines = [];
@@ -2006,7 +2068,8 @@ export class DragEngine {
       a.widgets === b.widgets &&
       a.canUndo === b.canUndo &&
       a.canRedo === b.canRedo &&
-      a.sourceGhost === b.sourceGhost
+      a.sourceGhost === b.sourceGhost &&
+      a.insertionLines === b.insertionLines
     );
   }
 

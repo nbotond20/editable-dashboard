@@ -202,6 +202,7 @@ export interface DragEngineConfig {
   dropMode: "classic" | "lines" | "both";
   lineSnapRadius: number;
   lineCornerInset: number;
+  lineProximityRadius?: number;
   isPositionLocked: (id: string) => boolean;
   isResizeLocked: (id: string) => boolean;
   canDrop: (sourceId: string, targetIndex: number) => boolean;

@@ -22,6 +22,14 @@ export interface DragConfig {
   dropMode?: "classic" | "lines" | "both";
   lineSnapRadius?: number;
   lineCornerInset?: number;
+  /**
+   * Pixel radius around the pointer within which insertion lines are exposed
+   * via `insertionLines`. When unset, all lines are exposed (default).
+   * Setting a value (e.g. `120`) makes the engine emit only lines whose
+   * nearest segment is within `lineProximityRadius` pixels of the pointer.
+   * The active (currently-snapped) line is always exposed regardless of distance.
+   */
+  lineProximityRadius?: number;
 }
 
 /**

@@ -118,5 +118,6 @@ export function buildEngineConfig(
     ...(dragConfig?.dropMode != null && { dropMode: dragConfig.dropMode }),
     ...(dragConfig?.lineSnapRadius != null && { lineSnapRadius: dragConfig.lineSnapRadius }),
     ...(dragConfig?.lineCornerInset != null && { lineCornerInset: dragConfig.lineCornerInset }),
+    ...(dragConfig?.lineProximityRadius != null && { lineProximityRadius: dragConfig.lineProximityRadius }),
   };
 }

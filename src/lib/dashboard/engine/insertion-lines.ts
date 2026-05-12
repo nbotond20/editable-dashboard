@@ -331,16 +331,17 @@ export function computeInsertionLines(input: ComputeInsertionLinesInput): Insert
       !hLineFeasible() ||
       crosses(insertionIdx);
 
-    const bx1 = Math.min(...segments.map((s) => s.x1));
-    const by1 = Math.min(...segments.map((s) => s.y1));
-    const bx2 = Math.max(...segments.map((s) => s.x2));
-    const by2 = Math.max(...segments.map((s) => s.y2));
+    const deduped = dedupeContainedSegments(segments, "horizontal");
+    const bx1 = Math.min(...deduped.map((s) => s.x1));
+    const by1 = Math.min(...deduped.map((s) => s.y1));
+    const bx2 = Math.max(...deduped.map((s) => s.x2));
+    const by2 = Math.max(...deduped.map((s) => s.y2));
 
     lines.push({
       id: `h-${beforeId ?? "start"}-${afterId ?? "end"}-${r}`,
       orientation: "horizontal",
       x1: bx1, y1: by1, x2: bx2, y2: by2,
-      segments,
+      segments: deduped,
       insertionIndex: insertionIdx,
       beforeId,
       afterId,
@@ -350,7 +351,44 @@ export function computeInsertionLines(input: ComputeInsertionLinesInput): Insert
     });
   }
 
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    if (l.orientation !== "vertical" || !l.segments || l.segments.length < 2) continue;
+    const deduped = dedupeContainedSegments(l.segments, "vertical");
+    if (deduped.length === l.segments.length) continue;
+    const bx1 = Math.min(...deduped.map((s) => s.x1));
+    const by1 = Math.min(...deduped.map((s) => s.y1));
+    const bx2 = Math.max(...deduped.map((s) => s.x2));
+    const by2 = Math.max(...deduped.map((s) => s.y2));
+    lines[i] = { ...l, segments: deduped, x1: bx1, y1: by1, x2: bx2, y2: by2 };
+  }
+
   return lines;
+}
+
+function dedupeContainedSegments(
+  segments: ReadonlyArray<InsertionLineSegment>,
+  orientation: "horizontal" | "vertical",
+): InsertionLineSegment[] {
+  if (segments.length < 2) return segments.slice();
+  const projected = segments.map((s, i) => ({
+    s,
+    i,
+    lo: orientation === "horizontal" ? s.x1 : s.y1,
+    hi: orientation === "horizontal" ? s.x2 : s.y2,
+  }));
+  projected.sort((a, b) => (b.hi - b.lo) - (a.hi - a.lo) || a.i - b.i);
+  const keptSet = new Set<number>();
+  const keptItems: typeof projected = [];
+  for (const p of projected) {
+    const dominated = keptItems.some((k) => k.lo <= p.lo && k.hi >= p.hi);
+    if (!dominated) {
+      keptItems.push(p);
+      keptSet.add(p.i);
+    }
+  }
+  if (keptSet.size === segments.length) return segments.slice();
+  return segments.filter((_, i) => keptSet.has(i));
 }
 
 export interface FindSnappedLineInput {
@@ -388,18 +426,7 @@ export function findSnappedLine(input: FindSnappedLineInput): InsertionLine | nu
   return best;
 }
 
-function pointerSegmentDistance(p: Point, orientation: "horizontal" | "vertical", s: InsertionLineSegment): number {
-  if (orientation === "vertical") {
-    if (p.y >= s.y1 && p.y <= s.y2) return Math.abs(p.x - s.x1);
-    const dy = p.y < s.y1 ? s.y1 - p.y : p.y - s.y2;
-    return Math.hypot(p.x - s.x1, dy);
-  }
-  if (p.x >= s.x1 && p.x <= s.x2) return Math.abs(p.y - s.y1);
-  const dx = p.x < s.x1 ? s.x1 - p.x : p.x - s.x2;
-  return Math.hypot(dx, p.y - s.y1);
-}
-
-function pointerLineDistance(p: Point, line: InsertionLine): number {
+export function pointerLineDistance(p: Point, line: InsertionLine): number {
   const segs: ReadonlyArray<InsertionLineSegment> = line.segments && line.segments.length > 0
     ? line.segments
     : [{ x1: line.x1, y1: line.y1, x2: line.x2, y2: line.y2, anchorId: null, edge: null }];
@@ -409,5 +436,16 @@ function pointerLineDistance(p: Point, line: InsertionLine): number {
     if (d < best) best = d;
   }
   return best;
+}
+
+export function pointerSegmentDistance(p: Point, orientation: "horizontal" | "vertical", s: InsertionLineSegment): number {
+  if (orientation === "vertical") {
+    if (p.y >= s.y1 && p.y <= s.y2) return Math.abs(p.x - s.x1);
+    const dy = p.y < s.y1 ? s.y1 - p.y : p.y - s.y2;
+    return Math.hypot(p.x - s.x1, dy);
+  }
+  if (p.x >= s.x1 && p.x <= s.x2) return Math.abs(p.y - s.y1);
+  const dx = p.x < s.x1 ? s.x1 - p.x : p.x - s.x2;
+  return Math.hypot(dx, p.y - s.y1);
 }
 

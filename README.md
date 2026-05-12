@@ -1640,6 +1640,22 @@ Geometry:
 - H-lines span the row's widget extent (not the full container width).
 - Endpoints are inset by `lineCornerInset` px (default `8`) so lines don't run into widget rounded corners — bump this to your widget's `border-radius` if you use a larger radius.
 
+### Proximity filter (opt-in)
+
+By default every feasible insertion line is exposed throughout a drag. Set `dragConfig.lineProximityRadius` to a pixel value and the engine emits only line segments within that many pixels of the pointer — any line whose segments are all outside the radius is dropped entirely, and lines with mixed segments are trimmed down to just the close ones. The currently-snapped (active) line is always exposed with all its segments regardless of distance.
+
+```tsx
+<DashboardProvider
+  definitions={defs}
+  initialWidgets={widgets}
+  dragConfig={{ dropMode: "lines", lineProximityRadius: 120 }}
+>
+  …
+</DashboardProvider>
+```
+
+Use this to reduce visual noise on dense grids — only lines near the pointer render. Snap behavior is unaffected; `lineSnapRadius` continues to control activation.
+
 Use `useInsertionLines()` in your grid component to render the lines:
 
 ```tsx
