@@ -1686,6 +1686,19 @@ Lines respect the same constraints as classic mode:
 
 When rendering, iterate `segments ?? [{ x1, y1, x2, y2, anchorId: null, edge: null }]`. For anchored segments you can portal/append the segment element inside the widget's container so it inherits the widget's layout transform; unanchored segments (e.g. the single line shown on an empty dashboard) render in container coordinates.
 
+For per-widget rendering, prefer `useAnchoredInsertionSegments(widgetId)` over filtering `useInsertionLines()` yourself — it returns just the segments anchored to that widget via a shared O(1) lookup, avoiding `O(widgets × lines × segments)` work each drag frame:
+
+```tsx
+import { useAnchoredInsertionSegments } from "editable-dashboard";
+
+function WidgetSlot({ widget }) {
+  const anchored = useAnchoredInsertionSegments(widget.id);
+  return anchored.map(({ line, segment, index }) => (
+    <YourSegment key={`${line.id}:${index}`} line={line} segment={segment} />
+  ));
+}
+```
+
 Vertical line drops trigger an equal-distribute resize if the row would overflow `maxColumns`. Horizontal line drops insert the source as a new full-width row.
 
 ### Source ghost

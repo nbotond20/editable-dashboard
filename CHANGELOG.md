@@ -7,7 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [5.0.0] - 2026-05-12
+### Added
+
+- `useAnchoredInsertionSegments(widgetId)` hook — returns the segments anchored to a single widget via a shared O(1) lookup, replacing per-widget filtering of the full lines array.
+
+### Changed
+
+- Insertion lines: `computeInsertionLines` result is now memoized inside the engine by layout / widgets / source identity; recomputed only on real input changes instead of every pointer move.
+- Insertion lines: exposed `insertionLines` array preserves referential identity when neither the raw lines nor the active line changed, avoiding unnecessary React re-renders during drag.
+- `findSnappedLine` and `filterLinesByProximity` short-circuit lines outside the pointer's bounding box.
+- `computeInsertionLines` internals: O(1) excluded-widget index lookups, single-pass bounding-box math (no `Math.min(...spread)`), memoized `hLineFeasible`, and deduplicated source-widget lookups.
 ## [4.4.2] - 2026-04-21
 ## [4.4.1] - 2026-04-21
 ## [4.4.0] - 2026-04-19

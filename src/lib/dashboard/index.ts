@@ -47,6 +47,8 @@ export { useTrashZone } from "./react/use-trash-zone.ts";
 export { useWidgetSlot } from "./react/use-widget-slot.ts";
 export type { UseWidgetSlotResult } from "./react/use-widget-slot.ts";
 export { useInsertionLines } from "./react/use-insertion-lines.ts";
+export { useAnchoredInsertionSegments } from "./react/use-anchored-insertion-segments.ts";
+export type { AnchoredInsertionSegment } from "./react/use-anchored-insertion-segments.ts";
 export { useSourceGhost } from "./react/use-source-ghost.ts";
 export { useDragFollow } from "./react/use-drag-follow.ts";
 export type { DragFollowResult, DragFollowOptions, SettleConfig } from "./react/use-drag-follow.ts";

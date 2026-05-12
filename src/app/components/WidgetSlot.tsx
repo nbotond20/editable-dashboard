@@ -3,12 +3,10 @@ import { AnimatePresence, motion, useMotionValue, useSpring } from "motion/react
 import {
   useWidgetSlot,
   useDragFollow,
-  useInsertionLines,
+  useAnchoredInsertionSegments,
   useDashboardDrag,
   type WidgetState,
   type DragHandleProps,
-  type InsertionLine,
-  type InsertionLineSegment,
 } from "../../lib/dashboard/index.ts";
 import { SPRINGS, SETTLE_EASING, SETTLE_DURATION } from "../animation-config.ts";
 import { AnchoredInsertionSegment } from "./InsertionLineElement.tsx";
@@ -35,7 +33,7 @@ interface WidgetSlotProps {
 
 export function WidgetSlot({ widget, animated = true, children }: WidgetSlotProps) {
   const slot = useWidgetSlot(widget);
-  const lines = useInsertionLines();
+  const anchored = useAnchoredInsertionSegments(widget.id);
   const { dragState } = useDashboardDrag();
   const isSwapHighlight = dragState.swapTargetId === widget.id;
   const { ref: dragRef, isActive: dragActive } = useDragFollow(slot, {
@@ -45,20 +43,18 @@ export function WidgetSlot({ widget, animated = true, children }: WidgetSlotProp
   });
 
   const anchoredSegments = useMemo(() => {
-    if (slot.isDragging) return [];
-    const out: Array<{ key: string; line: InsertionLine; segment: InsertionLineSegment }> = [];
-    for (const line of lines) {
-      if (!line.segments) continue;
-      let i = 0;
-      for (const seg of line.segments) {
-        if (seg.anchorId === widget.id) {
-          out.push({ key: `${line.id}:${seg.edge}:${i}`, line, segment: seg });
-        }
-        i++;
-      }
+    if (slot.isDragging || anchored.length === 0) return [];
+    const out = new Array(anchored.length);
+    for (let i = 0; i < anchored.length; i++) {
+      const a = anchored[i];
+      out[i] = {
+        key: `${a.line.id}:${a.segment.edge}:${a.index}`,
+        line: a.line,
+        segment: a.segment,
+      };
     }
     return out;
-  }, [lines, widget.id, slot.isDragging]);
+  }, [anchored, slot.isDragging]);
 
   const widthMV = useMotionValue(slot.position?.width ?? 0);
   const springWidth = useSpring(widthMV, WIDTH_SPRING);

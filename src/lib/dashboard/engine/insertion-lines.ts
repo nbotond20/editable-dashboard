@@ -64,10 +64,10 @@ export function computeInsertionLines(input: ComputeInsertionLinesInput): Insert
     return result != null;
   };
 
-  const hLineFeasible = (): boolean => {
-    if (!sourceWidgetRef) return true;
-    return newRowColSpan(sourceWidgetRef, { maxColumns, isResizeLocked, getWidgetConstraints }) != null;
-  };
+  const hLineFeasibleValue = !sourceWidgetRef
+    ? true
+    : newRowColSpan(sourceWidgetRef, { maxColumns, isResizeLocked, getWidgetConstraints }) != null;
+  const hLineFeasible = (): boolean => hLineFeasibleValue;
 
   const allPositioned: PositionedWidget[] = [];
   for (const w of widgets) {
@@ -128,33 +128,39 @@ export function computeInsertionLines(input: ComputeInsertionLinesInput): Insert
     .map(([, arr]) => arr);
   for (const row of rows) row.sort((a, b) => a.x - b.x);
 
-  const includedSorted = widgets
-    .filter((w) => w.visible)
-    .slice()
-    .sort((a, b) => a.order - b.order);
-  const sourceIncludedIdx = sourceId != null
-    ? includedSorted.findIndex((w) => w.id === sourceId)
-    : -1;
-  const excludedSorted = sourceId != null
+  const includedSorted = visibleSorted;
+  let sourceIncludedIdx = -1;
+  if (sourceId != null) {
+    for (let i = 0; i < includedSorted.length; i++) {
+      if (includedSorted[i].id === sourceId) { sourceIncludedIdx = i; break; }
+    }
+  }
+  const excludedSorted: WidgetState[] = sourceId != null
     ? includedSorted.filter((w) => w.id !== sourceId)
     : includedSorted;
+  const excludedIndexById = new Map<string, number>();
+  for (let i = 0; i < excludedSorted.length; i++) {
+    excludedIndexById.set(excludedSorted[i].id, i);
+  }
+  const excludedLength = excludedSorted.length;
 
   function indexOfExcluded(id: string | null): number {
     if (id == null) return -1;
-    return excludedSorted.findIndex((w) => w.id === id);
+    const idx = excludedIndexById.get(id);
+    return idx === undefined ? -1 : idx;
   }
 
   function insertionIndexFromAfter(afterId: string | null): number {
-    if (afterId == null) return excludedSorted.length;
-    const idx = indexOfExcluded(afterId);
-    return idx === -1 ? excludedSorted.length : idx;
+    if (afterId == null) return excludedLength;
+    const idx = excludedIndexById.get(afterId);
+    return idx === undefined ? excludedLength : idx;
   }
 
   function isSelfAdjacentByOrder(insertionIdx: number): boolean {
     return sourceIncludedIdx >= 0 && insertionIdx === sourceIncludedIdx;
   }
 
-  const sourceWidget = sourceId != null ? widgets.find((w) => w.id === sourceId) : undefined;
+  const sourceWidget = sourceWidgetRef;
   const sourceSpan = sourceWidget?.colSpan ?? 1;
 
   function isLineSelfAdjacent(insertionIdx: number, row: PositionedWidget[]): boolean {
@@ -179,7 +185,7 @@ export function computeInsertionLines(input: ComputeInsertionLinesInput): Insert
       const idx = indexOfExcluded(last.id);
       if (idx !== -1) return idx + 1;
     }
-    return excludedSorted.length;
+    return excludedLength;
   }
 
   const sourceRowIndex = sourceId != null ? rowIndexById.get(sourceId) : undefined;
@@ -233,8 +239,13 @@ export function computeInsertionLines(input: ComputeInsertionLinesInput): Insert
 
   function vBoundingBox(segments: InsertionLineSegment[]): { x1: number; y1: number; x2: number; y2: number } {
     const x = segments[0].x1;
-    const y1 = Math.min(...segments.map((s) => s.y1));
-    const y2 = Math.max(...segments.map((s) => s.y2));
+    let y1 = segments[0].y1;
+    let y2 = segments[0].y2;
+    for (let i = 1; i < segments.length; i++) {
+      const s = segments[i];
+      if (s.y1 < y1) y1 = s.y1;
+      if (s.y2 > y2) y2 = s.y2;
+    }
     return { x1: x, y1, x2: x, y2 };
   }
 
@@ -325,17 +336,24 @@ export function computeInsertionLines(input: ComputeInsertionLinesInput): Insert
 
     const aboveAloneSource = above != null && above.length === 1 && above[0].id === sourceId;
     const belowAloneSource = below != null && below.length === 1 && below[0].id === sourceId;
-    const sourceFullWidth = sourceId != null && (widgets.find((w) => w.id === sourceId)?.colSpan ?? 0) >= maxColumns;
+    const sourceFullWidth = sourceId != null && (sourceWidget?.colSpan ?? 0) >= maxColumns;
     const disabled =
       (sourceAloneInRow && sourceFullWidth && (aboveAloneSource || belowAloneSource)) ||
       !hLineFeasible() ||
       crosses(insertionIdx);
 
     const deduped = dedupeContainedSegments(segments, "horizontal");
-    const bx1 = Math.min(...deduped.map((s) => s.x1));
-    const by1 = Math.min(...deduped.map((s) => s.y1));
-    const bx2 = Math.max(...deduped.map((s) => s.x2));
-    const by2 = Math.max(...deduped.map((s) => s.y2));
+    let bx1 = deduped[0].x1;
+    let by1 = deduped[0].y1;
+    let bx2 = deduped[0].x2;
+    let by2 = deduped[0].y2;
+    for (let i = 1; i < deduped.length; i++) {
+      const s = deduped[i];
+      if (s.x1 < bx1) bx1 = s.x1;
+      if (s.y1 < by1) by1 = s.y1;
+      if (s.x2 > bx2) bx2 = s.x2;
+      if (s.y2 > by2) by2 = s.y2;
+    }
 
     lines.push({
       id: `h-${beforeId ?? "start"}-${afterId ?? "end"}-${r}`,
@@ -356,10 +374,17 @@ export function computeInsertionLines(input: ComputeInsertionLinesInput): Insert
     if (l.orientation !== "vertical" || !l.segments || l.segments.length < 2) continue;
     const deduped = dedupeContainedSegments(l.segments, "vertical");
     if (deduped.length === l.segments.length) continue;
-    const bx1 = Math.min(...deduped.map((s) => s.x1));
-    const by1 = Math.min(...deduped.map((s) => s.y1));
-    const bx2 = Math.max(...deduped.map((s) => s.x2));
-    const by2 = Math.max(...deduped.map((s) => s.y2));
+    let bx1 = deduped[0].x1;
+    let by1 = deduped[0].y1;
+    let bx2 = deduped[0].x2;
+    let by2 = deduped[0].y2;
+    for (let j = 1; j < deduped.length; j++) {
+      const s = deduped[j];
+      if (s.x1 < bx1) bx1 = s.x1;
+      if (s.y1 < by1) by1 = s.y1;
+      if (s.x2 > bx2) bx2 = s.x2;
+      if (s.y2 > by2) by2 = s.y2;
+    }
     lines[i] = { ...l, segments: deduped, x1: bx1, y1: by1, x2: bx2, y2: by2 };
   }
 
@@ -400,16 +425,31 @@ export interface FindSnappedLineInput {
 
 export function findSnappedLine(input: FindSnappedLineInput): InsertionLine | null {
   const { pointer, lines, snapRadius, previousLineId } = input;
+  const outerRadius = snapRadius + LINE_SNAP_HYSTERESIS;
+  const px = pointer.x;
+  const py = pointer.y;
 
   let best: InsertionLine | null = null;
   let bestDist = Infinity;
   let previousLine: InsertionLine | null = null;
   let previousDist = Infinity;
 
-  for (const line of lines) {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
     if (line.disabled) continue;
+    const isPrev = line.id === previousLineId;
+    if (
+      px < line.x1 - outerRadius || px > line.x2 + outerRadius ||
+      py < line.y1 - outerRadius || py > line.y2 + outerRadius
+    ) {
+      if (isPrev) {
+        previousLine = line;
+        previousDist = Infinity;
+      }
+      continue;
+    }
     const dist = pointerLineDistance(pointer, line);
-    if (line.id === previousLineId) {
+    if (isPrev) {
       previousLine = line;
       previousDist = dist;
     }
@@ -419,7 +459,7 @@ export function findSnappedLine(input: FindSnappedLineInput): InsertionLine | nu
     }
   }
 
-  if (previousLine && previousDist <= snapRadius + LINE_SNAP_HYSTERESIS) {
+  if (previousLine && previousDist <= outerRadius) {
     return previousLine;
   }
 

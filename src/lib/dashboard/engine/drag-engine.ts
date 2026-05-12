@@ -143,6 +143,24 @@ export class DragEngine {
     radius: number;
     result: InsertionLine[];
   } | null = null;
+  private rawLinesCache: {
+    layout: ComputedLayout;
+    widgets: readonly WidgetState[];
+    sourceId: string | null;
+    dropMode: "classic" | "lines";
+    maxColumns: number;
+    containerWidth: number;
+    cornerInset: number;
+    isPositionLocked: (id: string) => boolean;
+    isResizeLocked: (id: string) => boolean;
+    getWidgetConstraints: (id: string) => { minSpan: number; maxSpan: number };
+    result: InsertionLine[];
+  } | null = null;
+  private exposedLinesCache: {
+    rawLines: InsertionLine[];
+    activeId: string | null;
+    result: InsertionLine[];
+  } | null = null;
 
   constructor(
     initialState: DashboardState,
@@ -501,6 +519,9 @@ export class DragEngine {
     this.previewLayout = null;
     this.insertionLines = [];
     this.currentLineId = null;
+    this.rawLinesCache = null;
+    this.exposedLinesCache = null;
+    this.filteredLinesCache = null;
     this.recomputeLayouts();
 
     this.announcement = this.buildDropAnnouncement(committed);
@@ -1536,10 +1557,7 @@ export class DragEngine {
       }
 
       if (prevLineId !== this.currentLineId) {
-        this.insertionLines = this.insertionLines.map((l) => {
-          const active = l.id === this.currentLineId && !l.disabled;
-          return active === l.isActive ? l : { ...l, isActive: active };
-        });
+        this.applyActiveLine();
       }
 
       if (this.lastZonePointerPos) {
@@ -1866,6 +1884,9 @@ export class DragEngine {
     this.intentGraceStart = null;
     this.currentLineId = null;
     this.insertionLines = [];
+    this.rawLinesCache = null;
+    this.exposedLinesCache = null;
+    this.filteredLinesCache = null;
   }
 
   private filterLinesByProximity(lines: InsertionLine[]): InsertionLine[] {
@@ -1879,7 +1900,7 @@ export class DragEngine {
     if (!pointer) return lines;
     const cache = this.filteredLinesCache;
     if (
-      cache &&
+      cache !== null &&
       cache.source === lines &&
       cache.pointerX === pointer.x &&
       cache.pointerY === pointer.y &&
@@ -1887,29 +1908,61 @@ export class DragEngine {
     ) {
       return cache.result;
     }
+    const px = pointer.x;
+    const py = pointer.y;
     const result: InsertionLine[] = [];
-    for (const l of lines) {
+    for (let li = 0; li < lines.length; li++) {
+      const l = lines[li];
       if (l.isActive) {
         result.push(l);
         continue;
       }
-      if (!l.segments || l.segments.length === 0) {
+      if (
+        px < l.x1 - radius || px > l.x2 + radius ||
+        py < l.y1 - radius || py > l.y2 + radius
+      ) {
+        continue;
+      }
+      const segs = l.segments;
+      if (!segs || segs.length === 0) {
         if (pointerLineDistance(pointer, l) <= radius) result.push(l);
         continue;
       }
-      const closeSegs = l.segments.filter(
-        (s) => pointerSegmentDistance(pointer, l.orientation, s) <= radius,
-      );
-      if (closeSegs.length === 0) continue;
-      if (closeSegs.length === l.segments.length) {
+      let closeCount = 0;
+      let firstClose: typeof segs[number] | null = null;
+      let closeSegs: typeof segs[number][] | null = null;
+      const orientation = l.orientation;
+      for (let si = 0; si < segs.length; si++) {
+        const s = segs[si];
+        if (pointerSegmentDistance(pointer, orientation, s) <= radius) {
+          if (closeCount === 0) {
+            firstClose = s;
+          } else if (closeCount === 1) {
+            closeSegs = [firstClose as typeof segs[number], s];
+          } else {
+            (closeSegs as typeof segs[number][]).push(s);
+          }
+          closeCount++;
+        }
+      }
+      if (closeCount === 0) continue;
+      if (closeCount === segs.length) {
         result.push(l);
         continue;
       }
-      const bx1 = Math.min(...closeSegs.map((s) => s.x1));
-      const by1 = Math.min(...closeSegs.map((s) => s.y1));
-      const bx2 = Math.max(...closeSegs.map((s) => s.x2));
-      const by2 = Math.max(...closeSegs.map((s) => s.y2));
-      result.push({ ...l, segments: closeSegs, x1: bx1, y1: by1, x2: bx2, y2: by2 });
+      const kept = closeSegs ?? [firstClose as typeof segs[number]];
+      let bx1 = kept[0].x1;
+      let by1 = kept[0].y1;
+      let bx2 = kept[0].x2;
+      let by2 = kept[0].y2;
+      for (let i = 1; i < kept.length; i++) {
+        const s = kept[i];
+        if (s.x1 < bx1) bx1 = s.x1;
+        if (s.y1 < by1) by1 = s.y1;
+        if (s.x2 > bx2) bx2 = s.x2;
+        if (s.y2 > by2) by2 = s.y2;
+      }
+      result.push({ ...l, segments: kept, x1: bx1, y1: by1, x2: bx2, y2: by2 });
     }
     this.filteredLinesCache = {
       source: lines,
@@ -1925,28 +1978,95 @@ export class DragEngine {
     if (this.phase.type !== "dragging" && this.phase.type !== "external-dragging") {
       this.insertionLines = [];
       this.currentLineId = null;
+      this.rawLinesCache = null;
+      this.exposedLinesCache = null;
       return;
     }
 
     const sourceId = this.phase.type === "dragging" ? this.phase.sourceId : null;
     const state = this.history.present;
+    const layout = this.dragLayout ?? this.baseLayout;
+    const dropMode = this.config.dropMode;
+    const maxColumns = state.maxColumns;
+    const containerWidth = this.containerWidth;
+    const cornerInset = this.config.lineCornerInset;
+    const isPositionLocked = this.config.isPositionLocked;
+    const isResizeLocked = this.config.isResizeLocked;
+    const getWidgetConstraints = this.config.getWidgetConstraints;
 
-    const lines = computeInsertionLines({
-      layout: this.dragLayout ?? this.baseLayout,
-      widgets: state.widgets,
-      sourceId,
-      dropMode: this.config.dropMode,
-      maxColumns: state.maxColumns,
-      containerWidth: this.containerWidth,
-      cornerInset: this.config.lineCornerInset,
-      isPositionLocked: this.config.isPositionLocked,
-      isResizeLocked: this.config.isResizeLocked,
-      getWidgetConstraints: this.config.getWidgetConstraints,
-    });
+    const rc = this.rawLinesCache;
+    let rawLines: InsertionLine[];
+    if (
+      rc !== null &&
+      rc.layout === layout &&
+      rc.widgets === state.widgets &&
+      rc.sourceId === sourceId &&
+      rc.dropMode === dropMode &&
+      rc.maxColumns === maxColumns &&
+      rc.containerWidth === containerWidth &&
+      rc.cornerInset === cornerInset &&
+      rc.isPositionLocked === isPositionLocked &&
+      rc.isResizeLocked === isResizeLocked &&
+      rc.getWidgetConstraints === getWidgetConstraints
+    ) {
+      rawLines = rc.result;
+    } else {
+      rawLines = computeInsertionLines({
+        layout,
+        widgets: state.widgets,
+        sourceId,
+        dropMode,
+        maxColumns,
+        containerWidth,
+        cornerInset,
+        isPositionLocked,
+        isResizeLocked,
+        getWidgetConstraints,
+      });
+      this.rawLinesCache = {
+        layout,
+        widgets: state.widgets,
+        sourceId,
+        dropMode,
+        maxColumns,
+        containerWidth,
+        cornerInset,
+        isPositionLocked,
+        isResizeLocked,
+        getWidgetConstraints,
+        result: rawLines,
+      };
+    }
 
-    this.insertionLines = lines.map((l) =>
-      l.id === this.currentLineId && !l.disabled ? { ...l, isActive: true } : l,
-    );
+    this.applyActiveLine(rawLines);
+  }
+
+  private applyActiveLine(rawLines: InsertionLine[] = this.rawLinesCache?.result ?? this.insertionLines): void {
+    const activeId = this.currentLineId;
+    const ec = this.exposedLinesCache;
+    if (ec !== null && ec.rawLines === rawLines && ec.activeId === activeId) {
+      this.insertionLines = ec.result;
+      return;
+    }
+
+    let result: InsertionLine[];
+    if (activeId === null) {
+      result = rawLines;
+    } else {
+      let activeIdx = -1;
+      for (let i = 0; i < rawLines.length; i++) {
+        const l = rawLines[i];
+        if (l.id === activeId && !l.disabled) { activeIdx = i; break; }
+      }
+      if (activeIdx === -1) {
+        result = rawLines;
+      } else {
+        result = rawLines.slice();
+        result[activeIdx] = { ...rawLines[activeIdx], isActive: true };
+      }
+    }
+    this.exposedLinesCache = { rawLines, activeId, result };
+    this.insertionLines = result;
   }
 
   private recomputeBaseLayout(): void {
