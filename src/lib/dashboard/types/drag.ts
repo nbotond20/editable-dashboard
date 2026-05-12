@@ -1,6 +1,6 @@
 import type { PointerEvent as ReactPointerEvent } from "react";
 import type { WidgetState } from "./widget.ts";
-import type { ComputedLayout } from "./layout.ts";
+import type { ComputedLayout, WidgetLayout } from "./layout.ts";
 
 /**
  * Current drag interaction state exposed via {@link DashboardContextValue.dragState}.
@@ -17,6 +17,14 @@ export interface DragState {
   intentType: "none" | "reorder" | "swap" | "deferred-swap" | "auto-resize" | "column-pin" | "empty-row-maximize" | "new-row" | "in-row-insert" | null;
   /** Widget ID that will be swapped on drop (deferred-swap intent). Null otherwise. */
   swapTargetId: string | null;
+  /**
+   * Layout of the dragged widget at its original (pre-drag) position.
+   *
+   * Populated only during a pointer drag while `dropMode` is `"lines"` or `"both"`,
+   * giving consumers a headless anchor to render a "source ghost" placeholder at
+   * the slot the widget was picked up from. `null` in all other cases.
+   */
+  sourceGhost: WidgetLayout | null;
 }
 
 /** Resolved drop target information produced by the drag engine. */

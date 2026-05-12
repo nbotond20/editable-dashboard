@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New `dropMode` config (`'classic' | 'lines' | 'both'`, default `'classic'`), `lineSnapRadius` (default `16`), and `lineCornerInset` (default `8`) on `DragConfig`.
 - New `InsertionLine` engine type and `insertionLines: InsertionLine[]` field on `DragEngineSnapshot`.
 - New `useInsertionLines()` React hook for consumer-rendered drop indicators.
+- New `sourceGhost: WidgetLayout | null` field on `DragState` and matching `useSourceGhost()` React hook — exposes the pre-drag layout of the dragged widget so consumers can render a headless "source ghost" placeholder at the slot it was picked up from. Populated only during a pointer drag while `dropMode` is `'lines'` or `'both'`; `null` otherwise. The demo app renders it as a solid-bordered outline matching the original widget's size and border radius.
 - New `OperationIntent` / `CommittedOperation` variants: `new-row` (drop on H-line) and `in-row-insert` (drop on V-line with equal-distribute resize fallback).
 - E2E coverage: `insertion-lines-render`, `insertion-lines-magnetic`, `insertion-lines-h-drop`, `insertion-lines-v-drop`, `insertion-lines-edge-cases`, `insertion-lines-modes`.
 - Unit coverage: `equal-distribute`, `insertion-lines` (`computeInsertionLines`, `findSnappedLine`), `zone-resolver-lines`, `intent-resolver-lines`, `operation-applier-lines`, `zones-equal-lines`.

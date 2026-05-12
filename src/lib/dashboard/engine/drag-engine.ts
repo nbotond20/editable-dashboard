@@ -241,6 +241,11 @@ export class DragEngine {
         ? this.lastTimestamp - this.zoneEnteredAt
         : 0;
 
+    const sourceGhost =
+      phase.type === "dragging" && this.config.dropMode !== "classic"
+        ? this.baseLayout.positions.get(phase.sourceId) ?? null
+        : null;
+
     this.cachedSnapshot = {
       phase,
       layout: this.baseLayout,
@@ -263,6 +268,7 @@ export class DragEngine {
       canUndo: canUndo(this.history),
       canRedo: canRedo(this.history),
       insertionLines: this.insertionLines,
+      sourceGhost,
     };
 
     return this.cachedSnapshot;
@@ -1998,7 +2004,8 @@ export class DragEngine {
       a.announcement === b.announcement &&
       a.widgets === b.widgets &&
       a.canUndo === b.canUndo &&
-      a.canRedo === b.canRedo
+      a.canRedo === b.canRedo &&
+      a.sourceGhost === b.sourceGhost
     );
   }
 

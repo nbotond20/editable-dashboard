@@ -1,4 +1,4 @@
-import type { ComputedLayout, DashboardAction, DashboardState, WidgetState } from "../types.ts";
+import type { ComputedLayout, DashboardAction, DashboardState, WidgetLayout, WidgetState } from "../types.ts";
 
 export interface Point {
   readonly x: number;
@@ -223,6 +223,7 @@ export interface DragEngineSnapshot {
   canUndo: boolean;
   canRedo: boolean;
   insertionLines: InsertionLine[];
+  sourceGhost: WidgetLayout | null;
 }
 
 export interface LayoutOptions {

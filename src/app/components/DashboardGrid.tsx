@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from "react";
 import { LayoutGroup, AnimatePresence, motion } from "motion/react";
-import { useDashboard, useInsertionLines, EXTERNAL_PHANTOM_ID, type WidgetState, type DragHandleProps } from "../../lib/dashboard/index.ts";
+import { useDashboard, useInsertionLines, useSourceGhost, EXTERNAL_PHANTOM_ID, type WidgetState, type DragHandleProps } from "../../lib/dashboard/index.ts";
 import { SPRINGS } from "../animation-config.ts";
 import { WidgetSlot } from "./WidgetSlot.tsx";
 import { InsertionLineMarker, UnanchoredInsertionLine } from "./InsertionLineElement.tsx";
@@ -20,6 +20,7 @@ interface DashboardGridProps {
   className?: string;
   style?: React.CSSProperties;
   ghostClassName?: string;
+  sourceGhostClassName?: string;
   animated?: boolean;
   children: (
     widget: WidgetState,
@@ -27,7 +28,7 @@ interface DashboardGridProps {
   ) => React.ReactNode;
 }
 
-export function DashboardGrid({ className, style, ghostClassName, animated = true, children }: DashboardGridProps) {
+export function DashboardGrid({ className, style, ghostClassName, sourceGhostClassName, animated = true, children }: DashboardGridProps) {
   const { state, layout, dragState, containerRef, phase } = useDashboard();
 
   const visibleWidgets = useMemo(
@@ -48,6 +49,7 @@ export function DashboardGrid({ className, style, ghostClassName, animated = tru
   }, [phase]);
 
   const lines = useInsertionLines();
+  const sourceGhost = useSourceGhost();
   const unanchoredLines = useMemo(
     () => lines.filter((l) => !l.segments || l.segments.length === 0 || l.segments.every((s) => s.anchorId == null)),
     [lines]
@@ -126,6 +128,50 @@ export function DashboardGrid({ className, style, ghostClassName, animated = tru
     )
   );
 
+  const sourceGhostElement = sourceGhost && (
+    animated ? (
+      <motion.div
+        key="source-ghost"
+        className={sourceGhostClassName ?? "dashboard-source-ghost"}
+        data-testid="source-ghost"
+        data-source-ghost-x={sourceGhost.x}
+        data-source-ghost-y={sourceGhost.y}
+        data-source-ghost-width={sourceGhost.width}
+        data-source-ghost-height={sourceGhost.height}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.12, ease: "easeOut" }}
+        style={{
+          position: "absolute",
+          left: sourceGhost.x,
+          top: sourceGhost.y,
+          width: sourceGhost.width,
+          height: sourceGhost.height,
+          pointerEvents: "none",
+        }}
+      />
+    ) : (
+      <div
+        key="source-ghost"
+        className={sourceGhostClassName ?? "dashboard-source-ghost"}
+        data-testid="source-ghost"
+        data-source-ghost-x={sourceGhost.x}
+        data-source-ghost-y={sourceGhost.y}
+        data-source-ghost-width={sourceGhost.width}
+        data-source-ghost-height={sourceGhost.height}
+        style={{
+          position: "absolute",
+          left: sourceGhost.x,
+          top: sourceGhost.y,
+          width: sourceGhost.width,
+          height: sourceGhost.height,
+          pointerEvents: "none",
+        }}
+      />
+    )
+  );
+
   const widgetElements = visibleWidgets.map((widget) => (
     <WidgetSlot key={widget.id} widget={widget} animated={animated}>
       {children}
@@ -150,6 +196,7 @@ export function DashboardGrid({ className, style, ghostClassName, animated = tru
     >
       {animated ? (
         <>
+          <AnimatePresence>{sourceGhostElement}</AnimatePresence>
           <AnimatePresence>{ghostElement}</AnimatePresence>
           <AnimatePresence mode="popLayout">{widgetElements}</AnimatePresence>
           <AnimatePresence>
@@ -163,6 +210,7 @@ export function DashboardGrid({ className, style, ghostClassName, animated = tru
         </>
       ) : (
         <>
+          {sourceGhostElement}
           {ghostElement}
           {widgetElements}
           {unanchoredLines.map((line) => (

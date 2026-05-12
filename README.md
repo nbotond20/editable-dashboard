@@ -1667,6 +1667,38 @@ When rendering, iterate `segments ?? [{ x1, y1, x2, y2, anchorId: null, edge: nu
 
 Vertical line drops trigger an equal-distribute resize if the row would overflow `maxColumns`. Horizontal line drops insert the source as a new full-width row.
 
+### Source ghost
+
+In `'lines'` / `'both'` modes the dragged widget no longer reflows the grid until a line is snapped, leaving an apparent "hole" at the slot it was picked up from. The library exposes a headless anchor for that slot so you can render a placeholder (outline, dashed border, label, etc.) without re-implementing layout math.
+
+It lives on `dragState.sourceGhost` and is mirrored on the convenience hook:
+
+```tsx
+import { useSourceGhost } from "editable-dashboard";
+
+function SourceGhost() {
+  const ghost = useSourceGhost();
+  if (!ghost) return null;
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: ghost.x,
+        top: ghost.y,
+        width: ghost.width,
+        height: ghost.height,
+        borderRadius: 12,
+        border: "2px solid currentColor",
+        opacity: 0.4,
+        pointerEvents: "none",
+      }}
+    />
+  );
+}
+```
+
+`sourceGhost` is a `WidgetLayout` (`{ id, x, y, width, height, colSpan }`) and is `null` outside an active pointer drag, in `'classic'` mode, and during keyboard / external drags.
+
 ---
 
 ## Advanced: Engine Subpath
