@@ -11,9 +11,7 @@ export function buildDragState(snapshot: DragEngineSnapshot): DragState {
   const phase = snapshot.phase;
   const intent = snapshot.intent;
   const swapTargetId =
-    intent?.type === "deferred-swap" || intent?.type === "swap"
-      ? intent.targetId
-      : null;
+    intent?.type === "deferred-swap" ? intent.targetId : null;
 
   if (phase.type === "dragging") {
     return {
