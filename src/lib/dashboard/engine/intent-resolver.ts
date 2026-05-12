@@ -14,7 +14,7 @@ export interface IntentResolverConfig {
   layout?: ComputedLayout;
   baseLayout?: ComputedLayout;
   pointerY?: number;
-  dropMode?: "classic" | "lines" | "both";
+  dropMode?: "classic" | "lines";
 }
 
 export function resolveIntent(
@@ -38,7 +38,7 @@ export function resolveIntent(
     }
 
     case "widget": {
-      if (config.dropMode === "lines" || config.dropMode === "both") {
+      if (config.dropMode === "lines") {
         if (config.isPositionLocked(zone.targetId)) {
           return { type: "none" };
         }

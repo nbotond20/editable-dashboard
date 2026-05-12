@@ -9,13 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- New `deferred-swap` `OperationIntent` variant and `swapTargetId: string | null` field on `DragState`. In `lines` / `both` modes, hovering directly over a widget surfaces a deferred-swap intent that highlights the target without reflowing the layout; the swap commits as a regular `SWAP_WIDGETS` operation only on drop. Classic mode keeps the existing immediate (dwell-based) swap.
-- New `dropMode` config (`'classic' | 'lines' | 'both'`, default `'classic'`), `lineSnapRadius` (default `16`), and `lineCornerInset` (default `8`) on `DragConfig`.
+- New `deferred-swap` `OperationIntent` variant and `swapTargetId: string | null` field on `DragState`. In `lines` mode, hovering directly over a widget surfaces a deferred-swap intent that highlights the target without reflowing the layout; the swap commits as a regular `SWAP_WIDGETS` operation only on drop. Classic mode keeps the existing immediate (dwell-based) swap.
+- New `dropMode` config (`'classic' | 'lines'`, default `'classic'`), `lineSnapRadius` (default `16`), and `lineCornerInset` (default `8`) on `DragConfig`.
 - New optional `lineProximityRadius` on `DragConfig` (and `DragEngineConfig`). When set, the engine exposes only insertion-line segments within the given pixel radius of the pointer; if every segment of a line is outside the radius, the whole line is dropped. The active (snapped) line is always exposed with all its segments. Unset (default) keeps the prior behavior of exposing every feasible line throughout a drag.
 - Insertion line segment dedup: when multiple anchored segments inside the same `InsertionLine` overlap on the longitudinal axis (e.g. a row-spanning widget's top segment shadowing each shorter widget-edge segment in the row above), the shorter segments are now dropped in favor of the longer one. Side-by-side, non-overlapping segments are still emitted, so per-widget anchoring is preserved wherever it doesn't produce visually doubled lines.
 - New `InsertionLine` engine type and `insertionLines: InsertionLine[]` field on `DragEngineSnapshot`.
 - New `useInsertionLines()` React hook for consumer-rendered drop indicators.
-- New `sourceGhost: WidgetLayout | null` field on `DragState` and matching `useSourceGhost()` React hook — exposes the pre-drag layout of the dragged widget so consumers can render a headless "source ghost" placeholder at the slot it was picked up from. Populated only during a pointer drag while `dropMode` is `'lines'` or `'both'`; `null` otherwise. The demo app renders it as a solid-bordered outline matching the original widget's size and border radius.
+- New `sourceGhost: WidgetLayout | null` field on `DragState` and matching `useSourceGhost()` React hook — exposes the pre-drag layout of the dragged widget so consumers can render a headless "source ghost" placeholder at the slot it was picked up from. Populated only during a pointer drag while `dropMode` is `'lines'`; `null` otherwise. The demo app renders it as a solid-bordered outline matching the original widget's size and border radius.
 - New `OperationIntent` / `CommittedOperation` variants: `new-row` (drop on H-line) and `in-row-insert` (drop on V-line with equal-distribute resize fallback).
 - E2E coverage: `insertion-lines-render`, `insertion-lines-magnetic`, `insertion-lines-h-drop`, `insertion-lines-v-drop`, `insertion-lines-edge-cases`, `insertion-lines-modes`.
 - Unit coverage: `equal-distribute`, `insertion-lines` (`computeInsertionLines`, `findSnappedLine`), `zone-resolver-lines`, `intent-resolver-lines`, `operation-applier-lines`, `zones-equal-lines`.
@@ -24,6 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `computeInsertionLines` now accepts an optional `getWidgetConstraints` input. Lines mode now uniformly respects the same locks and constraints as classic mode: position locks, resize locks (source and stationaries), and `minSpan` / `maxSpan` from `getWidgetConstraints`.
 - `equalDistribute` now also enforces `isResizeLocked` on the source widget (previously skipped) — in-row inserts no longer silently shrink a resize-locked source.
+
+### Removed
+
+- `dropMode: 'both'` — only `'classic'` and `'lines'` remain. The hybrid mode (lines inside snap radius, classic resolver elsewhere) was redundant once `lines` mode gained deferred-swap on widget hovers.
 
 ### Fixed
 
@@ -39,7 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Horizontal insertion lines no longer cross widgets when row heights differ. H-lines are now rendered as per-widget (top/bottom of the dashboard) and per-column-gap (between rows) segments anchored to widget edges with `lineCornerInset`, so the indicators always sit in the gap and never overlay a widget body. `InsertionLine` gained an optional `segments` array carrying the per-segment endpoints; existing `x1/y1/x2/y2` fields are preserved as a bounding box for backwards compatibility.
 - Insertion lines now render around every widget — including the dragged source — at exactly half-gap distance on all four sides. Mid-row H-lines emit per-widget top/bottom segments (instead of column-overlap segments) and surrounding lines for the dragged widget are emitted as disabled so the rhythm stays consistent.
 - Insertion line segments are now anchored to a specific widget (`anchorId` + `edge` on `InsertionLineSegment`) and rendered inside the anchor widget's animated container, so lines follow the widget's transform during layout shifts instead of staying at frozen placement coordinates. Vertical line segments are sized to the anchor widget's height (no longer the row's union of heights), so they no longer overshoot shorter widgets. Vertical lines now always emit `segments` (previously only horizontal lines did).
-- Ghost preview is now shown during drag in `lines` / `both` modes (previously suppressed). Hover-over-widget swaps and other intents now produce a visible preview layout instead of leaving the layout frozen.
+- Ghost preview is now shown during drag in `lines` mode (previously suppressed). Hover-over-widget swaps and other intents now produce a visible preview layout instead of leaving the layout frozen.
 
 ## [4.4.2] - 2026-04-21
 ## [4.4.1] - 2026-04-21

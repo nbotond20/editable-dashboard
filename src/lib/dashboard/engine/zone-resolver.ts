@@ -19,7 +19,7 @@ export function resolveZone(
   containerWidth: number,
   sourceId: string | null,
   currentWidgetSide?: "left" | "right",
-  dropMode: "classic" | "lines" | "both" = "classic",
+  dropMode: "classic" | "lines" = "classic",
   insertionLines: ReadonlyArray<InsertionLine> = [],
   lineSnapRadius = 16,
   previousLineId: string | null = null,
@@ -33,7 +33,7 @@ export function resolveZone(
   const rects = buildRects(layout, widgets, sourceId);
   const inset = gap / 2;
 
-  if (dropMode !== "classic") {
+  if (dropMode === "lines") {
     const widgetHit = resolveWidgetHit(rawPointer, rects, inset, colWidth, currentWidgetSide);
     if (widgetHit) return widgetHit;
 
@@ -48,7 +48,7 @@ export function resolveZone(
       };
     }
 
-    if (dropMode === "lines") return { type: "outside" };
+    return { type: "outside" };
   }
 
   return classicResolveZone(pointer, rects, layout, gap, maxColumns, containerWidth, inset, colWidth, currentWidgetSide);

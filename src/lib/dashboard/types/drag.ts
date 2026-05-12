@@ -20,7 +20,7 @@ export interface DragState {
   /**
    * Layout of the dragged widget at its original (pre-drag) position.
    *
-   * Populated only during a pointer drag while `dropMode` is `"lines"` or `"both"`,
+   * Populated only during a pointer drag while `dropMode` is `"lines"`,
    * giving consumers a headless anchor to render a "source ghost" placeholder at
    * the slot the widget was picked up from. `null` in all other cases.
    */

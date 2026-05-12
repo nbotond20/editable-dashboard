@@ -19,7 +19,7 @@ export interface DragConfig {
   swapDwellMs?: number;
   resizeDwellMs?: number;
   dropAnimationDuration?: number;
-  dropMode?: "classic" | "lines" | "both";
+  dropMode?: "classic" | "lines";
   lineSnapRadius?: number;
   lineCornerInset?: number;
   /**

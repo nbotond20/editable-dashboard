@@ -38,7 +38,7 @@ export const DROP_ANIMATION_DURATION = 250;
 export const EXTERNAL_PHANTOM_ID = "__external_phantom__";
 
 /** Default drop interaction mode. `'classic'` preserves all pre-line behavior. */
-export const DEFAULT_DROP_MODE: "classic" | "lines" | "both" = "classic";
+export const DEFAULT_DROP_MODE: "classic" | "lines" = "classic";
 
 /** Pixel radius around an insertion line that magnetically snaps the pointer. */
 export const DEFAULT_LINE_SNAP_RADIUS = 16;

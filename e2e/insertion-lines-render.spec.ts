@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { setupDashboard } from "./helpers/setup";
 import { widgetDragHandleById } from "./helpers/locators";
 
-async function setDropMode(page: import("@playwright/test").Page, mode: "classic" | "lines" | "both") {
+async function setDropMode(page: import("@playwright/test").Page, mode: "classic" | "lines") {
   await page.locator(`[data-testid="drop-mode-selector"] [data-drop-mode="${mode}"]`).click();
 }
 

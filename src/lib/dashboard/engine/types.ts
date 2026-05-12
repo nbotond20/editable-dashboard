@@ -199,7 +199,7 @@ export interface DragEngineConfig {
   gap: number;
   dropAnimationDuration: number;
   maxUndoDepth: number;
-  dropMode: "classic" | "lines" | "both";
+  dropMode: "classic" | "lines";
   lineSnapRadius: number;
   lineCornerInset: number;
   lineProximityRadius?: number;

@@ -8,7 +8,7 @@ export interface ComputeInsertionLinesInput {
   layout: ComputedLayout;
   widgets: readonly WidgetState[];
   sourceId: string | null;
-  dropMode: "classic" | "lines" | "both";
+  dropMode: "classic" | "lines";
   maxColumns: number;
   containerWidth: number;
   cornerInset?: number;

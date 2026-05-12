@@ -5,7 +5,7 @@ import type { InsertionLine } from "../engine/types.ts";
 /**
  * Returns the current set of magnetic insertion lines emitted by the drag engine.
  *
- * Lines are only populated when `dropMode` is `'lines'` or `'both'` and a drag is in progress.
+ * Lines are only populated when `dropMode` is `'lines'` and a drag is in progress.
  * Each line includes its geometry, an `isActive` flag (true when the pointer is snapped to it),
  * and a `disabled` flag (true for infeasible drops: self-adjacent, would cross a position-locked
  * widget, would resize a resize-locked widget, or would violate `minSpan` / `maxSpan` constraints).

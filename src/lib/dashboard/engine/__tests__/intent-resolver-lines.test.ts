@@ -25,18 +25,11 @@ const CFG = {
   getWidgetConstraints: () => ({ minSpan: 1, maxSpan: 3 }),
 };
 
-describe("resolveIntent — deferred swap in lines/both mode", () => {
+describe("resolveIntent — deferred swap in lines mode", () => {
   it("returns deferred-swap for widget zone in lines mode", () => {
     const zone: DropZone = { type: "widget", targetId: "a", side: "left" };
     const source = widget("src", 1, 5);
     const result = resolveIntent(zone, 0, source, [widget("a")], { ...CFG, dropMode: "lines" });
-    expect(result).toEqual({ type: "deferred-swap", targetId: "a" });
-  });
-
-  it("returns deferred-swap for widget zone in both mode", () => {
-    const zone: DropZone = { type: "widget", targetId: "a", side: "right" };
-    const source = widget("src", 1, 5);
-    const result = resolveIntent(zone, 0, source, [widget("a")], { ...CFG, dropMode: "both" });
     expect(result).toEqual({ type: "deferred-swap", targetId: "a" });
   });
 

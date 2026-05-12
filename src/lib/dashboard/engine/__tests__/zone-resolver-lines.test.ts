@@ -67,17 +67,6 @@ describe("resolveZone — mode-aware line snapping", () => {
     expect(zone.type).toBe("outside");
   });
 
-  it("falls back to classic resolver in 'both' mode when no line snaps", () => {
-    const lay = layout([{ id: "a", x: 0, y: 0, width: 256, height: 100 }]);
-    const lines: InsertionLine[] = [];
-    const zone = resolveZone(
-      { x: 400, y: 50 },
-      lay, widgets(["a"]), STD.gap, STD.maxColumns, STD.containerWidth,
-      null, undefined, "both", lines, 16, null
-    );
-    expect(zone.type).not.toBe("outside");
-  });
-
   it("ignores lines entirely in classic mode", () => {
     const lay = layout([{ id: "a", x: 0, y: 0, width: 256, height: 100 }]);
     const lines: InsertionLine[] = [

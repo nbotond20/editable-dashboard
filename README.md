@@ -1614,11 +1614,10 @@ Modes:
 
 - `'classic'` (default) -- original gap-reorder, swap-on-dwell, side-drop semantics. Backward-compatible.
 - `'lines'` -- magnetic insertion lines determine drops. Hovering directly over a widget produces a **deferred swap** (target is highlighted, layout does not reflow, swap commits on drop). Drops outside lines cancel.
-- `'both'` -- lines win inside the magnetic snap radius; deferred swap fires for direct widget hovers; classic resolver runs elsewhere.
 
-### Deferred swap (lines / both mode)
+### Deferred swap (lines mode)
 
-In `lines` or `both` mode, hovering directly over a widget's interior surfaces a `deferred-swap` intent. Unlike classic swap (which reflows immediately based on `swapDwellMs`), deferred swap:
+In `lines` mode, hovering directly over a widget's interior surfaces a `deferred-swap` intent. Unlike classic swap (which reflows immediately based on `swapDwellMs`), deferred swap:
 
 - Sets `dragState.intentType = "deferred-swap"` and `dragState.swapTargetId = <target widget id>`.
 - Does **not** mutate `previewLayout`, so the grid stays still while the user decides.
@@ -1691,7 +1690,7 @@ Vertical line drops trigger an equal-distribute resize if the row would overflow
 
 ### Source ghost
 
-In `'lines'` / `'both'` modes the dragged widget no longer reflows the grid until a line is snapped, leaving an apparent "hole" at the slot it was picked up from. The library exposes a headless anchor for that slot so you can render a placeholder (outline, dashed border, label, etc.) without re-implementing layout math.
+In `'lines'` mode the dragged widget no longer reflows the grid until a line is snapped, leaving an apparent "hole" at the slot it was picked up from. The library exposes a headless anchor for that slot so you can render a placeholder (outline, dashed border, label, etc.) without re-implementing layout math.
 
 It lives on `dragState.sourceGhost` and is mirrored on the convenience hook:
 

@@ -47,8 +47,8 @@ interface DashboardContentProps {
    */
   maxColumns?: number;
   onMaxColumnsChange?: (n: number) => void;
-  dropMode?: "classic" | "lines" | "both";
-  onDropModeChange?: (m: "classic" | "lines" | "both") => void;
+  dropMode?: "classic" | "lines";
+  onDropModeChange?: (m: "classic" | "lines") => void;
   lineProximity?: ProximityOption;
   onLineProximityChange?: (p: ProximityOption) => void;
 }
@@ -138,7 +138,7 @@ function DashboardContent({ maxColumns: controlledMaxColumns, onMaxColumnsChange
             ))}
           </div>
           <div style={{ display: "flex", gap: 4 }} data-testid="drop-mode-selector">
-            {(["classic", "lines", "both"] as const).map((m) => (
+            {(["classic", "lines"] as const).map((m) => (
               <button
                 key={m}
                 type="button"
@@ -241,7 +241,7 @@ function saveState(widgets: WidgetState[], maxColumns: number, gap: number) {
 
 function UncontrolledApp({ saved }: { saved: { widgets: WidgetState[]; maxColumns: number } | undefined }) {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const [dropMode, setDropMode] = useState<"classic" | "lines" | "both">("classic");
+  const [dropMode, setDropMode] = useState<"classic" | "lines">("classic");
   const [lineProximity, setLineProximity] = useState<ProximityOption>(60);
 
   const handleChange = useCallback((state: DashboardState) => {
@@ -278,7 +278,7 @@ function UncontrolledApp({ saved }: { saved: { widgets: WidgetState[]; maxColumn
 function ControlledApp({ saved }: { saved: { widgets: WidgetState[]; maxColumns: number } | undefined }) {
   const [widgets, setWidgets] = useState<WidgetState[]>(saved?.widgets ?? initialWidgets);
   const [maxColumns, setMaxColumns] = useState(saved?.maxColumns ?? 2);
-  const [dropMode, setDropMode] = useState<"classic" | "lines" | "both">("classic");
+  const [dropMode, setDropMode] = useState<"classic" | "lines">("classic");
   const [lineProximity, setLineProximity] = useState<ProximityOption>(60);
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
