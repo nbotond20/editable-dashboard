@@ -7,10 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-
-- `dragState.swapTargetId` populated only for `deferred-swap` intents (lines mode), matching its JSDoc. Previously also set for classic-mode `swap`, causing consumers to render swap-preview UI (blue overlay) during classic-mode swaps.
-
+## [5.0.2] - 2026-05-12
 ## [5.0.1] - 2026-05-12
 ## [4.4.2] - 2026-04-21
 ## [4.4.1] - 2026-04-21
