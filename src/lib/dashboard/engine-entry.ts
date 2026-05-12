@@ -10,6 +10,7 @@ export type {
   DragEngineConfig,
   DragEngineSnapshot,
   Point,
+  InsertionLine,
 } from "./engine/types.ts";
 
 export { useAutoScroll } from "./drag/use-auto-scroll.ts";

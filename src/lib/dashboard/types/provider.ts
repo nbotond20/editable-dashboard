@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { CommittedOperation } from "../engine/types.ts";
+import type { CommittedOperation, InsertionLine } from "../engine/types.ts";
 import type { LockType, WidgetDefinition, WidgetState } from "./widget.ts";
 import type { DashboardState, DashboardActions } from "./state.ts";
 import type { ComputedLayout } from "./layout.ts";
@@ -80,6 +80,7 @@ export interface DashboardStableContextValue {
 export interface DashboardDragContextValue {
   phase: "idle" | "pending" | "dragging" | "keyboard-dragging" | "dropping" | "external-dragging";
   dragState: DragState;
+  insertionLines: InsertionLine[];
 }
 
 /**

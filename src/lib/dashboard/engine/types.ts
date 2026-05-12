@@ -5,6 +5,28 @@ export interface Point {
   readonly y: number;
 }
 
+export type InsertionLineSegment = {
+  readonly x1: number;
+  readonly y1: number;
+  readonly x2: number;
+  readonly y2: number;
+  readonly anchorId: string | null;
+  readonly edge: "top" | "bottom" | "left" | "right" | null;
+};
+
+export type InsertionLine = {
+  id: string;
+  orientation: "horizontal" | "vertical";
+  x1: number; y1: number; x2: number; y2: number;
+  segments?: ReadonlyArray<InsertionLineSegment>;
+  insertionIndex: number;
+  beforeId: string | null;
+  afterId: string | null;
+  rowIndex?: number;
+  isActive: boolean;
+  disabled: boolean;
+};
+
 export type PointerType = "mouse" | "touch" | "pen";
 
 export type DragEvent =
@@ -87,12 +109,27 @@ export type DropZone =
     }
   | { type: "widget"; targetId: string; side: "left" | "right" }
   | { type: "empty"; column: number }
-  | { type: "outside" };
+  | { type: "outside" }
+  | {
+      type: "insertion-line-h";
+      lineId: string;
+      insertionIndex: number;
+      beforeId: string | null;
+      afterId: string | null;
+    }
+  | {
+      type: "insertion-line-v";
+      lineId: string;
+      insertionIndex: number;
+      beforeId: string | null;
+      afterId: string | null;
+    };
 
 export type OperationIntent =
   | { type: "none" }
   | { type: "reorder"; targetIndex: number }
   | { type: "swap"; targetId: string }
+  | { type: "deferred-swap"; targetId: string }
   | {
       type: "auto-resize";
       targetId: string;
@@ -101,7 +138,13 @@ export type OperationIntent =
       targetIndex: number;
     }
   | { type: "column-pin"; column: number; pointerY?: number; _insertionIndex?: number }
-  | { type: "empty-row-maximize"; newSpan: number; pointerY?: number; _insertionIndex?: number };
+  | { type: "empty-row-maximize"; newSpan: number; pointerY?: number; _insertionIndex?: number }
+  | { type: "new-row"; insertionIndex: number; colSpan: number }
+  | {
+      type: "in-row-insert";
+      insertionIndex: number;
+      resize: ReadonlyArray<{ id: string; newSpan: number }>;
+    };
 
 export type CommittedOperation =
   | { type: "reorder"; fromIndex: number; toIndex: number }
@@ -126,7 +169,14 @@ export type CommittedOperation =
       config?: Record<string, unknown>;
     }
   | { type: "trash"; sourceId: string }
-  | { type: "cancelled" };
+  | { type: "cancelled" }
+  | { type: "new-row"; sourceId: string; insertionIndex: number; colSpan: number }
+  | {
+      type: "in-row-insert";
+      sourceId: string;
+      insertionIndex: number;
+      resize: ReadonlyArray<{ id: string; newSpan: number }>;
+    };
 
 /**
  * Describes what caused a state commit inside the engine.
@@ -149,6 +199,9 @@ export interface DragEngineConfig {
   gap: number;
   dropAnimationDuration: number;
   maxUndoDepth: number;
+  dropMode: "classic" | "lines" | "both";
+  lineSnapRadius: number;
+  lineCornerInset: number;
   isPositionLocked: (id: string) => boolean;
   isResizeLocked: (id: string) => boolean;
   canDrop: (sourceId: string, targetIndex: number) => boolean;
@@ -169,6 +222,7 @@ export interface DragEngineSnapshot {
   dwellProgress: number;
   canUndo: boolean;
   canRedo: boolean;
+  insertionLines: InsertionLine[];
 }
 
 export interface LayoutOptions {

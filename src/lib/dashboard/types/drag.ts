@@ -14,7 +14,9 @@ export interface DragState {
   longPressTargetId: string | null;
   isExternalDrag: boolean;
   externalWidgetType: string | null;
-  intentType: "none" | "reorder" | "swap" | "auto-resize" | "column-pin" | "empty-row-maximize" | null;
+  intentType: "none" | "reorder" | "swap" | "deferred-swap" | "auto-resize" | "column-pin" | "empty-row-maximize" | "new-row" | "in-row-insert" | null;
+  /** Widget ID that will be swapped on drop (deferred-swap intent). Null otherwise. */
+  swapTargetId: string | null;
 }
 
 /** Resolved drop target information produced by the drag engine. */

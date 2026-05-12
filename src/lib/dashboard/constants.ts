@@ -36,3 +36,15 @@ export const DROP_ANIMATION_DURATION = 250;
 
 /** Widget ID used for the phantom placeholder during external drag-to-add. */
 export const EXTERNAL_PHANTOM_ID = "__external_phantom__";
+
+/** Default drop interaction mode. `'classic'` preserves all pre-line behavior. */
+export const DEFAULT_DROP_MODE: "classic" | "lines" | "both" = "classic";
+
+/** Pixel radius around an insertion line that magnetically snaps the pointer. */
+export const DEFAULT_LINE_SNAP_RADIUS = 16;
+
+/** Extra pixels the pointer must travel before leaving a snapped line (hysteresis). */
+export const LINE_SNAP_HYSTERESIS = 8;
+
+/** Pixel inset applied to insertion line endpoints so they don't run into widget rounded corners. */
+export const DEFAULT_LINE_CORNER_INSET = 8;

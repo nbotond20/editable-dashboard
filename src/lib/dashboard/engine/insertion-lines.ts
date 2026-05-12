@@ -1,0 +1,383 @@
+import type { ComputedLayout, WidgetState } from "../types.ts";
+import type { InsertionLine, InsertionLineSegment, Point } from "./types.ts";
+import { LINE_SNAP_HYSTERESIS, DEFAULT_LINE_CORNER_INSET } from "../constants.ts";
+
+export interface ComputeInsertionLinesInput {
+  layout: ComputedLayout;
+  widgets: readonly WidgetState[];
+  sourceId: string | null;
+  dropMode: "classic" | "lines" | "both";
+  maxColumns: number;
+  containerWidth: number;
+  cornerInset?: number;
+  isPositionLocked: (id: string) => boolean;
+  isResizeLocked: (id: string) => boolean;
+}
+
+interface PositionedWidget {
+  id: string;
+  order: number;
+  colSpan: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export function computeInsertionLines(input: ComputeInsertionLinesInput): InsertionLine[] {
+  const { layout, widgets, sourceId, dropMode, maxColumns, containerWidth, isPositionLocked, isResizeLocked } = input;
+  const cornerInset = input.cornerInset ?? DEFAULT_LINE_CORNER_INSET;
+
+  if (dropMode === "classic") return [];
+  if (sourceId != null && isPositionLocked(sourceId)) return [];
+
+  const allPositioned: PositionedWidget[] = [];
+  for (const w of widgets) {
+    if (!w.visible) continue;
+    const pos = layout.positions.get(w.id);
+    if (!pos) continue;
+    allPositioned.push({ id: w.id, order: w.order, colSpan: w.colSpan, x: pos.x, y: pos.y, width: pos.width, height: pos.height });
+  }
+
+  if (
+    allPositioned.length === 0 ||
+    (allPositioned.length === 1 && allPositioned[0].id === sourceId)
+  ) {
+    return [
+      {
+        id: "h-null-null-0",
+        orientation: "horizontal",
+        x1: 0, y1: 0, x2: containerWidth, y2: 0,
+        segments: [{ x1: 0, y1: 0, x2: containerWidth, y2: 0, anchorId: null, edge: null }],
+        insertionIndex: 0,
+        beforeId: null,
+        afterId: null,
+        rowIndex: 0,
+        isActive: false,
+        disabled: false,
+      },
+    ];
+  }
+
+  const stepForCol = maxColumns > 0
+    ? containerWidth / maxColumns
+    : containerWidth;
+  const colOfWidget = (w: PositionedWidget) => Math.round(w.x / stepForCol);
+  const nextRowForCol = new Array(maxColumns).fill(0);
+  const rowIndexById = new Map<string, number>();
+  const sortedByOrder = allPositioned.slice().sort((a, b) => a.order - b.order);
+  for (const w of sortedByOrder) {
+    const col = colOfWidget(w);
+    let row = 0;
+    for (let c = col; c < col + w.colSpan && c < maxColumns; c++) {
+      row = Math.max(row, nextRowForCol[c]);
+    }
+    for (let c = col; c < col + w.colSpan && c < maxColumns; c++) {
+      nextRowForCol[c] = row + 1;
+    }
+    rowIndexById.set(w.id, row);
+  }
+
+  const rowsMap = new Map<number, PositionedWidget[]>();
+  for (const w of allPositioned) {
+    const r = rowIndexById.get(w.id) ?? 0;
+    const arr = rowsMap.get(r) ?? [];
+    arr.push(w);
+    rowsMap.set(r, arr);
+  }
+  const rows: PositionedWidget[][] = [...rowsMap.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([, arr]) => arr);
+  for (const row of rows) row.sort((a, b) => a.x - b.x);
+
+  const includedSorted = widgets
+    .filter((w) => w.visible)
+    .slice()
+    .sort((a, b) => a.order - b.order);
+  const sourceIncludedIdx = sourceId != null
+    ? includedSorted.findIndex((w) => w.id === sourceId)
+    : -1;
+  const excludedSorted = sourceId != null
+    ? includedSorted.filter((w) => w.id !== sourceId)
+    : includedSorted;
+
+  function indexOfExcluded(id: string | null): number {
+    if (id == null) return -1;
+    return excludedSorted.findIndex((w) => w.id === id);
+  }
+
+  function insertionIndexFromAfter(afterId: string | null): number {
+    if (afterId == null) return excludedSorted.length;
+    const idx = indexOfExcluded(afterId);
+    return idx === -1 ? excludedSorted.length : idx;
+  }
+
+  function isSelfAdjacentByOrder(insertionIdx: number): boolean {
+    return sourceIncludedIdx >= 0 && insertionIdx === sourceIncludedIdx;
+  }
+
+  const sourceWidget = sourceId != null ? widgets.find((w) => w.id === sourceId) : undefined;
+  const sourceSpan = sourceWidget?.colSpan ?? 1;
+
+  function isLineSelfAdjacent(insertionIdx: number, row: PositionedWidget[]): boolean {
+    if (!isSelfAdjacentByOrder(insertionIdx)) return false;
+    let stationaryTotal = 0;
+    for (const w of row) if (w.id !== sourceId) stationaryTotal += w.colSpan;
+    return stationaryTotal + sourceSpan <= maxColumns;
+  }
+
+  function vRightSideWidget(row: PositionedWidget[], boundaryIdx: number): PositionedWidget | null {
+    for (let i = boundaryIdx; i < row.length; i++) {
+      if (row[i].id !== sourceId) return row[i];
+    }
+    return null;
+  }
+
+  function vInsertionIndex(row: PositionedWidget[], boundaryIdx: number): number {
+    const right = vRightSideWidget(row, boundaryIdx);
+    if (right) return insertionIndexFromAfter(right.id);
+    const last = lastNonSource(row);
+    if (last) {
+      const idx = indexOfExcluded(last.id);
+      if (idx !== -1) return idx + 1;
+    }
+    return excludedSorted.length;
+  }
+
+  const sourceRowIndex = sourceId != null ? rowIndexById.get(sourceId) : undefined;
+  const sourceRowWidgets = sourceRowIndex !== undefined ? (rowsMap.get(sourceRowIndex) ?? []) : [];
+  const sourceAloneInRow = sourceRowWidgets.length === 1 && sourceRowWidgets[0].id === sourceId;
+
+  let gapPx = 16;
+  for (const row of rows) {
+    if (row.length > 1) {
+      gapPx = Math.max(0, row[1].x - (row[0].x + row[0].width));
+      break;
+    }
+  }
+  const halfGap = gapPx / 2;
+
+  function widgetTopSegment(w: PositionedWidget): InsertionLineSegment {
+    const inset = Math.min(cornerInset, w.width / 2);
+    const y = w.y - halfGap;
+    return { x1: w.x + inset, y1: y, x2: w.x + w.width - inset, y2: y, anchorId: w.id, edge: "top" };
+  }
+
+  function widgetBottomSegment(w: PositionedWidget): InsertionLineSegment {
+    const inset = Math.min(cornerInset, w.width / 2);
+    const y = w.y + w.height + halfGap;
+    return { x1: w.x + inset, y1: y, x2: w.x + w.width - inset, y2: y, anchorId: w.id, edge: "bottom" };
+  }
+
+  function widgetLeftSegment(w: PositionedWidget): InsertionLineSegment {
+    const inset = Math.min(cornerInset, w.height / 2);
+    const x = w.x - halfGap;
+    return { x1: x, y1: w.y + inset, x2: x, y2: w.y + w.height - inset, anchorId: w.id, edge: "left" };
+  }
+
+  function widgetRightSegment(w: PositionedWidget): InsertionLineSegment {
+    const inset = Math.min(cornerInset, w.height / 2);
+    const x = w.x + w.width + halfGap;
+    return { x1: x, y1: w.y + inset, x2: x, y2: w.y + w.height - inset, anchorId: w.id, edge: "right" };
+  }
+
+  function firstNonSource(row: PositionedWidget[]): PositionedWidget | null {
+    for (const w of row) if (w.id !== sourceId) return w;
+    return null;
+  }
+
+  function lastNonSource(row: PositionedWidget[]): PositionedWidget | null {
+    for (let i = row.length - 1; i >= 0; i--) if (row[i].id !== sourceId) return row[i];
+    return null;
+  }
+
+  const lines: InsertionLine[] = [];
+
+  function vBoundingBox(segments: InsertionLineSegment[]): { x1: number; y1: number; x2: number; y2: number } {
+    const x = segments[0].x1;
+    const y1 = Math.min(...segments.map((s) => s.y1));
+    const y2 = Math.max(...segments.map((s) => s.y2));
+    return { x1: x, y1, x2: x, y2 };
+  }
+
+  for (let r = 0; r < rows.length; r++) {
+    const row = rows[r];
+
+    if (maxColumns > 1) {
+      const first = row[0];
+      const outerLeftIdx = vInsertionIndex(row, 0);
+      const outerLeftAfterId: string | null = first.id;
+      const adjacentToSourceLeft = first.id === sourceId;
+      const outerLeftSegs: InsertionLineSegment[] = [widgetLeftSegment(first)];
+      const outerLeftBB = vBoundingBox(outerLeftSegs);
+      lines.push({
+        id: `v-start-${outerLeftAfterId}-${r}`,
+        orientation: "vertical",
+        x1: outerLeftBB.x1, y1: outerLeftBB.y1, x2: outerLeftBB.x2, y2: outerLeftBB.y2,
+        segments: outerLeftSegs,
+        insertionIndex: outerLeftIdx,
+        beforeId: null,
+        afterId: outerLeftAfterId,
+        isActive: false,
+        disabled: adjacentToSourceLeft || isLineSelfAdjacent(outerLeftIdx, row),
+      });
+
+      for (let i = 0; i < row.length - 1; i++) {
+        const a = row[i];
+        const b = row[i + 1];
+        const adjacentToSource = a.id === sourceId || b.id === sourceId;
+        const stationaryRow = row.filter((w) => w.id !== sourceId);
+        const rowFull = isRowFullAfterInsertion(stationaryRow, sourceId, isResizeLocked, maxColumns);
+        const midIdx = vInsertionIndex(row, i + 1);
+        const midSegs: InsertionLineSegment[] = [widgetRightSegment(a), widgetLeftSegment(b)];
+        const midBB = vBoundingBox(midSegs);
+        lines.push({
+          id: `v-${a.id}-${b.id}-${r}`,
+          orientation: "vertical",
+          x1: midBB.x1, y1: midBB.y1, x2: midBB.x2, y2: midBB.y2,
+          segments: midSegs,
+          insertionIndex: midIdx,
+          beforeId: a.id,
+          afterId: b.id,
+          isActive: false,
+          disabled: adjacentToSource || rowFull || isLineSelfAdjacent(midIdx, row),
+        });
+      }
+
+      const last = row[row.length - 1];
+      const outerRightIdx = vInsertionIndex(row, row.length);
+      const outerRightBeforeId: string | null = last.id;
+      const adjacentToSourceRight = last.id === sourceId;
+      const outerRightSegs: InsertionLineSegment[] = [widgetRightSegment(last)];
+      const outerRightBB = vBoundingBox(outerRightSegs);
+      lines.push({
+        id: `v-${outerRightBeforeId}-end-${r}`,
+        orientation: "vertical",
+        x1: outerRightBB.x1, y1: outerRightBB.y1, x2: outerRightBB.x2, y2: outerRightBB.y2,
+        segments: outerRightSegs,
+        insertionIndex: outerRightIdx,
+        beforeId: outerRightBeforeId,
+        afterId: null,
+        isActive: false,
+        disabled: adjacentToSourceRight || isLineSelfAdjacent(outerRightIdx, row),
+      });
+    }
+  }
+
+  for (let r = 0; r <= rows.length; r++) {
+    const segments: InsertionLineSegment[] = [];
+    const above = r > 0 ? rows[r - 1] : null;
+    const below = r < rows.length ? rows[r] : null;
+
+    if (above) {
+      for (const w of above) segments.push(widgetBottomSegment(w));
+    }
+    if (below) {
+      for (const w of below) segments.push(widgetTopSegment(w));
+    }
+
+    if (segments.length === 0) continue;
+
+    const aboveLast = above ? lastNonSource(above) : null;
+    const belowFirst = below ? firstNonSource(below) : null;
+    const beforeId = aboveLast ? aboveLast.id : null;
+    const afterId = belowFirst ? belowFirst.id : null;
+
+    const insertionIdx = insertionIndexFromAfter(afterId);
+
+    const aboveAloneSource = above != null && above.length === 1 && above[0].id === sourceId;
+    const belowAloneSource = below != null && below.length === 1 && below[0].id === sourceId;
+    const sourceFullWidth = sourceId != null && (widgets.find((w) => w.id === sourceId)?.colSpan ?? 0) >= maxColumns;
+    const disabled =
+      sourceAloneInRow && sourceFullWidth && (aboveAloneSource || belowAloneSource);
+
+    const bx1 = Math.min(...segments.map((s) => s.x1));
+    const by1 = Math.min(...segments.map((s) => s.y1));
+    const bx2 = Math.max(...segments.map((s) => s.x2));
+    const by2 = Math.max(...segments.map((s) => s.y2));
+
+    lines.push({
+      id: `h-${beforeId ?? "start"}-${afterId ?? "end"}-${r}`,
+      orientation: "horizontal",
+      x1: bx1, y1: by1, x2: bx2, y2: by2,
+      segments,
+      insertionIndex: insertionIdx,
+      beforeId,
+      afterId,
+      rowIndex: r,
+      isActive: false,
+      disabled,
+    });
+  }
+
+  return lines;
+}
+
+export interface FindSnappedLineInput {
+  pointer: Point;
+  lines: ReadonlyArray<InsertionLine>;
+  snapRadius: number;
+  previousLineId: string | null;
+}
+
+export function findSnappedLine(input: FindSnappedLineInput): InsertionLine | null {
+  const { pointer, lines, snapRadius, previousLineId } = input;
+
+  let best: InsertionLine | null = null;
+  let bestDist = Infinity;
+  let previousLine: InsertionLine | null = null;
+  let previousDist = Infinity;
+
+  for (const line of lines) {
+    if (line.disabled) continue;
+    const dist = pointerLineDistance(pointer, line);
+    if (line.id === previousLineId) {
+      previousLine = line;
+      previousDist = dist;
+    }
+    if (dist <= snapRadius && dist < bestDist) {
+      best = line;
+      bestDist = dist;
+    }
+  }
+
+  if (previousLine && previousDist <= snapRadius + LINE_SNAP_HYSTERESIS) {
+    return previousLine;
+  }
+
+  return best;
+}
+
+function pointerSegmentDistance(p: Point, orientation: "horizontal" | "vertical", s: InsertionLineSegment): number {
+  if (orientation === "vertical") {
+    if (p.y >= s.y1 && p.y <= s.y2) return Math.abs(p.x - s.x1);
+    const dy = p.y < s.y1 ? s.y1 - p.y : p.y - s.y2;
+    return Math.hypot(p.x - s.x1, dy);
+  }
+  if (p.x >= s.x1 && p.x <= s.x2) return Math.abs(p.y - s.y1);
+  const dx = p.x < s.x1 ? s.x1 - p.x : p.x - s.x2;
+  return Math.hypot(dx, p.y - s.y1);
+}
+
+function pointerLineDistance(p: Point, line: InsertionLine): number {
+  const segs: ReadonlyArray<InsertionLineSegment> = line.segments && line.segments.length > 0
+    ? line.segments
+    : [{ x1: line.x1, y1: line.y1, x2: line.x2, y2: line.y2, anchorId: null, edge: null }];
+  let best = Infinity;
+  for (const s of segs) {
+    const d = pointerSegmentDistance(p, line.orientation, s);
+    if (d < best) best = d;
+  }
+  return best;
+}
+
+function isRowFullAfterInsertion(
+  row: ReadonlyArray<{ id: string; colSpan: number }>,
+  sourceId: string | null,
+  isResizeLocked: (id: string) => boolean,
+  maxColumns: number,
+): boolean {
+  const totalSpan = row.reduce((sum, w) => sum + w.colSpan, 0);
+  if (totalSpan + 1 <= maxColumns) return false;
+  return row.some((w) => w.id !== sourceId && isResizeLocked(w.id));
+}

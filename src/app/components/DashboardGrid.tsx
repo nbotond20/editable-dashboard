@@ -1,8 +1,9 @@
 import { useEffect, useMemo } from "react";
 import { LayoutGroup, AnimatePresence, motion } from "motion/react";
-import { useDashboard, EXTERNAL_PHANTOM_ID, type WidgetState, type DragHandleProps } from "../../lib/dashboard/index.ts";
+import { useDashboard, useInsertionLines, EXTERNAL_PHANTOM_ID, type WidgetState, type DragHandleProps } from "../../lib/dashboard/index.ts";
 import { SPRINGS } from "../animation-config.ts";
 import { WidgetSlot } from "./WidgetSlot.tsx";
+import { InsertionLineMarker, UnanchoredInsertionLine } from "./InsertionLineElement.tsx";
 
 interface WidgetSlotCallbackProps {
   key: string;
@@ -45,6 +46,16 @@ export function DashboardGrid({ className, style, ghostClassName, animated = tru
     }
     return () => document.body.classList.remove("dash-dragging");
   }, [phase]);
+
+  const lines = useInsertionLines();
+  const unanchoredLines = useMemo(
+    () => lines.filter((l) => !l.segments || l.segments.length === 0 || l.segments.every((s) => s.anchorId == null)),
+    [lines]
+  );
+  const anchoredLines = useMemo(
+    () => lines.filter((l) => l.segments && l.segments.some((s) => s.anchorId != null)),
+    [lines]
+  );
 
   const activeLayout = dragState.previewLayout ?? layout;
   const containerHeight = activeLayout.totalHeight;
@@ -141,11 +152,25 @@ export function DashboardGrid({ className, style, ghostClassName, animated = tru
         <>
           <AnimatePresence>{ghostElement}</AnimatePresence>
           <AnimatePresence mode="popLayout">{widgetElements}</AnimatePresence>
+          <AnimatePresence>
+            {unanchoredLines.map((line) => (
+              <UnanchoredInsertionLine key={line.id} line={line} />
+            ))}
+          </AnimatePresence>
+          {anchoredLines.map((line) => (
+            <InsertionLineMarker key={`marker-${line.id}`} line={line} />
+          ))}
         </>
       ) : (
         <>
           {ghostElement}
           {widgetElements}
+          {unanchoredLines.map((line) => (
+            <UnanchoredInsertionLine key={line.id} line={line} />
+          ))}
+          {anchoredLines.map((line) => (
+            <InsertionLineMarker key={`marker-${line.id}`} line={line} />
+          ))}
         </>
       )}
     </div>

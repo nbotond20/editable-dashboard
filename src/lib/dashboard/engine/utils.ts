@@ -28,6 +28,9 @@ export function zonesEqual(a: DropZone | null, b: DropZone | null): boolean {
       return a.column === (b as typeof a).column;
     case "outside":
       return true;
+    case "insertion-line-h":
+    case "insertion-line-v":
+      return a.lineId === (b as typeof a).lineId;
   }
 }
 

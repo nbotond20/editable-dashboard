@@ -29,6 +29,7 @@ Demo: https://nbotond20.github.io/editable-dashboard/
 - **Keyboard drag** -- full keyboard navigation with arrow keys, Space, and Escape
 - **Tree-shakeable** -- marked `sideEffects: false`; import only what you use
 - **Configurable drag behavior** -- tune activation thresholds, dwell times, scroll speed, and more via `dragConfig`
+- **Opt-in magnetic insertion lines** -- explicit V/H drop positions with hysteresis, full-row insertion, and equal-distribute resize
 - **Lifecycle callbacks** -- `onDragStart`, `onDragEnd`, `onWidgetAdd`, `onWidgetRemove`, and more
 - **Error handling** -- `onError` callback with typed error codes for validation failures
 - **Input validation** -- definitions, props, and serialized data are validated with descriptive errors
@@ -666,8 +667,9 @@ Complete internal state of the dashboard, including layout configuration and tra
 | `activeId`        | `string \| null`         | ID of the dragged widget.                                                                                         |
 | `dropTargetIndex` | `number \| null`         | Target insertion index.                                                                                           |
 | `previewColSpan`  | `number \| null`         | Dragged widget's span in the preview (if resize is involved).                                                     |
-| `previewLayout`   | `ComputedLayout \| null` | Full layout for the tentative drop position.                                                                      |
-| `intentType`      | `string \| null`         | Current drag intent: `"reorder"`, `"swap"`, `"auto-resize"`, `"column-pin"`, `"empty-row-maximize"`, or `"none"`. |
+| `previewLayout`   | `ComputedLayout \| null` | Full layout for the tentative drop position. `null` for `deferred-swap` (target highlights but layout does not reflow). |
+| `intentType`      | `string \| null`         | Current drag intent: `"reorder"`, `"swap"`, `"deferred-swap"`, `"auto-resize"`, `"column-pin"`, `"empty-row-maximize"`, `"new-row"`, `"in-row-insert"`, or `"none"`. |
+| `swapTargetId`    | `string \| null`         | ID of the widget that will be swapped on drop (set during `"deferred-swap"` or `"swap"` intent). Useful for rendering a hover highlight on the target. |
 
 ### `DropTarget`
 
@@ -1591,6 +1593,79 @@ Pass a `dragConfig` prop to tune the drag system:
 ```
 
 All fields are optional. Omitted fields use the defaults from the library's constants.
+
+---
+
+## Insertion lines (opt-in)
+
+The dashboard supports a magnetic insertion-line drop UI as an alternative to dwell-based drag operations.
+
+```tsx
+<DashboardProvider
+  definitions={defs}
+  initialWidgets={widgets}
+  dragConfig={{ dropMode: "lines", lineSnapRadius: 16, lineCornerInset: 8 }}
+>
+  …
+</DashboardProvider>
+```
+
+Modes:
+
+- `'classic'` (default) -- original gap-reorder, swap-on-dwell, side-drop semantics. Backward-compatible.
+- `'lines'` -- magnetic insertion lines determine drops. Hovering directly over a widget produces a **deferred swap** (target is highlighted, layout does not reflow, swap commits on drop). Drops outside lines cancel.
+- `'both'` -- lines win inside the magnetic snap radius; deferred swap fires for direct widget hovers; classic resolver runs elsewhere.
+
+### Deferred swap (lines / both mode)
+
+In `lines` or `both` mode, hovering directly over a widget's interior surfaces a `deferred-swap` intent. Unlike classic swap (which reflows immediately based on `swapDwellMs`), deferred swap:
+
+- Sets `dragState.intentType = "deferred-swap"` and `dragState.swapTargetId = <target widget id>`.
+- Does **not** mutate `previewLayout`, so the grid stays still while the user decides.
+- Commits as a regular `SWAP_WIDGETS` operation on drop (or is discarded on cancel).
+
+Consumers can render a highlight on the target widget by reading `dragState.swapTargetId`:
+
+```tsx
+function MyWidget({ widget }) {
+  const { dragState } = useDashboard();
+  const willSwap = dragState.swapTargetId === widget.id;
+  return <div style={{ outline: willSwap ? "2px solid #3b82f6" : undefined }} />;
+}
+```
+
+Geometry:
+
+- Outer V-lines sit half-gap to the left/right of the adjacent widget (matching inner V-line geometry).
+- H-lines span the row's widget extent (not the full container width).
+- Endpoints are inset by `lineCornerInset` px (default `8`) so lines don't run into widget rounded corners — bump this to your widget's `border-radius` if you use a larger radius.
+
+Use `useInsertionLines()` in your grid component to render the lines:
+
+```tsx
+import { useInsertionLines } from "editable-dashboard";
+
+function Lines() {
+  const lines = useInsertionLines();
+  return (
+    <>
+      {lines.map(line => <YourLineComponent key={line.id} line={line} />)}
+    </>
+  );
+}
+```
+
+Each line carries:
+
+- `orientation` (`'horizontal' | 'vertical'`)
+- `x1, y1, x2, y2` (geometry — bounding box for the line, useful for fallback rendering)
+- `segments?` (optional `Array<{ x1, y1, x2, y2, anchorId, edge }>` — each segment is anchored to a specific widget (`anchorId`) on a specific `edge` (`'top' | 'bottom' | 'left' | 'right'`). Both H-lines and V-lines emit segments; V-line mid-lines emit two segments (one anchored to each neighbor widget), sized to that widget's height. Anchor info lets you render the segment inside the widget's animated container so the line follows widget transforms.)
+- `isActive` (pointer snapped to it)
+- `disabled` (self-adjacent or resize-lock conflict)
+
+When rendering, iterate `segments ?? [{ x1, y1, x2, y2, anchorId: null, edge: null }]`. For anchored segments you can portal/append the segment element inside the widget's container so it inherits the widget's layout transform; unanchored segments (e.g. the single line shown on an empty dashboard) render in container coordinates.
+
+Vertical line drops trigger an equal-distribute resize if the row would overflow `maxColumns`. Horizontal line drops insert the source as a new full-width row.
 
 ---
 

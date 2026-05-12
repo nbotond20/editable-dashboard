@@ -44,9 +44,11 @@ interface DashboardContentProps {
    */
   maxColumns?: number;
   onMaxColumnsChange?: (n: number) => void;
+  dropMode?: "classic" | "lines" | "both";
+  onDropModeChange?: (m: "classic" | "lines" | "both") => void;
 }
 
-function DashboardContent({ maxColumns: controlledMaxColumns, onMaxColumnsChange }: DashboardContentProps) {
+function DashboardContent({ maxColumns: controlledMaxColumns, onMaxColumnsChange, dropMode = "classic", onDropModeChange }: DashboardContentProps) {
   const { state, actions, definitions: defs, canUndo, canRedo } = useDashboardStable();
   const [catalogOpen, setCatalogOpen] = useState(false);
   const [animated, setAnimated] = useState(
@@ -87,7 +89,7 @@ function DashboardContent({ maxColumns: controlledMaxColumns, onMaxColumnsChange
   );
 
   return (
-    <div style={{ minHeight: "100vh" }}>
+    <div style={{ minHeight: "100vh", background: "#e8edf5" }}>
       <header className="dash-header">
         <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
           <h1 className="dash-heading-md">Dashboard</h1>
@@ -127,6 +129,20 @@ function DashboardContent({ maxColumns: controlledMaxColumns, onMaxColumnsChange
                 onClick={() => setMaxColumns(n)}
               >
                 {n} col{n > 1 ? "s" : ""}
+              </button>
+            ))}
+          </div>
+          <div style={{ display: "flex", gap: 4 }} data-testid="drop-mode-selector">
+            {(["classic", "lines", "both"] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                className={`dash-btn ${dropMode === m ? "dash-btn--primary" : "dash-btn--outline"}`}
+                data-drop-mode={m}
+                data-active={m === dropMode ? "true" : "false"}
+                onClick={() => onDropModeChange?.(m)}
+              >
+                {m}
               </button>
             ))}
           </div>
@@ -203,6 +219,7 @@ function saveState(widgets: WidgetState[], maxColumns: number, gap: number) {
 
 function UncontrolledApp({ saved }: { saved: { widgets: WidgetState[]; maxColumns: number } | undefined }) {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const [dropMode, setDropMode] = useState<"classic" | "lines" | "both">("classic");
 
   const handleChange = useCallback((state: DashboardState) => {
     clearTimeout(saveTimerRef.current);
@@ -217,11 +234,11 @@ function UncontrolledApp({ saved }: { saved: { widgets: WidgetState[]; maxColumn
       initialWidgets={saved?.widgets ?? initialWidgets}
       maxColumns={saved?.maxColumns ?? 2}
       gap={16}
-      dragConfig={DRAG_CONFIG}
+      dragConfig={{ ...DRAG_CONFIG, dropMode }}
       enableExternalDrag
       onChange={handleChange}
     >
-      <DashboardContent />
+      <DashboardContent dropMode={dropMode} onDropModeChange={setDropMode} />
     </DashboardProvider>
   );
 }
@@ -229,6 +246,7 @@ function UncontrolledApp({ saved }: { saved: { widgets: WidgetState[]; maxColumn
 function ControlledApp({ saved }: { saved: { widgets: WidgetState[]; maxColumns: number } | undefined }) {
   const [widgets, setWidgets] = useState<WidgetState[]>(saved?.widgets ?? initialWidgets);
   const [maxColumns, setMaxColumns] = useState(saved?.maxColumns ?? 2);
+  const [dropMode, setDropMode] = useState<"classic" | "lines" | "both">("classic");
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => {
@@ -245,12 +263,14 @@ function ControlledApp({ saved }: { saved: { widgets: WidgetState[]; maxColumns:
       onStateChange={setWidgets}
       maxColumns={maxColumns}
       gap={16}
-      dragConfig={DRAG_CONFIG}
+      dragConfig={{ ...DRAG_CONFIG, dropMode }}
       enableExternalDrag
     >
       <DashboardContent
         maxColumns={maxColumns}
         onMaxColumnsChange={setMaxColumns}
+        dropMode={dropMode}
+        onDropModeChange={setDropMode}
       />
     </DashboardProvider>
   );

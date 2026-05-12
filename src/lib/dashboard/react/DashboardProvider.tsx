@@ -360,8 +360,8 @@ export function DashboardProvider(props: DashboardProviderProps) {
   );
 
   const dragValue = useMemo(
-    () => ({ phase, dragState }),
-    [phase, dragState],
+    () => ({ phase, dragState, insertionLines: snapshot.insertionLines }),
+    [phase, dragState, snapshot.insertionLines],
   );
 
   const onChangeRef = useRef(onChange);

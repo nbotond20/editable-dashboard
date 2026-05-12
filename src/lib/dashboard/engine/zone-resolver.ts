@@ -1,5 +1,6 @@
-import type { Point, DropZone } from "./types.ts";
+import type { Point, DropZone, InsertionLine } from "./types.ts";
 import type { ComputedLayout, WidgetState } from "../types.ts";
+import { findSnappedLine } from "./insertion-lines.ts";
 
 type WidgetRect = {
   id: string;
@@ -18,6 +19,11 @@ export function resolveZone(
   containerWidth: number,
   sourceId: string | null,
   currentWidgetSide?: "left" | "right",
+  dropMode: "classic" | "lines" | "both" = "classic",
+  insertionLines: ReadonlyArray<InsertionLine> = [],
+  lineSnapRadius = 16,
+  previousLineId: string | null = null,
+  rawPointer: Point = pointer,
 ): DropZone {
   const colWidth =
     maxColumns > 1
@@ -27,6 +33,38 @@ export function resolveZone(
   const rects = buildRects(layout, widgets, sourceId);
   const inset = gap / 2;
 
+  if (dropMode !== "classic") {
+    const widgetHit = resolveWidgetHit(rawPointer, rects, inset, colWidth, currentWidgetSide);
+    if (widgetHit) return widgetHit;
+
+    const snapped = findSnappedLine({ pointer: rawPointer, lines: insertionLines, snapRadius: lineSnapRadius, previousLineId });
+    if (snapped) {
+      return {
+        type: snapped.orientation === "horizontal" ? "insertion-line-h" : "insertion-line-v",
+        lineId: snapped.id,
+        insertionIndex: snapped.insertionIndex,
+        beforeId: snapped.beforeId,
+        afterId: snapped.afterId,
+      };
+    }
+
+    if (dropMode === "lines") return { type: "outside" };
+  }
+
+  return classicResolveZone(pointer, rects, layout, gap, maxColumns, containerWidth, inset, colWidth, currentWidgetSide);
+}
+
+function classicResolveZone(
+  pointer: Point,
+  rects: WidgetRect[],
+  layout: ComputedLayout,
+  gap: number,
+  maxColumns: number,
+  containerWidth: number,
+  inset: number,
+  colWidth: number,
+  currentWidgetSide?: "left" | "right",
+): DropZone {
   const widgetHit = resolveWidgetHit(
     pointer,
     rects,

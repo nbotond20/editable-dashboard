@@ -8,10 +8,12 @@ import type {
   CommitSource,
   DragEngineConfig,
   DragEngineSnapshot,
+  InsertionLine,
   Point,
 } from "./types.ts";
 import { distance, getVisibleSorted, zonesEqual, getPinnedIds } from "./utils.ts";
 import { resolveZone } from "./zone-resolver.ts";
+import { computeInsertionLines } from "./insertion-lines.ts";
 import { resolveIntent, computeDwellProgress } from "./intent-resolver.ts";
 import { applyOperation } from "./operation-applier.ts";
 import {
@@ -47,6 +49,9 @@ import {
   EMPTY_ROW_MAXIMIZE_DWELL_MS,
   DROP_ANIMATION_DURATION,
   EXTERNAL_PHANTOM_ID,
+  DEFAULT_DROP_MODE,
+  DEFAULT_LINE_SNAP_RADIUS,
+  DEFAULT_LINE_CORNER_INSET,
 } from "../constants.ts";
 
 const UNDOABLE_ACTIONS = new Set<string>([
@@ -78,6 +83,9 @@ function defaultConfig(): DragEngineConfig {
     gap: DEFAULT_GAP,
     dropAnimationDuration: DROP_ANIMATION_DURATION,
     maxUndoDepth: MAX_UNDO_DEPTH,
+    dropMode: DEFAULT_DROP_MODE,
+    lineSnapRadius: DEFAULT_LINE_SNAP_RADIUS,
+    lineCornerInset: DEFAULT_LINE_CORNER_INSET,
     isPositionLocked: () => false,
     isResizeLocked: () => false,
     canDrop: () => true,
@@ -125,6 +133,9 @@ export class DragEngine {
   private widgetById = new Map<string, WidgetState>();
   private visibleSortedCache: WidgetState[] = [];
   private lastProcessedPointerPos: Point | null = null;
+
+  private insertionLines: InsertionLine[] = [];
+  private currentLineId: string | null = null;
 
   constructor(
     initialState: DashboardState,
@@ -251,6 +262,7 @@ export class DragEngine {
           : 0,
       canUndo: canUndo(this.history),
       canRedo: canRedo(this.history),
+      insertionLines: this.insertionLines,
     };
 
     return this.cachedSnapshot;
@@ -472,6 +484,8 @@ export class DragEngine {
     this.currentZone = null;
     this.currentIntent = null;
     this.previewLayout = null;
+    this.insertionLines = [];
+    this.currentLineId = null;
     this.recomputeLayouts();
 
     this.announcement = this.buildDropAnnouncement(committed);
@@ -750,6 +764,26 @@ export class DragEngine {
           cfg.maxColumns,
           cfg.gap,
         ),
+      };
+    } else if (committed.type === "new-row" || committed.type === "in-row-insert") {
+      const involvedIds = new Set<string>([committed.sourceId]);
+      if (committed.type === "in-row-insert") {
+        for (const r of committed.resize) involvedIds.add(r.id);
+      }
+      newState = {
+        ...newState,
+        widgets: stabilizeUninvolvedWidgets(
+          newState.widgets,
+          this.baseLayout,
+          involvedIds,
+          this.containerWidth,
+          cfg.maxColumns,
+          cfg.gap,
+        ),
+      };
+      newState = {
+        ...newState,
+        widgets: pinToGreedyColumns(newState.widgets, cfg.maxColumns),
       };
     } else {
       newState = {
@@ -1099,6 +1133,8 @@ export class DragEngine {
       const currentWidgetSide =
         this.currentZone?.type === "widget" ? this.currentZone.side : undefined;
 
+      this.recomputeInsertionLines();
+
       const computedZone = resolveZone(
         pointerPos,
         layout,
@@ -1108,6 +1144,10 @@ export class DragEngine {
         this.containerWidth,
         null,
         currentWidgetSide,
+        this.config.dropMode,
+        this.insertionLines,
+        this.config.lineSnapRadius,
+        this.currentLineId,
       );
 
       if (!zonesEqual(computedZone, this.currentZone)) {
@@ -1115,6 +1155,9 @@ export class DragEngine {
           this.pendingZoneFrames++;
           if (this.pendingZoneFrames >= 2) {
             this.currentZone = computedZone;
+            this.currentLineId =
+              computedZone.type === "insertion-line-h" || computedZone.type === "insertion-line-v"
+                ? computedZone.lineId : null;
             this.zoneEnteredAt = timestamp;
             this.lastZonePointerPos = null;
             this.pendingZone = null;
@@ -1127,6 +1170,9 @@ export class DragEngine {
           this.pendingZoneFrames = 1;
           if (this.currentZone === null || computedZone.type === "outside") {
             this.currentZone = computedZone;
+            this.currentLineId =
+              computedZone.type === "insertion-line-h" || computedZone.type === "insertion-line-v"
+                ? computedZone.lineId : null;
             this.zoneEnteredAt = timestamp;
             this.lastZonePointerPos = null;
             this.pendingZone = null;
@@ -1144,6 +1190,7 @@ export class DragEngine {
           computedZone.side !== this.currentZone.side
         ) {
           this.currentZone = computedZone;
+          this.currentLineId = null;
         }
       }
 
@@ -1185,6 +1232,7 @@ export class DragEngine {
       }),
       layout,
       pointerY: phase.pointerPos.y,
+      dropMode: this.config.dropMode,
     });
 
     if (newIntent.type === "swap" || newIntent.type === "auto-resize") {
@@ -1341,15 +1389,22 @@ export class DragEngine {
       grabOffset,
     };
 
-    this.dragLayout = solveDragLayout(
+    this.dragLayout = this.computeDragLayout(sourceId);
+
+    this.announcement = "Dragging started";
+  }
+
+  private computeDragLayout(sourceId: string): ComputedLayout {
+    if (this.config.dropMode !== "classic") {
+      return this.baseLayout;
+    }
+    return solveDragLayout(
       this.history.present.widgets,
       this.heights,
       this.containerWidth,
       this.layoutConfig(),
       sourceId,
     );
-
-    this.announcement = "Dragging started";
   }
 
   private updateZoneAndIntent(timestamp: number): void {
@@ -1378,6 +1433,8 @@ export class DragEngine {
       const currentWidgetSide =
         this.currentZone?.type === "widget" ? this.currentZone.side : undefined;
 
+      this.recomputeInsertionLines();
+
       let computedZone = resolveZone(
         zonePointerPos,
         layout,
@@ -1387,6 +1444,11 @@ export class DragEngine {
         this.containerWidth,
         this.phase.sourceId,
         currentWidgetSide,
+        this.config.dropMode,
+        this.insertionLines,
+        this.config.lineSnapRadius,
+        this.currentLineId,
+        rawPointerPos,
       );
 
       if (computedZone.type === "outside" || computedZone.type === "gap") {
@@ -1410,11 +1472,15 @@ export class DragEngine {
         }
       }
 
+      const prevLineId = this.currentLineId;
       if (!zonesEqual(computedZone, this.currentZone)) {
         if (zonesEqual(computedZone, this.pendingZone)) {
           this.pendingZoneFrames++;
           if (this.pendingZoneFrames >= 2) {
             this.currentZone = computedZone;
+            this.currentLineId =
+              computedZone.type === "insertion-line-h" || computedZone.type === "insertion-line-v"
+                ? computedZone.lineId : null;
             this.zoneEnteredAt = timestamp;
             this.lastZonePointerPos = null;
             this.pendingZone = null;
@@ -1430,6 +1496,9 @@ export class DragEngine {
             computedZone.type === "outside"
           ) {
             this.currentZone = computedZone;
+            this.currentLineId =
+              computedZone.type === "insertion-line-h" || computedZone.type === "insertion-line-v"
+                ? computedZone.lineId : null;
             this.zoneEnteredAt = timestamp;
             this.lastZonePointerPos = null;
             this.pendingZone = null;
@@ -1447,7 +1516,15 @@ export class DragEngine {
           computedZone.side !== this.currentZone.side
         ) {
           this.currentZone = computedZone;
+          this.currentLineId = null;
         }
+      }
+
+      if (prevLineId !== this.currentLineId) {
+        this.insertionLines = this.insertionLines.map((l) => {
+          const active = l.id === this.currentLineId && !l.disabled;
+          return active === l.isActive ? l : { ...l, isActive: active };
+        });
       }
 
       if (this.lastZonePointerPos) {
@@ -1524,6 +1601,7 @@ export class DragEngine {
       layout,
       baseLayout: this.baseLayout,
       pointerY: this.phase.type === "dragging" ? zonePointerPos.y : undefined,
+      dropMode: this.config.dropMode,
     });
 
     // Cross-row auto-resize that shrinks the target when source+target
@@ -1597,7 +1675,7 @@ export class DragEngine {
     if (!this.intentsEqual(newIntent, this.currentIntent)) {
       this.currentIntent = newIntent;
       this.previewLayout =
-        newIntent.type !== "none"
+        newIntent.type !== "none" && newIntent.type !== "deferred-swap"
           ? solvePreviewLayout(
               state.widgets,
               this.heights,
@@ -1665,6 +1743,7 @@ export class DragEngine {
         };
 
       case "swap":
+      case "deferred-swap":
         return {
           type: "swap",
           sourceId,
@@ -1711,6 +1790,22 @@ export class DragEngine {
           targetIndex: Math.min(insertIdx, remaining.length),
         };
       }
+
+      case "new-row":
+        return {
+          type: "new-row",
+          sourceId,
+          insertionIndex: intent.insertionIndex,
+          colSpan: intent.colSpan,
+        };
+
+      case "in-row-insert":
+        return {
+          type: "in-row-insert",
+          sourceId,
+          insertionIndex: intent.insertionIndex,
+          resize: intent.resize,
+        };
     }
   }
 
@@ -1754,6 +1849,35 @@ export class DragEngine {
     this.lastProcessedPointerPos = null;
     this.sideCollapsed = false;
     this.intentGraceStart = null;
+    this.currentLineId = null;
+    this.insertionLines = [];
+  }
+
+  private recomputeInsertionLines(): void {
+    if (this.phase.type !== "dragging" && this.phase.type !== "external-dragging") {
+      this.insertionLines = [];
+      this.currentLineId = null;
+      return;
+    }
+
+    const sourceId = this.phase.type === "dragging" ? this.phase.sourceId : null;
+    const state = this.history.present;
+
+    const lines = computeInsertionLines({
+      layout: this.dragLayout ?? this.baseLayout,
+      widgets: state.widgets,
+      sourceId,
+      dropMode: this.config.dropMode,
+      maxColumns: state.maxColumns,
+      containerWidth: this.containerWidth,
+      cornerInset: this.config.lineCornerInset,
+      isPositionLocked: this.config.isPositionLocked,
+      isResizeLocked: this.config.isResizeLocked,
+    });
+
+    this.insertionLines = lines.map((l) =>
+      l.id === this.currentLineId && !l.disabled ? { ...l, isActive: true } : l,
+    );
   }
 
   private recomputeBaseLayout(): void {
@@ -1796,13 +1920,7 @@ export class DragEngine {
     this.recomputeBaseLayout();
 
     if (this.phase.type === "dragging") {
-      this.dragLayout = solveDragLayout(
-        this.history.present.widgets,
-        this.heights,
-        this.containerWidth,
-        this.layoutConfig(),
-        this.phase.sourceId,
-      );
+      this.dragLayout = this.computeDragLayout(this.phase.sourceId);
     } else {
       this.dragLayout = null;
     }
@@ -1839,6 +1957,7 @@ export class DragEngine {
       case "reorder":
         return a.targetIndex === (b as typeof a).targetIndex;
       case "swap":
+      case "deferred-swap":
         return a.targetId === (b as typeof a).targetId;
       case "auto-resize":
         return (
@@ -1851,6 +1970,21 @@ export class DragEngine {
         return a.column === (b as typeof a).column && a._insertionIndex === (b as typeof a)._insertionIndex;
       case "empty-row-maximize":
         return a.newSpan === (b as typeof a).newSpan && a._insertionIndex === (b as typeof a)._insertionIndex;
+      case "new-row":
+        return (
+          a.insertionIndex === (b as typeof a).insertionIndex &&
+          a.colSpan === (b as typeof a).colSpan
+        );
+      case "in-row-insert": {
+        const bb = b as typeof a;
+        if (a.insertionIndex !== bb.insertionIndex) return false;
+        if (a.resize.length !== bb.resize.length) return false;
+        for (let i = 0; i < a.resize.length; i++) {
+          if (a.resize[i].id !== bb.resize[i].id) return false;
+          if (a.resize[i].newSpan !== bb.resize[i].newSpan) return false;
+        }
+        return true;
+      }
     }
   }
 
@@ -1911,6 +2045,12 @@ export class DragEngine {
         return `Added widget at position ${operation.targetIndex + 1}`;
       case "trash":
         return "Widget removed";
+      case "new-row":
+        return `Inserted as new full-width row at position ${operation.insertionIndex + 1}`;
+      case "in-row-insert":
+        return operation.resize.length > 0
+          ? `Inserted at position ${operation.insertionIndex + 1}, resizing row`
+          : `Inserted at position ${operation.insertionIndex + 1}`;
       case "cancelled":
         return "Drop cancelled";
     }

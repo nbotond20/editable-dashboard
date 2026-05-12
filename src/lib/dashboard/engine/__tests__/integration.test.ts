@@ -139,6 +139,63 @@ describe("Integration: complete drag sequences", () => {
     });
   });
 
+  describe("deferred-swap in lines mode", () => {
+    it("highlights target without reflowing preview, commits swap on drop", () => {
+      const engine = setup(
+        [
+          makeWidget("a", 0),
+          makeWidget("b", 1),
+          makeWidget("c", 2),
+          makeWidget("d", 3),
+        ],
+        { dropMode: "lines" },
+      );
+
+      activateDrag(engine, "a");
+
+      const cPos = engine.getSnapshot().layout.positions.get("c")!;
+      const t = moveAndStabilize(
+        engine,
+        { x: cPos.x + cPos.width / 2, y: cPos.y + cPos.height / 2 },
+        100,
+      );
+
+      const snap = engine.getSnapshot();
+      expect(snap.intent?.type).toBe("deferred-swap");
+      if (snap.intent?.type === "deferred-swap") {
+        expect(snap.intent.targetId).toBe("c");
+      }
+      expect(snap.previewLayout).toBeNull();
+
+      engine.send({ type: "POINTER_UP", timestamp: t + 100 });
+      engine.send({ type: "TICK", timestamp: t + 200 });
+
+      const order = getVisibleOrder(engine);
+      expect(order.indexOf("c")).toBeLessThan(order.indexOf("a"));
+    });
+
+    it("does not commit when drag is cancelled before drop", () => {
+      const engine = setup(
+        [makeWidget("a", 0), makeWidget("b", 1)],
+        { dropMode: "lines" },
+      );
+
+      const initialOrder = getVisibleOrder(engine);
+      activateDrag(engine, "a");
+
+      const bPos = engine.getSnapshot().layout.positions.get("b")!;
+      moveAndStabilize(
+        engine,
+        { x: bPos.x + bPos.width / 2, y: bPos.y + bPos.height / 2 },
+        100,
+      );
+      expect(engine.getSnapshot().intent?.type).toBe("deferred-swap");
+
+      engine.send({ type: "CANCEL", timestamp: 200 });
+      expect(getVisibleOrder(engine)).toEqual(initialOrder);
+    });
+  });
+
   describe("reorder via gap zone", () => {
     it("reorders when dropping into a gap zone", () => {
       const engine = setup([

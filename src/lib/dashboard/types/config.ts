@@ -19,6 +19,9 @@ export interface DragConfig {
   swapDwellMs?: number;
   resizeDwellMs?: number;
   dropAnimationDuration?: number;
+  dropMode?: "classic" | "lines" | "both";
+  lineSnapRadius?: number;
+  lineCornerInset?: number;
 }
 
 /**

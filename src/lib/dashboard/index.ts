@@ -24,7 +24,7 @@ export type {
   DragConfig,
 } from "./types.ts";
 
-export type { CommittedOperation, CommitSource } from "./engine/types.ts";
+export type { CommittedOperation, CommitSource, InsertionLine, InsertionLineSegment } from "./engine/types.ts";
 
 export type {
   ExternalDragItem,
@@ -46,6 +46,7 @@ export { useExternalDragSource } from "./react/use-external-drag-source.ts";
 export { useTrashZone } from "./react/use-trash-zone.ts";
 export { useWidgetSlot } from "./react/use-widget-slot.ts";
 export type { UseWidgetSlotResult } from "./react/use-widget-slot.ts";
+export { useInsertionLines } from "./react/use-insertion-lines.ts";
 export { useDragFollow } from "./react/use-drag-follow.ts";
 export type { DragFollowResult, DragFollowOptions, SettleConfig } from "./react/use-drag-follow.ts";
 export type { TrashZoneResult } from "./react/use-trash-zone.ts";

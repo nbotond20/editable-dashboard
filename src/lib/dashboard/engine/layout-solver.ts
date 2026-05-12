@@ -383,6 +383,9 @@ export function solvePreviewLayout(
 
   switch (intent.type) {
     case "none":
+    case "deferred-swap":
+    case "new-row":
+    case "in-row-insert":
       return fallback();
 
     case "reorder": {

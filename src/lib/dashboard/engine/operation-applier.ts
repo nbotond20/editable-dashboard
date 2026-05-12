@@ -120,7 +120,51 @@ export function applyOperation(
         id: operation.sourceId,
       });
 
+    case "new-row": {
+      let result = state;
+      if (operation.colSpan !== getColSpan(state, operation.sourceId)) {
+        result = dashboardReducer(result, {
+          type: "RESIZE_WIDGET",
+          id: operation.sourceId,
+          colSpan: operation.colSpan,
+        });
+      }
+      const visibleSorted = getVisibleSorted(result.widgets);
+      const fromIndex = visibleSorted.findIndex((w) => w.id === operation.sourceId);
+      if (fromIndex === -1) return result;
+      result = dashboardReducer(result, {
+        type: "REORDER_WIDGETS",
+        fromIndex,
+        toIndex: operation.insertionIndex,
+      });
+      return result;
+    }
+
+    case "in-row-insert": {
+      let result = state;
+      for (const r of operation.resize) {
+        result = dashboardReducer(result, {
+          type: "RESIZE_WIDGET",
+          id: r.id,
+          colSpan: r.newSpan,
+        });
+      }
+      const visibleSorted = getVisibleSorted(result.widgets);
+      const fromIndex = visibleSorted.findIndex((w) => w.id === operation.sourceId);
+      if (fromIndex === -1) return result;
+      result = dashboardReducer(result, {
+        type: "REORDER_WIDGETS",
+        fromIndex,
+        toIndex: operation.insertionIndex,
+      });
+      return result;
+    }
+
     case "cancelled":
       return state;
   }
+}
+
+function getColSpan(state: DashboardState, id: string): number | undefined {
+  return state.widgets.find((w) => w.id === id)?.colSpan;
 }

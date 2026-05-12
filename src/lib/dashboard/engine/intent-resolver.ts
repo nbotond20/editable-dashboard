@@ -1,5 +1,6 @@
 import type { DropZone, OperationIntent } from "./types.ts";
 import type { ComputedLayout, WidgetState } from "../types.ts";
+import { equalDistribute } from "./equal-distribute.ts";
 
 export interface IntentResolverConfig {
   swapDwellMs: number;
@@ -13,6 +14,7 @@ export interface IntentResolverConfig {
   layout?: ComputedLayout;
   baseLayout?: ComputedLayout;
   pointerY?: number;
+  dropMode?: "classic" | "lines" | "both";
 }
 
 export function resolveIntent(
@@ -45,6 +47,13 @@ export function resolveIntent(
     }
 
     case "widget": {
+      if (config.dropMode === "lines" || config.dropMode === "both") {
+        if (config.isPositionLocked(zone.targetId)) {
+          return { type: "none" };
+        }
+        return { type: "deferred-swap", targetId: zone.targetId };
+      }
+
       if (dwellMs < config.swapDwellMs) {
         return { type: "none" };
       }
@@ -172,6 +181,35 @@ export function resolveIntent(
       return { type: "column-pin", column: zone.column };
     }
 
+    case "insertion-line-h": {
+      const constraints = config.getWidgetConstraints(sourceWidget.id);
+      const colSpan = Math.min(config.maxColumns, constraints.maxSpan);
+      return { type: "new-row", insertionIndex: zone.insertionIndex, colSpan };
+    }
+
+    case "insertion-line-v": {
+      const row = findRowForLine(zone, widgets, config.layout, sourceWidget.id);
+      if (!row) return { type: "none" };
+
+      const result = equalDistribute({
+        rowSpans: row.map((w) => ({ id: w.id, colSpan: w.colSpan })),
+        sourceId: sourceWidget.id,
+        sourceSpan: sourceWidget.colSpan,
+        sourceOriginalSpan: sourceWidget.colSpan,
+        maxColumns: config.maxColumns,
+        getWidgetConstraints: config.getWidgetConstraints,
+        isResizeLocked: config.isResizeLocked,
+      });
+
+      if (!result) return { type: "none" };
+
+      return {
+        type: "in-row-insert",
+        insertionIndex: zone.insertionIndex,
+        resize: result.resize,
+      };
+    }
+
     case "outside": {
       return { type: "none" };
     }
@@ -198,6 +236,10 @@ export function computeDwellProgress(
 
     case "outside":
       return 0;
+
+    case "insertion-line-h":
+    case "insertion-line-v":
+      return 1;
 
     case "widget": {
       if (dwellMs < swapDwellMs) {
@@ -292,4 +334,31 @@ function isEmptyRow(
     }
   }
   return true;
+}
+
+function findRowForLine(
+  zone: Extract<DropZone, { type: "insertion-line-v" }>,
+  widgets: readonly WidgetState[],
+  layout: ComputedLayout | undefined,
+  sourceId: string,
+): WidgetState[] | null {
+  if (!layout) return null;
+
+  const anchorId = zone.beforeId ?? zone.afterId;
+  if (anchorId == null) return null;
+
+  const anchorPos = layout.positions.get(anchorId);
+  if (!anchorPos) return null;
+
+  const row: WidgetState[] = [];
+  for (const w of widgets) {
+    if (!w.visible) continue;
+    if (w.id === sourceId) continue;
+    const pos = layout.positions.get(w.id);
+    if (!pos) continue;
+    if (Math.abs(pos.y - anchorPos.y) < 1) {
+      row.push(w);
+    }
+  }
+  return row;
 }

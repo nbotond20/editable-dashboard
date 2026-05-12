@@ -9,18 +9,24 @@ import type { DragEngineSnapshot, DragEngineConfig } from "../engine/types.ts";
  */
 export function buildDragState(snapshot: DragEngineSnapshot): DragState {
   const phase = snapshot.phase;
+  const intent = snapshot.intent;
+  const swapTargetId =
+    intent?.type === "deferred-swap" || intent?.type === "swap"
+      ? intent.targetId
+      : null;
 
   if (phase.type === "dragging") {
     return {
       activeId: phase.sourceId,
-      dropTargetIndex: snapshot.intent?.type === "reorder" ? snapshot.intent.targetIndex : null,
-      previewColSpan: snapshot.intent?.type === "auto-resize" ? snapshot.intent.sourceSpan : null,
+      dropTargetIndex: intent?.type === "reorder" ? intent.targetIndex : null,
+      previewColSpan: intent?.type === "auto-resize" ? intent.sourceSpan : null,
       previewLayout: snapshot.previewLayout,
       isLongPressing: false,
       longPressTargetId: null,
       isExternalDrag: false,
       externalWidgetType: null,
-      intentType: snapshot.intent?.type ?? null,
+      intentType: intent?.type ?? null,
+      swapTargetId,
     };
   }
 
@@ -35,20 +41,22 @@ export function buildDragState(snapshot: DragEngineSnapshot): DragState {
       isExternalDrag: false,
       externalWidgetType: null,
       intentType: "reorder",
+      swapTargetId: null,
     };
   }
 
   if (phase.type === "external-dragging") {
     return {
       activeId: null,
-      dropTargetIndex: snapshot.intent?.type === "reorder" ? snapshot.intent.targetIndex : null,
+      dropTargetIndex: intent?.type === "reorder" ? intent.targetIndex : null,
       previewColSpan: null,
       previewLayout: snapshot.previewLayout,
       isLongPressing: false,
       longPressTargetId: null,
       isExternalDrag: true,
       externalWidgetType: phase.widgetType,
-      intentType: snapshot.intent?.type ?? null,
+      intentType: intent?.type ?? null,
+      swapTargetId,
     };
   }
 
@@ -63,6 +71,7 @@ export function buildDragState(snapshot: DragEngineSnapshot): DragState {
       isExternalDrag: false,
       externalWidgetType: null,
       intentType: null,
+      swapTargetId: null,
     };
   }
 
@@ -76,6 +85,7 @@ export function buildDragState(snapshot: DragEngineSnapshot): DragState {
     isExternalDrag: false,
     externalWidgetType: null,
     intentType: null,
+    swapTargetId: null,
   };
 }
 
@@ -100,5 +110,8 @@ export function buildEngineConfig(
     ...(dragConfig?.swapDwellMs != null && { swapDwellMs: dragConfig.swapDwellMs }),
     ...(dragConfig?.resizeDwellMs != null && { resizeDwellMs: dragConfig.resizeDwellMs }),
     ...(dragConfig?.dropAnimationDuration != null && { dropAnimationDuration: dragConfig.dropAnimationDuration }),
+    ...(dragConfig?.dropMode != null && { dropMode: dragConfig.dropMode }),
+    ...(dragConfig?.lineSnapRadius != null && { lineSnapRadius: dragConfig.lineSnapRadius }),
+    ...(dragConfig?.lineCornerInset != null && { lineCornerInset: dragConfig.lineCornerInset }),
   };
 }

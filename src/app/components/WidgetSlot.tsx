@@ -1,7 +1,17 @@
-import { useRef, useLayoutEffect } from "react";
-import { motion, useMotionValue, useSpring } from "motion/react";
-import { useWidgetSlot, useDragFollow, type WidgetState, type DragHandleProps } from "../../lib/dashboard/index.ts";
+import { useRef, useLayoutEffect, useMemo } from "react";
+import { AnimatePresence, motion, useMotionValue, useSpring } from "motion/react";
+import {
+  useWidgetSlot,
+  useDragFollow,
+  useInsertionLines,
+  useDashboardDrag,
+  type WidgetState,
+  type DragHandleProps,
+  type InsertionLine,
+  type InsertionLineSegment,
+} from "../../lib/dashboard/index.ts";
 import { SPRINGS, SETTLE_EASING, SETTLE_DURATION } from "../animation-config.ts";
+import { AnchoredInsertionSegment } from "./InsertionLineElement.tsx";
 
 const WIDTH_SPRING = { stiffness: SPRINGS.layout.stiffness, damping: SPRINGS.layout.damping, mass: SPRINGS.layout.mass };
 
@@ -25,11 +35,30 @@ interface WidgetSlotProps {
 
 export function WidgetSlot({ widget, animated = true, children }: WidgetSlotProps) {
   const slot = useWidgetSlot(widget);
+  const lines = useInsertionLines();
+  const { dragState } = useDashboardDrag();
+  const isSwapHighlight = dragState.swapTargetId === widget.id;
   const { ref: dragRef, isActive: dragActive } = useDragFollow(slot, {
     settle: animated
       ? { duration: SETTLE_DURATION, easing: SETTLE_EASING }
       : false,
   });
+
+  const anchoredSegments = useMemo(() => {
+    if (slot.isDragging) return [];
+    const out: Array<{ key: string; line: InsertionLine; segment: InsertionLineSegment }> = [];
+    for (const line of lines) {
+      if (!line.segments) continue;
+      let i = 0;
+      for (const seg of line.segments) {
+        if (seg.anchorId === widget.id) {
+          out.push({ key: `${line.id}:${seg.edge}:${i}`, line, segment: seg });
+        }
+        i++;
+      }
+    }
+    return out;
+  }, [lines, widget.id, slot.isDragging]);
 
   const widthMV = useMotionValue(slot.position?.width ?? 0);
   const springWidth = useSpring(widthMV, WIDTH_SPRING);
@@ -74,6 +103,7 @@ export function WidgetSlot({ widget, animated = true, children }: WidgetSlotProp
       data-width={position.width}
       data-height={position.height}
       data-dragging={isDragging}
+      data-swap-target={isSwapHighlight || undefined}
       style={{
         position: "absolute",
         left: position.x,
@@ -109,6 +139,37 @@ export function WidgetSlot({ widget, animated = true, children }: WidgetSlotProp
         remove: slot.remove,
         isLongPressing: slot.isLongPressing,
       })}
+      <AnimatePresence>
+        {isSwapHighlight && (
+          <motion.div
+            key="swap-overlay"
+            data-testid="swap-overlay"
+            initial={animated ? { opacity: 0 } : false}
+            animate={animated ? { opacity: 1 } : undefined}
+            exit={animated ? { opacity: 0 } : undefined}
+            transition={{ duration: 0.12, ease: "easeOut" }}
+            style={{
+              position: "absolute",
+              inset: 0,
+              borderRadius: 12,
+              background: "rgba(59, 130, 246, 0.32)",
+              pointerEvents: "none",
+              zIndex: 2,
+            }}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {anchoredSegments.map(({ key, line, segment }) => (
+          <AnchoredInsertionSegment
+            key={key}
+            line={line}
+            segment={segment}
+            widgetX={position.x}
+            widgetY={position.y}
+          />
+        ))}
+      </AnimatePresence>
     </motion.div>
   );
 }
