@@ -18,8 +18,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - E2E coverage: `insertion-lines-render`, `insertion-lines-magnetic`, `insertion-lines-h-drop`, `insertion-lines-v-drop`, `insertion-lines-edge-cases`, `insertion-lines-modes`.
 - Unit coverage: `equal-distribute`, `insertion-lines` (`computeInsertionLines`, `findSnappedLine`), `zone-resolver-lines`, `intent-resolver-lines`, `operation-applier-lines`, `zones-equal-lines`.
 
+### Changed
+
+- `computeInsertionLines` now accepts an optional `getWidgetConstraints` input. Lines mode now uniformly respects the same locks and constraints as classic mode: position locks, resize locks (source and stationaries), and `minSpan` / `maxSpan` from `getWidgetConstraints`.
+- `equalDistribute` now also enforces `isResizeLocked` on the source widget (previously skipped) — in-row inserts no longer silently shrink a resize-locked source.
+
 ### Fixed
 
+- Insertion lines are now greyed out (`disabled: true`) when the drop is infeasible: any V-line where equal-distribute would violate a stationary's resize-lock, the source's resize-lock, or a `minSpan` / `maxSpan` constraint; any line whose reorder would shift a position-locked widget across the source's original position; and H-lines where the source is resize-locked but its current span exceeds `maxColumns` or constraint bounds.
+- `insertion-line-h` `new-row` intent now keeps the source's current `colSpan` when the source is resize-locked instead of forcing it to `min(maxColumns, maxSpan)`. Returns `none` when the locked span doesn't fit.
+- `insertion-line-h` / `insertion-line-v` zones now return `none` when reordering would cross a position-locked widget (matching the existing `gap` behavior).
 - Column-pin no longer shrinks the source widget instantly when the pinned column can't accommodate its full `colSpan`. The shrink now waits for `resizeDwellMs` (matching other resize-style operations). If the source is `isResizeLocked`, column-pin to a too-narrow column is suppressed entirely.
 - Outer insertion lines no longer sit flush against widget edges. Outer-left/outer-right V-lines are now offset half-gap outward from the adjacent widget (no longer clamped to container bounds), matching the half-gap geometry of inner V-lines and existing H-lines.
 - Horizontal insertion lines now span only the row's widget extent instead of the full container width, so they visually align with the row above/below rather than running edge-to-edge.

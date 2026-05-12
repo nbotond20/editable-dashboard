@@ -1879,6 +1879,7 @@ export class DragEngine {
       cornerInset: this.config.lineCornerInset,
       isPositionLocked: this.config.isPositionLocked,
       isResizeLocked: this.config.isResizeLocked,
+      getWidgetConstraints: this.config.getWidgetConstraints,
     });
 
     this.insertionLines = lines.map((l) =>

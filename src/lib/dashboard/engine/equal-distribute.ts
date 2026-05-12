@@ -39,7 +39,6 @@ export function equalDistribute(input: EqualDistributeInput): EqualDistributeRes
   if (distributed > maxColumns) return null;
 
   for (let i = 0; i < n; i++) {
-    if (ids[i] === sourceId) continue;
     if (isResizeLocked(ids[i]) && targetSpans[i] !== originals[i]) return null;
   }
 

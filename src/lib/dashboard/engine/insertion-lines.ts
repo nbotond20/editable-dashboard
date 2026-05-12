@@ -1,6 +1,8 @@
 import type { ComputedLayout, WidgetState } from "../types.ts";
 import type { InsertionLine, InsertionLineSegment, Point } from "./types.ts";
 import { LINE_SNAP_HYSTERESIS, DEFAULT_LINE_CORNER_INSET } from "../constants.ts";
+import { equalDistribute } from "./equal-distribute.ts";
+import { crossesPositionLocked, newRowColSpan } from "./intent-resolver.ts";
 
 export interface ComputeInsertionLinesInput {
   layout: ComputedLayout;
@@ -12,6 +14,7 @@ export interface ComputeInsertionLinesInput {
   cornerInset?: number;
   isPositionLocked: (id: string) => boolean;
   isResizeLocked: (id: string) => boolean;
+  getWidgetConstraints?: (id: string) => { minSpan: number; maxSpan: number };
 }
 
 interface PositionedWidget {
@@ -27,9 +30,44 @@ interface PositionedWidget {
 export function computeInsertionLines(input: ComputeInsertionLinesInput): InsertionLine[] {
   const { layout, widgets, sourceId, dropMode, maxColumns, containerWidth, isPositionLocked, isResizeLocked } = input;
   const cornerInset = input.cornerInset ?? DEFAULT_LINE_CORNER_INSET;
+  const getWidgetConstraints = input.getWidgetConstraints ?? (() => ({ minSpan: 1, maxSpan: maxColumns }));
 
   if (dropMode === "classic") return [];
   if (sourceId != null && isPositionLocked(sourceId)) return [];
+
+  const visibleSorted = widgets
+    .filter((w) => w.visible)
+    .slice()
+    .sort((a, b) => a.order - b.order);
+  const sourceWidgetRef = sourceId != null ? widgets.find((w) => w.id === sourceId) ?? null : null;
+
+  const crosses = (insertionIndex: number): boolean =>
+    sourceId != null && crossesPositionLocked(visibleSorted, sourceId, insertionIndex, isPositionLocked);
+
+  const vLineFeasible = (row: PositionedWidget[]): boolean => {
+    if (!sourceWidgetRef) {
+      const stationary = row.filter((w) => w.id !== sourceId);
+      const totalSpan = stationary.reduce((sum, w) => sum + w.colSpan, 0);
+      if (totalSpan + 1 <= maxColumns) return true;
+      return !stationary.some((w) => isResizeLocked(w.id));
+    }
+    const stationary = row.filter((w) => w.id !== sourceId);
+    const result = equalDistribute({
+      rowSpans: stationary.map((w) => ({ id: w.id, colSpan: w.colSpan })),
+      sourceId: sourceWidgetRef.id,
+      sourceSpan: sourceWidgetRef.colSpan,
+      sourceOriginalSpan: sourceWidgetRef.colSpan,
+      maxColumns,
+      getWidgetConstraints,
+      isResizeLocked,
+    });
+    return result != null;
+  };
+
+  const hLineFeasible = (): boolean => {
+    if (!sourceWidgetRef) return true;
+    return newRowColSpan(sourceWidgetRef, { maxColumns, isResizeLocked, getWidgetConstraints }) != null;
+  };
 
   const allPositioned: PositionedWidget[] = [];
   for (const w of widgets) {
@@ -204,6 +242,8 @@ export function computeInsertionLines(input: ComputeInsertionLinesInput): Insert
     const row = rows[r];
 
     if (maxColumns > 1) {
+      const rowFeasible = vLineFeasible(row);
+
       const first = row[0];
       const outerLeftIdx = vInsertionIndex(row, 0);
       const outerLeftAfterId: string | null = first.id;
@@ -219,15 +259,13 @@ export function computeInsertionLines(input: ComputeInsertionLinesInput): Insert
         beforeId: null,
         afterId: outerLeftAfterId,
         isActive: false,
-        disabled: adjacentToSourceLeft || isLineSelfAdjacent(outerLeftIdx, row),
+        disabled: adjacentToSourceLeft || isLineSelfAdjacent(outerLeftIdx, row) || !rowFeasible || crosses(outerLeftIdx),
       });
 
       for (let i = 0; i < row.length - 1; i++) {
         const a = row[i];
         const b = row[i + 1];
         const adjacentToSource = a.id === sourceId || b.id === sourceId;
-        const stationaryRow = row.filter((w) => w.id !== sourceId);
-        const rowFull = isRowFullAfterInsertion(stationaryRow, sourceId, isResizeLocked, maxColumns);
         const midIdx = vInsertionIndex(row, i + 1);
         const midSegs: InsertionLineSegment[] = [widgetRightSegment(a), widgetLeftSegment(b)];
         const midBB = vBoundingBox(midSegs);
@@ -240,7 +278,7 @@ export function computeInsertionLines(input: ComputeInsertionLinesInput): Insert
           beforeId: a.id,
           afterId: b.id,
           isActive: false,
-          disabled: adjacentToSource || rowFull || isLineSelfAdjacent(midIdx, row),
+          disabled: adjacentToSource || !rowFeasible || isLineSelfAdjacent(midIdx, row) || crosses(midIdx),
         });
       }
 
@@ -259,7 +297,7 @@ export function computeInsertionLines(input: ComputeInsertionLinesInput): Insert
         beforeId: outerRightBeforeId,
         afterId: null,
         isActive: false,
-        disabled: adjacentToSourceRight || isLineSelfAdjacent(outerRightIdx, row),
+        disabled: adjacentToSourceRight || isLineSelfAdjacent(outerRightIdx, row) || !rowFeasible || crosses(outerRightIdx),
       });
     }
   }
@@ -289,7 +327,9 @@ export function computeInsertionLines(input: ComputeInsertionLinesInput): Insert
     const belowAloneSource = below != null && below.length === 1 && below[0].id === sourceId;
     const sourceFullWidth = sourceId != null && (widgets.find((w) => w.id === sourceId)?.colSpan ?? 0) >= maxColumns;
     const disabled =
-      sourceAloneInRow && sourceFullWidth && (aboveAloneSource || belowAloneSource);
+      (sourceAloneInRow && sourceFullWidth && (aboveAloneSource || belowAloneSource)) ||
+      !hLineFeasible() ||
+      crosses(insertionIdx);
 
     const bx1 = Math.min(...segments.map((s) => s.x1));
     const by1 = Math.min(...segments.map((s) => s.y1));
@@ -371,13 +411,3 @@ function pointerLineDistance(p: Point, line: InsertionLine): number {
   return best;
 }
 
-function isRowFullAfterInsertion(
-  row: ReadonlyArray<{ id: string; colSpan: number }>,
-  sourceId: string | null,
-  isResizeLocked: (id: string) => boolean,
-  maxColumns: number,
-): boolean {
-  const totalSpan = row.reduce((sum, w) => sum + w.colSpan, 0);
-  if (totalSpan + 1 <= maxColumns) return false;
-  return row.some((w) => w.id !== sourceId && isResizeLocked(w.id));
-}

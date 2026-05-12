@@ -30,17 +30,8 @@ export function resolveIntent(
         return { type: "none" };
       }
 
-      const sourceIdx = widgets.findIndex(w => w.id === sourceWidget.id);
-      if (sourceIdx >= 0 && zone.index !== sourceIdx) {
-        const adjustedTarget = zone.index > sourceIdx ? zone.index - 1 : zone.index;
-        const [lo, hi] = sourceIdx < adjustedTarget
-          ? [sourceIdx + 1, adjustedTarget]
-          : [adjustedTarget, sourceIdx - 1];
-        for (let i = lo; i <= hi; i++) {
-          if (widgets[i] && config.isPositionLocked(widgets[i].id)) {
-            return { type: "none" };
-          }
-        }
+      if (crossesPositionLocked(widgets, sourceWidget.id, zone.index, config.isPositionLocked)) {
+        return { type: "none" };
       }
 
       return { type: "reorder", targetIndex: zone.index };
@@ -182,12 +173,19 @@ export function resolveIntent(
     }
 
     case "insertion-line-h": {
-      const constraints = config.getWidgetConstraints(sourceWidget.id);
-      const colSpan = Math.min(config.maxColumns, constraints.maxSpan);
+      if (crossesPositionLocked(widgets, sourceWidget.id, zone.insertionIndex, config.isPositionLocked)) {
+        return { type: "none" };
+      }
+      const colSpan = newRowColSpan(sourceWidget, config);
+      if (colSpan == null) return { type: "none" };
       return { type: "new-row", insertionIndex: zone.insertionIndex, colSpan };
     }
 
     case "insertion-line-v": {
+      if (crossesPositionLocked(widgets, sourceWidget.id, zone.insertionIndex, config.isPositionLocked)) {
+        return { type: "none" };
+      }
+
       const row = findRowForLine(zone, widgets, config.layout, sourceWidget.id);
       if (!row) return { type: "none" };
 
@@ -334,6 +332,37 @@ function isEmptyRow(
     }
   }
   return true;
+}
+
+export function crossesPositionLocked(
+  widgets: readonly WidgetState[],
+  sourceId: string,
+  targetIndex: number,
+  isPositionLocked: (id: string) => boolean,
+): boolean {
+  const sourceIdx = widgets.findIndex((w) => w.id === sourceId);
+  if (sourceIdx < 0 || targetIndex === sourceIdx) return false;
+  const adjustedTarget = targetIndex > sourceIdx ? targetIndex - 1 : targetIndex;
+  const [lo, hi] = sourceIdx < adjustedTarget
+    ? [sourceIdx + 1, adjustedTarget]
+    : [adjustedTarget, sourceIdx - 1];
+  for (let i = lo; i <= hi; i++) {
+    if (widgets[i] && isPositionLocked(widgets[i].id)) return true;
+  }
+  return false;
+}
+
+export function newRowColSpan(
+  source: WidgetState,
+  config: { maxColumns: number; isResizeLocked: (id: string) => boolean; getWidgetConstraints: (id: string) => { minSpan: number; maxSpan: number } },
+): number | null {
+  if (config.isResizeLocked(source.id)) {
+    return source.colSpan <= config.maxColumns ? source.colSpan : null;
+  }
+  const c = config.getWidgetConstraints(source.id);
+  const span = Math.max(c.minSpan, Math.min(config.maxColumns, c.maxSpan));
+  if (span < c.minSpan || span > config.maxColumns) return null;
+  return span;
 }
 
 function findRowForLine(

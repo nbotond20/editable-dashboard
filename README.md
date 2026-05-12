@@ -1661,7 +1661,13 @@ Each line carries:
 - `x1, y1, x2, y2` (geometry — bounding box for the line, useful for fallback rendering)
 - `segments?` (optional `Array<{ x1, y1, x2, y2, anchorId, edge }>` — each segment is anchored to a specific widget (`anchorId`) on a specific `edge` (`'top' | 'bottom' | 'left' | 'right'`). Both H-lines and V-lines emit segments; V-line mid-lines emit two segments (one anchored to each neighbor widget), sized to that widget's height. Anchor info lets you render the segment inside the widget's animated container so the line follows widget transforms.)
 - `isActive` (pointer snapped to it)
-- `disabled` (self-adjacent or resize-lock conflict)
+- `disabled` (the drop is infeasible — self-adjacent, would cross a position-locked widget, would resize a resize-locked widget, or would violate `minSpan` / `maxSpan` constraints. Snapping skips disabled lines; render them dimmed.)
+
+Lines respect the same constraints as classic mode:
+
+- **Position locks** — the source line set is empty when the source is position-locked. Individual lines disable when reordering would shift a position-locked widget across the source.
+- **Resize locks** — V-lines disable if equal-distribute would resize a resize-locked widget (source or stationary). H-lines disable if the source is resize-locked but its current `colSpan` exceeds `maxColumns`.
+- **Size constraints** — V-lines disable if equal-distribute would violate any widget's `minSpan` or `maxSpan` from `getWidgetConstraints`. H-lines disable if the constrained `colSpan` cannot fit `[1, maxColumns]`.
 
 When rendering, iterate `segments ?? [{ x1, y1, x2, y2, anchorId: null, edge: null }]`. For anchored segments you can portal/append the segment element inside the widget's container so it inherits the widget's layout transform; unanchored segments (e.g. the single line shown on an empty dashboard) render in container coordinates.
 
