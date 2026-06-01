@@ -51,6 +51,8 @@ export interface DashboardStableContextValue {
   state: DashboardState;
   definitions: WidgetDefinition[];
   layout: ComputedLayout;
+  /** Measured width of the grid container in pixels. */
+  containerWidth: number;
   actions: DashboardActions;
   canUndo: boolean;
   canRedo: boolean;

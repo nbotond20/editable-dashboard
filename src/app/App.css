@@ -424,6 +424,116 @@
   box-sizing: border-box;
 }
 
+/* Lines mode: placeholder where the dragged widget will land. */
+.dashboard-place-ghost {
+  border-radius: var(--dash-radius-lg);
+  border: 2px dashed var(--dash-color-accent);
+  background: var(--dash-color-accent-subtle);
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.dashboard-place-ghost__inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  color: #1c3d8f;
+  font-weight: 650;
+  font-size: 0.95rem;
+}
+
+/* Lines mode: red feedback when the dragged widget cannot fit. */
+.dashboard-invalid-ghost {
+  border-radius: var(--dash-radius-lg);
+  border: 2px dashed var(--dash-color-danger);
+  background: rgba(229, 72, 77, 0.06);
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  overflow: hidden;
+}
+
+.dashboard-invalid-ghost__inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px;
+  color: var(--dash-color-danger);
+}
+
+.dashboard-invalid-ghost__inner strong {
+  font-size: 0.95rem;
+  font-weight: 650;
+}
+
+.dashboard-invalid-ghost__inner span {
+  font-size: 0.85rem;
+  opacity: 0.85;
+}
+
+/* Editing mode: persistent "add a new widget" affordance over free space. */
+.dashboard-empty-slot {
+  border-radius: var(--dash-radius-lg);
+  border: 2px dashed var(--dash-color-border-hover);
+  background: transparent;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #1c3d8f;
+  font-weight: 650;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: border-color var(--dash-transition), color var(--dash-transition), background var(--dash-transition);
+}
+
+.dashboard-empty-slot:hover {
+  border-color: var(--dash-color-accent);
+  color: var(--dash-color-accent);
+  background: var(--dash-color-accent-subtle);
+}
+
+.dashboard-empty-slot__icon {
+  display: inline-flex;
+}
+
+/* Drag feedback: dragged widget fits in this slot's free space. */
+.dashboard-empty-slot--valid {
+  border-color: var(--dash-color-accent);
+  background: var(--dash-color-accent-subtle);
+  color: var(--dash-color-accent);
+}
+
+/* Drag feedback: dragged widget cannot fit here. */
+.dashboard-empty-slot--invalid {
+  gap: 4px;
+  padding: 8px;
+  border-color: var(--dash-color-danger);
+  background: rgba(229, 72, 77, 0.06);
+  color: var(--dash-color-danger);
+  text-align: center;
+}
+
+.dashboard-empty-slot--invalid strong {
+  font-size: 0.95rem;
+  font-weight: 650;
+}
+
+.dashboard-empty-slot--invalid span:not(.dashboard-empty-slot__icon) {
+  font-size: 0.85rem;
+  font-weight: 500;
+  opacity: 0.85;
+}
+
 .dash-widget--long-pressing {
   outline: 2px solid var(--dash-color-accent);
   outline-offset: -2px;

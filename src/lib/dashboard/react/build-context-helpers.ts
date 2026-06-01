@@ -26,6 +26,8 @@ export function buildDragState(snapshot: DragEngineSnapshot): DragState {
       intentType: intent?.type ?? null,
       swapTargetId,
       sourceGhost: snapshot.sourceGhost,
+      invalidTarget: snapshot.invalidTarget,
+      emptySlotDragState: snapshot.emptySlotDragState,
     };
   }
 
@@ -42,6 +44,8 @@ export function buildDragState(snapshot: DragEngineSnapshot): DragState {
       intentType: "reorder",
       swapTargetId: null,
       sourceGhost: null,
+      invalidTarget: null,
+      emptySlotDragState: null,
     };
   }
 
@@ -58,6 +62,8 @@ export function buildDragState(snapshot: DragEngineSnapshot): DragState {
       intentType: intent?.type ?? null,
       swapTargetId,
       sourceGhost: null,
+      invalidTarget: null,
+      emptySlotDragState: null,
     };
   }
 
@@ -74,6 +80,8 @@ export function buildDragState(snapshot: DragEngineSnapshot): DragState {
       intentType: null,
       swapTargetId: null,
       sourceGhost: null,
+      invalidTarget: null,
+      emptySlotDragState: null,
     };
   }
 
@@ -89,6 +97,8 @@ export function buildDragState(snapshot: DragEngineSnapshot): DragState {
     intentType: null,
     swapTargetId: null,
     sourceGhost: null,
+    invalidTarget: null,
+    emptySlotDragState: null,
   };
 }
 

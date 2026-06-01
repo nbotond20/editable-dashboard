@@ -1,4 +1,6 @@
-import type { ComputedLayout, DashboardAction, DashboardState, WidgetLayout, WidgetState } from "../types.ts";
+import type { ComputedLayout, DashboardAction, DashboardState, EmptySlotDragState, InsertionInvalidReason, InvalidDropTarget, WidgetLayout, WidgetState } from "../types.ts";
+
+export type { InsertionInvalidReason, InvalidDropTarget } from "../types.ts";
 
 export interface Point {
   readonly x: number;
@@ -25,6 +27,9 @@ export type InsertionLine = {
   rowIndex?: number;
   isActive: boolean;
   disabled: boolean;
+  disabledReason?: InsertionInvalidReason;
+  /** Nearest infeasible line to the pointer — render it as a "cannot drop here" marker. */
+  invalidActive?: boolean;
 };
 
 export type PointerType = "mouse" | "touch" | "pen";
@@ -225,6 +230,9 @@ export interface DragEngineSnapshot {
   canRedo: boolean;
   insertionLines: InsertionLine[];
   sourceGhost: WidgetLayout | null;
+  invalidTarget: InvalidDropTarget | null;
+  emptySlotDragState: EmptySlotDragState | null;
+  containerWidth: number;
 }
 
 export interface LayoutOptions {

@@ -55,7 +55,12 @@ export type DashboardAction =
  * Stable, memoized action dispatchers returned by {@link useDashboard}.
  */
 export interface DashboardActions {
-  addWidget: (widgetType: string, colSpan?: number, config?: Record<string, unknown>) => void;
+  addWidget: (
+    widgetType: string,
+    colSpan?: number,
+    config?: Record<string, unknown>,
+    placement?: { targetIndex?: number; columnStart?: number },
+  ) => void;
   removeWidget: (id: string) => void;
   resizeWidget: (id: string, colSpan: number) => void;
   reorderWidgets: (fromIndex: number, toIndex: number) => void;

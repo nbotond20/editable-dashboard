@@ -21,7 +21,12 @@ export function useActions(opts: UseActionsOptions): DashboardActions {
   const { dispatch, definitions, getState, maxWidgets, onError } = opts;
 
   const addWidget = useCallback(
-    (widgetType: string, colSpan?: number, config?: Record<string, unknown>) => {
+    (
+      widgetType: string,
+      colSpan?: number,
+      config?: Record<string, unknown>,
+      placement?: { targetIndex?: number; columnStart?: number },
+    ) => {
       const def = definitions.find((d) => d.type === widgetType);
 
       if (!def) {
@@ -47,7 +52,14 @@ export function useActions(opts: UseActionsOptions): DashboardActions {
       }
 
       const span = colSpan ?? def.defaultColSpan ?? 1;
-      dispatch({ type: "ADD_WIDGET", widgetType, colSpan: span, config });
+      dispatch({
+        type: "ADD_WIDGET",
+        widgetType,
+        colSpan: span,
+        config,
+        ...(placement?.targetIndex != null ? { targetIndex: placement.targetIndex } : {}),
+        ...(placement?.columnStart != null ? { columnStart: placement.columnStart } : {}),
+      });
     },
     [dispatch, definitions, getState, maxWidgets, onError]
   );

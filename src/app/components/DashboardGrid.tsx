@@ -1,9 +1,34 @@
 import { useEffect, useMemo } from "react";
 import { LayoutGroup, AnimatePresence, motion } from "motion/react";
-import { useDashboard, useInsertionLines, useSourceGhost, EXTERNAL_PHANTOM_ID, type WidgetState, type DragHandleProps } from "../../lib/dashboard/index.ts";
+import { useDashboard, useInsertionLines, useSourceGhost, useEmptySlots, useEmptySlotDragState, EXTERNAL_PHANTOM_ID, type WidgetState, type DragHandleProps, type EmptySlot, type InsertionInvalidReason } from "../../lib/dashboard/index.ts";
 import { SPRINGS } from "../animation-config.ts";
 import { WidgetSlot } from "./WidgetSlot.tsx";
-import { InsertionLineMarker, UnanchoredInsertionLine } from "./InsertionLineElement.tsx";
+import { InsertionLineMarker, UnanchoredInsertionLine, LineEndCap } from "./InsertionLineElement.tsx";
+
+const REASON_MESSAGES: Record<InsertionInvalidReason, { title: string; detail: string }> = {
+  "only-full-width": { title: "Widget sizing not possible", detail: "This widget only comes in full width" },
+  "resize-locked": { title: "Widget sizing not possible", detail: "A widget here is locked and can't make room" },
+  "position-locked": { title: "Can't place here", detail: "A locked widget is in the way" },
+  "column-overflow": { title: "Not enough space", detail: "This widget doesn't fit in this row" },
+};
+
+const CheckIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="20 6 9 17 4 12" />
+  </svg>
+);
+
+const PlusCircleIcon = () => (
+  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10" /><path d="M12 8v8M8 12h8" />
+  </svg>
+);
+
+const InvalidIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10" /><path d="M15 9l-6 6M9 9l6 6" />
+  </svg>
+);
 
 interface WidgetSlotCallbackProps {
   key: string;
@@ -22,14 +47,26 @@ interface DashboardGridProps {
   ghostClassName?: string;
   sourceGhostClassName?: string;
   animated?: boolean;
+  /** When true, render persistent "Add a new widget" affordances over free space. */
+  editing?: boolean;
+  /** Invoked when an empty-slot affordance is clicked. */
+  onAddWidget?: (slot: EmptySlot) => void;
   children: (
     widget: WidgetState,
     slotProps: WidgetSlotCallbackProps
   ) => React.ReactNode;
 }
 
-export function DashboardGrid({ className, style, ghostClassName, sourceGhostClassName, animated = true, children }: DashboardGridProps) {
+export function DashboardGrid({ className, style, ghostClassName, sourceGhostClassName, animated = true, editing = false, onAddWidget, children }: DashboardGridProps) {
   const { state, layout, dragState, containerRef, phase } = useDashboard();
+  const emptySlots = useEmptySlots();
+  const slotDrag = useEmptySlotDragState();
+
+  const draggedId = dragState.activeId;
+  const draggedHeight = draggedId
+    ? dragState.previewLayout?.positions.get(draggedId)?.height ??
+      layout.positions.get(draggedId)?.height
+    : undefined;
 
   const visibleWidgets = useMemo(
     () =>
@@ -70,11 +107,23 @@ export function DashboardGrid({ className, style, ghostClassName, sourceGhostCla
   const isResizeIntent = dragState.intentType === "auto-resize"
     || dragState.intentType === "empty-row-maximize";
 
+  const isLinesPlacement = dragState.intentType === "new-row"
+    || dragState.intentType === "in-row-insert";
+  const ghostClass = isLinesPlacement
+    ? "dashboard-place-ghost"
+    : (ghostClassName ?? "dashboard-drop-ghost");
+  const ghostContent = isLinesPlacement ? (
+    <div className="dashboard-place-ghost__inner">
+      <CheckIcon />
+      <span>Place widget</span>
+    </div>
+  ) : null;
+
   const ghostElement = ghostPos && (
     animated ? (
       <motion.div
         key="drop-ghost"
-        className={ghostClassName ?? "dashboard-drop-ghost"}
+        className={ghostClass}
         data-testid="drop-ghost"
         data-ghost-x={ghostPos.x}
         data-ghost-y={ghostPos.y}
@@ -105,11 +154,13 @@ export function DashboardGrid({ className, style, ghostClassName, sourceGhostCla
           top: 0,
           pointerEvents: "none",
         }}
-      />
+      >
+        {ghostContent}
+      </motion.div>
     ) : (
       <div
         key="drop-ghost"
-        className={ghostClassName ?? "dashboard-drop-ghost"}
+        className={ghostClass}
         data-testid="drop-ghost"
         data-ghost-x={ghostPos.x}
         data-ghost-y={ghostPos.y}
@@ -124,7 +175,9 @@ export function DashboardGrid({ className, style, ghostClassName, sourceGhostCla
           height: ghostPos.height,
           pointerEvents: "none",
         }}
-      />
+      >
+        {ghostContent}
+      </div>
     )
   );
 
@@ -178,6 +231,72 @@ export function DashboardGrid({ className, style, ghostClassName, sourceGhostCla
     </WidgetSlot>
   ));
 
+  const isDragging = phase !== "idle";
+  const emptyElements = editing
+    ? emptySlots.map((slot) => {
+        const ds =
+          slotDrag && slotDrag.rowIndex === slot.rowIndex && slotDrag.columnStart === slot.columnStart
+            ? slotDrag
+            : null;
+        const reason = ds?.state === "invalid" ? ds.reason : undefined;
+        const slotHeight =
+          ds?.state === "valid" && draggedHeight != null
+            ? Math.max(slot.height, draggedHeight)
+            : slot.height;
+        return (
+          <button
+            key={`empty-${slot.rowIndex}-${slot.columnStart}`}
+            type="button"
+            className={`dashboard-empty-slot${ds ? ` dashboard-empty-slot--${ds.state}` : ""}`}
+            data-testid="empty-slot"
+            data-row-index={slot.rowIndex}
+            data-column-start={slot.columnStart}
+            data-drag-state={ds?.state}
+            data-reason={reason}
+            disabled={isDragging}
+            onClick={isDragging ? undefined : () => onAddWidget?.(slot)}
+            style={{
+              position: "absolute",
+              left: slot.x,
+              top: slot.y,
+              width: slot.width,
+              height: slotHeight,
+              pointerEvents: isDragging ? "none" : undefined,
+            }}
+          >
+            {reason ? (
+              <>
+                <span className="dashboard-empty-slot__icon">
+                  <InvalidIcon />
+                </span>
+                <strong>{REASON_MESSAGES[reason].title}</strong>
+                <span>{REASON_MESSAGES[reason].detail}</span>
+              </>
+            ) : ds?.state === "valid" ? (
+              <>
+                <span className="dashboard-empty-slot__icon">
+                  <CheckIcon />
+                </span>
+                <span>Drop to add here</span>
+              </>
+            ) : (
+              <>
+                <span className="dashboard-empty-slot__icon">
+                  <PlusCircleIcon />
+                </span>
+                <span>Add a new widget</span>
+              </>
+            )}
+          </button>
+        );
+      })
+    : null;
+
+  const activeLine = lines.find((l) => l.isActive && !l.disabled);
+  const endCap = activeLine ? <LineEndCap key={`cap-${activeLine.id}`} line={activeLine} /> : null;
+
+  const placeGhostElement = editing && slotDrag?.state === "valid" ? null : ghostElement;
+
   const container = (
     <div
       ref={containerRef}
@@ -196,8 +315,9 @@ export function DashboardGrid({ className, style, ghostClassName, sourceGhostCla
     >
       {animated ? (
         <>
+          {emptyElements}
           <AnimatePresence>{sourceGhostElement}</AnimatePresence>
-          <AnimatePresence>{ghostElement}</AnimatePresence>
+          <AnimatePresence>{placeGhostElement}</AnimatePresence>
           <AnimatePresence mode="popLayout">{widgetElements}</AnimatePresence>
           <AnimatePresence>
             {unanchoredLines.map((line) => (
@@ -207,11 +327,13 @@ export function DashboardGrid({ className, style, ghostClassName, sourceGhostCla
           {anchoredLines.map((line) => (
             <InsertionLineMarker key={`marker-${line.id}`} line={line} />
           ))}
+          <AnimatePresence>{endCap}</AnimatePresence>
         </>
       ) : (
         <>
+          {emptyElements}
           {sourceGhostElement}
-          {ghostElement}
+          {placeGhostElement}
           {widgetElements}
           {unanchoredLines.map((line) => (
             <UnanchoredInsertionLine key={line.id} line={line} />
@@ -219,6 +341,7 @@ export function DashboardGrid({ className, style, ghostClassName, sourceGhostCla
           {anchoredLines.map((line) => (
             <InsertionLineMarker key={`marker-${line.id}`} line={line} />
           ))}
+          {endCap}
         </>
       )}
     </div>

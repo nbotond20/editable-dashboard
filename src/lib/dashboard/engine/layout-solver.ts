@@ -1,5 +1,6 @@
 import type { WidgetState, ComputedLayout } from "../types.ts";
-import type { OperationIntent } from "./types.ts";
+import type { OperationIntent, CommittedOperation } from "./types.ts";
+import { applyOperation } from "./operation-applier.ts";
 import { computeLayout } from "../layout/compute-layout.ts";
 import { DEFAULT_WIDGET_HEIGHT } from "../constants.ts";
 import { getPinnedIds } from "./utils.ts";
@@ -99,6 +100,77 @@ export function pinToGreedyColumns(
     if (col != null) {
       return { ...w, columnStart: col };
     }
+    return w;
+  });
+}
+
+/**
+ * Pin a source dropped onto a lower row's trailing free space so it lands
+ * beside the row's anchor instead of compacting up into the free top band of
+ * its column.
+ *
+ * `widgets` must already have the source reordered to just after the anchor.
+ * Returns widgets with `rowStart` + `columnStart` set on the source and the
+ * anchor row's widgets (reifying that one row so the masonry keeps the gap
+ * above the source), or `null` when the case doesn't apply — the slot is in the
+ * top row, the anchor isn't the row's trailing widget, or the source doesn't
+ * fit. Logical rows use the column-occupancy convention shared with
+ * {@link stabilizeCrossRowSwapMates}.
+ */
+export function pinSourceIntoTrailingSlot(
+  widgets: WidgetState[],
+  baseLayout: ComputedLayout | undefined,
+  sourceId: string,
+  maxColumns: number,
+  containerWidth: number,
+  gap: number,
+): WidgetState[] | null {
+  if (maxColumns <= 1 || !baseLayout) return null;
+
+  const visible = widgets.filter(w => w.visible).sort((a, b) => a.order - b.order);
+  const srcIdx = visible.findIndex(w => w.id === sourceId);
+  if (srcIdx <= 0) return null;
+  const source = visible[srcIdx];
+  const sourceSpan = Math.max(1, Math.min(source.colSpan, maxColumns));
+  const anchor = visible[srcIdx - 1];
+
+  const colWidth = (containerWidth - gap * (maxColumns - 1)) / maxColumns;
+  const step = colWidth + gap;
+
+  const entries = [...baseLayout.positions.entries()]
+    .filter(([id]) => id !== sourceId && !id.startsWith("__phantom_"))
+    .sort((a, b) => (Math.abs(a[1].y - b[1].y) > 1 ? a[1].y - b[1].y : a[1].x - b[1].x));
+
+  const rowUsed = new Array(maxColumns).fill(0);
+  const rowOf = new Map<string, number>();
+  const colOf = new Map<string, number>();
+  for (const [id, pos] of entries) {
+    const w = widgets.find(ww => ww.id === id);
+    if (!w || !w.visible) continue;
+    const span = Math.max(1, Math.min(w.colSpan, maxColumns));
+    const col = Math.max(0, Math.min(Math.round(pos.x / step), maxColumns - span));
+    let row = 0;
+    for (let c = col; c < col + span; c++) row = Math.max(row, rowUsed[c]);
+    rowOf.set(id, row);
+    colOf.set(id, col);
+    for (let c = col; c < col + span; c++) rowUsed[c] = row + 1;
+  }
+
+  const anchorRow = rowOf.get(anchor.id);
+  const anchorCol = colOf.get(anchor.id);
+  if (anchorRow == null || anchorRow === 0 || anchorCol == null) return null;
+
+  const anchorSpan = Math.max(1, Math.min(anchor.colSpan, maxColumns));
+  const trailingCol = anchorCol + anchorSpan;
+  if (trailingCol + sourceSpan > maxColumns) return null;
+
+  for (const [id, row] of rowOf) {
+    if (row === anchorRow && colOf.get(id)! > anchorCol) return null;
+  }
+
+  return widgets.map(w => {
+    if (w.id === sourceId) return { ...w, rowStart: anchorRow, columnStart: trailingCol };
+    if (rowOf.get(w.id) === anchorRow) return { ...w, rowStart: anchorRow, columnStart: colOf.get(w.id)! };
     return w;
   });
 }
@@ -384,9 +456,27 @@ export function solvePreviewLayout(
   switch (intent.type) {
     case "none":
     case "deferred-swap":
-    case "new-row":
-    case "in-row-insert":
       return fallback();
+
+    case "new-row":
+    case "in-row-insert": {
+      const op: CommittedOperation =
+        intent.type === "new-row"
+          ? { type: "new-row", sourceId, insertionIndex: intent.insertionIndex, colSpan: intent.colSpan }
+          : { type: "in-row-insert", sourceId, insertionIndex: intent.insertionIndex, resize: intent.resize };
+      const next = applyOperation(
+        { widgets, maxColumns: config.maxColumns, gap: config.gap, containerWidth },
+        op,
+      );
+      let placed = next.widgets;
+      if (intent.type === "in-row-insert") {
+        const pinned = pinSourceIntoTrailingSlot(
+          next.widgets, baseLayout, sourceId, config.maxColumns, containerWidth, config.gap,
+        );
+        if (pinned) placed = pinned;
+      }
+      return solveBaseLayout(placed, heights, containerWidth, config);
+    }
 
     case "reorder": {
       const result = reorderVisible(widgets, sourceId, intent.targetIndex, { columnStart: undefined });

@@ -1,5 +1,5 @@
 import type { ComputedLayout, WidgetState } from "../types.ts";
-import type { InsertionLine, InsertionLineSegment, Point } from "./types.ts";
+import type { InsertionLine, InsertionLineSegment, InsertionInvalidReason, Point } from "./types.ts";
 import { LINE_SNAP_HYSTERESIS, DEFAULT_LINE_CORNER_INSET } from "../constants.ts";
 import { equalDistribute } from "./equal-distribute.ts";
 import { crossesPositionLocked, newRowColSpan } from "./intent-resolver.ts";
@@ -68,6 +68,31 @@ export function computeInsertionLines(input: ComputeInsertionLinesInput): Insert
     ? true
     : newRowColSpan(sourceWidgetRef, { maxColumns, isResizeLocked, getWidgetConstraints }) != null;
   const hLineFeasible = (): boolean => hLineFeasibleValue;
+
+  const classifyRowInfeasibility = (row: PositionedWidget[]): InsertionInvalidReason => {
+    if (!sourceWidgetRef) return "column-overflow";
+    const c = getWidgetConstraints(sourceWidgetRef.id);
+    const sourceMin = isResizeLocked(sourceWidgetRef.id) ? sourceWidgetRef.colSpan : c.minSpan;
+    if (sourceMin >= maxColumns) return "only-full-width";
+    if (row.some((w) => w.id !== sourceId && isResizeLocked(w.id))) return "resize-locked";
+    return "column-overflow";
+  };
+
+  const vLineReason = (
+    insertionIdx: number,
+    rowFeasible: boolean,
+    rowReason: InsertionInvalidReason | undefined,
+  ): InsertionInvalidReason | undefined => {
+    if (crosses(insertionIdx)) return "position-locked";
+    if (!rowFeasible) return rowReason;
+    return undefined;
+  };
+
+  const hLineReason = (insertionIdx: number): InsertionInvalidReason | undefined => {
+    if (crosses(insertionIdx)) return "position-locked";
+    if (!hLineFeasible()) return "column-overflow";
+    return undefined;
+  };
 
   const allPositioned: PositionedWidget[] = [];
   for (const w of widgets) {
@@ -254,6 +279,7 @@ export function computeInsertionLines(input: ComputeInsertionLinesInput): Insert
 
     if (maxColumns > 1) {
       const rowFeasible = vLineFeasible(row);
+      const rowReason = rowFeasible ? undefined : classifyRowInfeasibility(row);
 
       const first = row[0];
       const outerLeftIdx = vInsertionIndex(row, 0);
@@ -271,6 +297,7 @@ export function computeInsertionLines(input: ComputeInsertionLinesInput): Insert
         afterId: outerLeftAfterId,
         isActive: false,
         disabled: adjacentToSourceLeft || isLineSelfAdjacent(outerLeftIdx, row) || !rowFeasible || crosses(outerLeftIdx),
+        disabledReason: vLineReason(outerLeftIdx, rowFeasible, rowReason),
       });
 
       for (let i = 0; i < row.length - 1; i++) {
@@ -290,6 +317,7 @@ export function computeInsertionLines(input: ComputeInsertionLinesInput): Insert
           afterId: b.id,
           isActive: false,
           disabled: adjacentToSource || !rowFeasible || isLineSelfAdjacent(midIdx, row) || crosses(midIdx),
+          disabledReason: vLineReason(midIdx, rowFeasible, rowReason),
         });
       }
 
@@ -309,6 +337,7 @@ export function computeInsertionLines(input: ComputeInsertionLinesInput): Insert
         afterId: null,
         isActive: false,
         disabled: adjacentToSourceRight || isLineSelfAdjacent(outerRightIdx, row) || !rowFeasible || crosses(outerRightIdx),
+        disabledReason: vLineReason(outerRightIdx, rowFeasible, rowReason),
       });
     }
   }
@@ -332,7 +361,11 @@ export function computeInsertionLines(input: ComputeInsertionLinesInput): Insert
     const beforeId = aboveLast ? aboveLast.id : null;
     const afterId = belowFirst ? belowFirst.id : null;
 
-    const insertionIdx = insertionIndexFromAfter(afterId);
+    const insertionIdx = afterId != null
+      ? insertionIndexFromAfter(afterId)
+      : beforeId != null
+        ? indexOfExcluded(beforeId) + 1
+        : excludedLength;
 
     const aboveAloneSource = above != null && above.length === 1 && above[0].id === sourceId;
     const belowAloneSource = below != null && below.length === 1 && below[0].id === sourceId;
@@ -366,6 +399,7 @@ export function computeInsertionLines(input: ComputeInsertionLinesInput): Insert
       rowIndex: r,
       isActive: false,
       disabled,
+      disabledReason: hLineReason(insertionIdx),
     });
   }
 

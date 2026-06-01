@@ -1,4 +1,4 @@
-import type { DashboardAction, DashboardState, ComputedLayout, WidgetState } from "../types.ts";
+import type { DashboardAction, DashboardState, ComputedLayout, EmptySlot, EmptySlotDragState, WidgetLayout, WidgetState } from "../types.ts";
 import type {
   DragEvent,
   DragPhase,
@@ -9,6 +9,8 @@ import type {
   DragEngineConfig,
   DragEngineSnapshot,
   InsertionLine,
+  InsertionInvalidReason,
+  InvalidDropTarget,
   Point,
 } from "./types.ts";
 import { distance, getVisibleSorted, zonesEqual, getPinnedIds } from "./utils.ts";
@@ -23,10 +25,12 @@ import {
   stabilizeUninvolvedWidgets,
   stabilizeCrossRowSwapMates,
   pinToGreedyColumns,
+  pinSourceIntoTrailingSlot,
   findColumnPinInsertionIndex,
   preserveTargetRowOrder,
 } from "./layout-solver.ts";
 import { computeLayout } from "../layout/compute-layout.ts";
+import { computeEmptySlots } from "../layout/compute-empty-slots.ts";
 import type { LayoutSolverConfig } from "./layout-solver.ts";
 import { dashboardReducer } from "../state/dashboard-reducer.ts";
 import {
@@ -69,6 +73,10 @@ const UNDOABLE_ACTIONS = new Set<string>([
 ]);
 
 const MAX_UNDO_DEPTH = 50;
+
+function rectsOverlap(a: WidgetLayout, b: WidgetLayout): boolean {
+  return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
+}
 
 function defaultConfig(): DragEngineConfig {
   return {
@@ -136,11 +144,19 @@ export class DragEngine {
 
   private insertionLines: InsertionLine[] = [];
   private currentLineId: string | null = null;
+  private invalidLineId: string | null = null;
+  private emptySlotDragState: EmptySlotDragState | null = null;
+  private invalidMarkedCache: {
+    source: InsertionLine[];
+    invalidId: string | null;
+    result: InsertionLine[];
+  } | null = null;
   private filteredLinesCache: {
     source: InsertionLine[];
     pointerX: number;
     pointerY: number;
     radius: number;
+    invalidId: string | null;
     result: InsertionLine[];
   } | null = null;
   private rawLinesCache: {
@@ -158,6 +174,12 @@ export class DragEngine {
   } | null = null;
   private exposedLinesCache: {
     rawLines: InsertionLine[];
+    activeId: string | null;
+    result: InsertionLine[];
+  } | null = null;
+  private alignedLineCache: {
+    source: InsertionLine[];
+    dropPos: WidgetLayout | null;
     activeId: string | null;
     result: InsertionLine[];
   } | null = null;
@@ -266,12 +288,28 @@ export class DragEngine {
         ? this.lastTimestamp - this.zoneEnteredAt
         : 0;
 
-    const sourceGhost =
+    const dropPreviewPos =
+      phase.type === "dragging" ? this.previewLayout?.positions.get(phase.sourceId) ?? null : null;
+    const sourcePos =
       phase.type === "dragging" && this.config.dropMode !== "classic"
         ? this.baseLayout.positions.get(phase.sourceId) ?? null
         : null;
+    const sourceGhost =
+      sourcePos && !(dropPreviewPos && rectsOverlap(sourcePos, dropPreviewPos)) ? sourcePos : null;
 
-    const exposedInsertionLines = this.filterLinesByProximity(this.insertionLines);
+    const invalidLine = this.findInvalidLine();
+    this.invalidLineId = invalidLine?.id ?? null;
+    const exposedInsertionLines = this.alignActiveLineToPreview(
+      this.markInvalidLine(
+        this.filterLinesByProximity(this.insertionLines),
+        this.invalidLineId,
+      ),
+      dropPreviewPos,
+    );
+    const invalidTarget =
+      invalidLine != null && invalidLine.disabledReason != null
+        ? this.buildInvalidTarget(invalidLine, invalidLine.disabledReason)
+        : null;
 
     this.cachedSnapshot = {
       phase,
@@ -296,6 +334,9 @@ export class DragEngine {
       canRedo: canRedo(this.history),
       insertionLines: exposedInsertionLines,
       sourceGhost,
+      invalidTarget,
+      emptySlotDragState: this.emptySlotDragState,
+      containerWidth: this.containerWidth,
     };
 
     return this.cachedSnapshot;
@@ -522,6 +563,7 @@ export class DragEngine {
     this.rawLinesCache = null;
     this.exposedLinesCache = null;
     this.filteredLinesCache = null;
+    this.alignedLineCache = null;
     this.recomputeLayouts();
 
     this.announcement = this.buildDropAnnouncement(committed);
@@ -806,21 +848,37 @@ export class DragEngine {
       if (committed.type === "in-row-insert") {
         for (const r of committed.resize) involvedIds.add(r.id);
       }
-      newState = {
-        ...newState,
-        widgets: stabilizeUninvolvedWidgets(
-          newState.widgets,
-          this.baseLayout,
-          involvedIds,
-          this.containerWidth,
-          cfg.maxColumns,
-          cfg.gap,
-        ),
-      };
-      newState = {
-        ...newState,
-        widgets: pinToGreedyColumns(newState.widgets, cfg.maxColumns),
-      };
+      const pinned = committed.type === "in-row-insert"
+        ? pinSourceIntoTrailingSlot(
+            newState.widgets, this.baseLayout, committed.sourceId,
+            cfg.maxColumns, this.containerWidth, cfg.gap,
+          )
+        : null;
+      if (pinned) {
+        newState = {
+          ...newState,
+          widgets: stabilizeUninvolvedWidgets(
+            pinned, this.baseLayout, involvedIds,
+            this.containerWidth, cfg.maxColumns, cfg.gap,
+          ),
+        };
+      } else {
+        newState = {
+          ...newState,
+          widgets: stabilizeUninvolvedWidgets(
+            newState.widgets,
+            this.baseLayout,
+            involvedIds,
+            this.containerWidth,
+            cfg.maxColumns,
+            cfg.gap,
+          ),
+        };
+        newState = {
+          ...newState,
+          widgets: pinToGreedyColumns(newState.widgets, cfg.maxColumns),
+        };
+      }
     } else {
       newState = {
         ...newState,
@@ -1508,6 +1566,39 @@ export class DragEngine {
         }
       }
 
+      this.emptySlotDragState = null;
+      if (this.config.dropMode !== "classic") {
+        const slot = this.emptySlotUnderPointer([rawPointerPos, zonePointerPos], layout);
+        const edge = slot ? this.slotEdgeLine(slot) : null;
+        if (slot && edge) {
+          if (edge.disabled) {
+            if (edge.disabledReason != null) {
+              this.emptySlotDragState = {
+                rowIndex: slot.rowIndex,
+                columnStart: slot.columnStart,
+                state: "invalid",
+                reason: edge.disabledReason,
+              };
+            }
+          } else {
+            this.emptySlotDragState = {
+              rowIndex: slot.rowIndex,
+              columnStart: slot.columnStart,
+              state: "valid",
+            };
+            if (computedZone.type === "outside" || computedZone.type === "gap") {
+              computedZone = {
+                type: edge.orientation === "vertical" ? "insertion-line-v" : "insertion-line-h",
+                lineId: edge.id,
+                insertionIndex: edge.insertionIndex,
+                beforeId: edge.beforeId,
+                afterId: edge.afterId,
+              };
+            }
+          }
+        }
+      }
+
       const prevLineId = this.currentLineId;
       if (!zonesEqual(computedZone, this.currentZone)) {
         if (zonesEqual(computedZone, this.pendingZone)) {
@@ -1883,10 +1974,14 @@ export class DragEngine {
     this.sideCollapsed = false;
     this.intentGraceStart = null;
     this.currentLineId = null;
+    this.invalidLineId = null;
+    this.emptySlotDragState = null;
     this.insertionLines = [];
     this.rawLinesCache = null;
     this.exposedLinesCache = null;
     this.filteredLinesCache = null;
+    this.invalidMarkedCache = null;
+    this.alignedLineCache = null;
   }
 
   private filterLinesByProximity(lines: InsertionLine[]): InsertionLine[] {
@@ -1898,13 +1993,15 @@ export class DragEngine {
         ? phase.pointerPos
         : null;
     if (!pointer) return lines;
+    const invalidId = this.invalidLineId;
     const cache = this.filteredLinesCache;
     if (
       cache !== null &&
       cache.source === lines &&
       cache.pointerX === pointer.x &&
       cache.pointerY === pointer.y &&
-      cache.radius === radius
+      cache.radius === radius &&
+      cache.invalidId === invalidId
     ) {
       return cache.result;
     }
@@ -1913,7 +2010,7 @@ export class DragEngine {
     const result: InsertionLine[] = [];
     for (let li = 0; li < lines.length; li++) {
       const l = lines[li];
-      if (l.isActive) {
+      if (l.isActive || (invalidId != null && l.id === invalidId)) {
         result.push(l);
         continue;
       }
@@ -1969,9 +2066,147 @@ export class DragEngine {
       pointerX: pointer.x,
       pointerY: pointer.y,
       radius,
+      invalidId,
       result,
     };
     return result;
+  }
+
+  /**
+   * Nearest infeasible insertion line to the pointer, or null. Drives both the
+   * red "cannot drop" marker and the {@link InvalidDropTarget}. Suppressed while
+   * a valid intent is resolved.
+   */
+  private findInvalidLine(): InsertionLine | null {
+    if (this.phase.type !== "dragging") return null;
+    if (this.config.dropMode === "classic") return null;
+    if (this.currentIntent != null && this.currentIntent.type !== "none") return null;
+    const pointer = this.phase.pointerPos;
+    if (!pointer) return null;
+
+    const radius = this.config.lineSnapRadius;
+    let best: InsertionLine | null = null;
+    let bestDist = Infinity;
+    for (const line of this.insertionLines) {
+      if (!line.disabled || line.disabledReason == null) continue;
+      const d = pointerLineDistance(pointer, line);
+      if (d <= radius && d < bestDist) {
+        best = line;
+        bestDist = d;
+      }
+    }
+    return best;
+  }
+
+  private markInvalidLine(lines: InsertionLine[], invalidId: string | null): InsertionLine[] {
+    if (invalidId == null) return lines;
+    const cache = this.invalidMarkedCache;
+    if (cache !== null && cache.source === lines && cache.invalidId === invalidId) {
+      return cache.result;
+    }
+    let result = lines;
+    const idx = lines.findIndex((l) => l.id === invalidId);
+    if (idx !== -1) {
+      result = lines.slice();
+      result[idx] = { ...lines[idx], invalidActive: true };
+    }
+    this.invalidMarkedCache = { source: lines, invalidId, result };
+    return result;
+  }
+
+  /**
+   * In lines mode the layout reflows to the placement preview while the lines
+   * stay anchored to the pre-drag layout. When the dragged widget vacates a row
+   * taller than its row-mates, that boundary shifts and the active line is left
+   * detached, floating inside the placement ghost. Re-anchor the active line to
+   * the leading edge of the previewed drop slot so it tracks where the widget
+   * lands.
+   */
+  private alignActiveLineToPreview(lines: InsertionLine[], dropPos: WidgetLayout | null): InsertionLine[] {
+    const activeId = this.currentLineId;
+    if (dropPos == null || activeId == null) return lines;
+    const cache = this.alignedLineCache;
+    if (cache !== null && cache.source === lines && cache.dropPos === dropPos && cache.activeId === activeId) {
+      return cache.result;
+    }
+
+    let result = lines;
+    const idx = lines.findIndex((l) => l.isActive && l.id === activeId);
+    if (idx !== -1) {
+      const line = lines[idx];
+      const half = this.history.present.gap / 2;
+      let aligned: InsertionLine;
+      if (line.orientation === "horizontal") {
+        const y = dropPos.y - half;
+        const x1 = dropPos.x;
+        const x2 = dropPos.x + dropPos.width;
+        aligned = { ...line, x1, y1: y, x2, y2: y, segments: [{ x1, y1: y, x2, y2: y, anchorId: null, edge: null }] };
+      } else {
+        const x = dropPos.x - half;
+        const y1 = dropPos.y;
+        const y2 = dropPos.y + dropPos.height;
+        aligned = { ...line, x1: x, y1, x2: x, y2, segments: [{ x1: x, y1, x2: x, y2, anchorId: null, edge: null }] };
+      }
+      result = lines.slice();
+      result[idx] = aligned;
+    }
+
+    this.alignedLineCache = { source: lines, dropPos, activeId, result };
+    return result;
+  }
+
+  private emptySlotUnderPointer(pointers: readonly Point[], layout: ComputedLayout): EmptySlot | null {
+    const state = this.history.present;
+    const slots = computeEmptySlots(layout, state.widgets, state.maxColumns, state.gap, this.containerWidth);
+    for (const p of pointers) {
+      for (const s of slots) {
+        if (p.x >= s.x && p.x <= s.x + s.width && p.y >= s.y && p.y <= s.y + s.height) {
+          return s;
+        }
+      }
+    }
+    return null;
+  }
+
+  private slotEdgeLine(slot: EmptySlot): InsertionLine | null {
+    for (const l of this.insertionLines) {
+      if (l.afterId !== null) continue;
+      if (slot.anchorId === null) {
+        if (l.orientation === "horizontal" && l.beforeId === null) return l;
+      } else if (l.orientation === "vertical" && l.beforeId === slot.anchorId) {
+        return l;
+      }
+    }
+    return null;
+  }
+
+  private buildInvalidTarget(line: InsertionLine, reason: InsertionInvalidReason): InvalidDropTarget {
+    const sourceId = this.phase.type === "dragging" ? this.phase.sourceId : null;
+    const source = sourceId != null ? this.widgetById.get(sourceId) : null;
+    const sourcePos = sourceId != null ? this.baseLayout.positions.get(sourceId) : null;
+    const state = this.history.present;
+    const maxColumns = state.maxColumns;
+    const gap = state.gap;
+    const colWidth = maxColumns > 0
+      ? (this.containerWidth - gap * (maxColumns - 1)) / maxColumns
+      : this.containerWidth;
+
+    let reqSpan = source ? Math.min(maxColumns, Math.max(1, source.colSpan)) : maxColumns;
+    if (reason === "only-full-width") reqSpan = maxColumns;
+    const reqWidth = Math.min(this.containerWidth, reqSpan * colWidth + (reqSpan - 1) * gap);
+
+    const meta = { reason, orientation: line.orientation, beforeId: line.beforeId, afterId: line.afterId };
+
+    if (line.orientation === "vertical") {
+      const height = Math.max(0, line.y2 - line.y1);
+      const x = Math.max(0, Math.min(this.containerWidth - reqWidth, line.x1 - reqWidth / 2));
+      return { rect: { x, y: line.y1, width: reqWidth, height }, ...meta };
+    }
+
+    const height = sourcePos?.height ?? Math.max(0, line.y2 - line.y1);
+    const cy = (line.y1 + line.y2) / 2;
+    const x = Math.max(0, Math.min(this.containerWidth - reqWidth, line.x1));
+    return { rect: { x, y: cy - height / 2, width: reqWidth, height }, ...meta };
   }
 
   private recomputeInsertionLines(): void {
@@ -1980,6 +2215,7 @@ export class DragEngine {
       this.currentLineId = null;
       this.rawLinesCache = null;
       this.exposedLinesCache = null;
+      this.alignedLineCache = null;
       return;
     }
 
@@ -2189,7 +2425,36 @@ export class DragEngine {
       a.canUndo === b.canUndo &&
       a.canRedo === b.canRedo &&
       a.sourceGhost === b.sourceGhost &&
-      a.insertionLines === b.insertionLines
+      a.insertionLines === b.insertionLines &&
+      a.containerWidth === b.containerWidth &&
+      this.invalidTargetsEqual(a.invalidTarget, b.invalidTarget) &&
+      this.emptySlotStatesEqual(a.emptySlotDragState, b.emptySlotDragState)
+    );
+  }
+
+  private emptySlotStatesEqual(a: EmptySlotDragState | null, b: EmptySlotDragState | null): boolean {
+    if (a === b) return true;
+    if (a == null || b == null) return false;
+    return (
+      a.rowIndex === b.rowIndex &&
+      a.columnStart === b.columnStart &&
+      a.state === b.state &&
+      a.reason === b.reason
+    );
+  }
+
+  private invalidTargetsEqual(a: InvalidDropTarget | null, b: InvalidDropTarget | null): boolean {
+    if (a === b) return true;
+    if (a == null || b == null) return false;
+    return (
+      a.reason === b.reason &&
+      a.orientation === b.orientation &&
+      a.beforeId === b.beforeId &&
+      a.afterId === b.afterId &&
+      a.rect.x === b.rect.x &&
+      a.rect.y === b.rect.y &&
+      a.rect.width === b.rect.width &&
+      a.rect.height === b.rect.height
     );
   }
 

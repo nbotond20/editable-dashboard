@@ -13,6 +13,7 @@ const widgetComponents: Record<string, React.FC> = {
   table: TableWidget,
   notes: NotesWidget,
   calendar: CalendarWidget,
+  banner: ChartWidget,
 };
 
 const widgetLabels: Record<string, string> = {
@@ -21,6 +22,7 @@ const widgetLabels: Record<string, string> = {
   table: "Team",
   notes: "Notes",
   calendar: "Calendar",
+  banner: "Promo Banner",
 };
 
 interface DemoWidgetProps {
@@ -60,12 +62,20 @@ export const DemoWidget = memo(function DemoWidget({
   remove,
   isLongPressing,
 }: DemoWidgetProps) {
-  const { actions, isWidgetLockActive } = useDashboardStable();
+  const { actions, isWidgetLockActive, definitions } = useDashboardStable();
   const Component = widgetComponents[widget.type];
   const label = widgetLabels[widget.type] ?? widget.type;
   const positionLocked = isWidgetLockActive(widget.id, "position");
   const resizeLocked = isWidgetLockActive(widget.id, "resize");
   const removeLocked = isWidgetLockActive(widget.id, "remove");
+
+  const def = definitions.find((d) => d.type === widget.type);
+  const minSpan = Math.max(1, def?.minColSpan ?? 1);
+  const maxSpan = Math.min(def?.maxColSpan ?? maxColumns, maxColumns);
+  const selectableSpans = Array.from(
+    { length: Math.max(0, maxSpan - minSpan + 1) },
+    (_, i) => minSpan + i,
+  );
 
   const widgetClass = [
     "dash-widget",
@@ -86,9 +96,9 @@ export const DemoWidget = memo(function DemoWidget({
         </div>
         <span style={{ flex: 1 }} className="dash-label-emphasis">{label}</span>
         <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-          {maxColumns > 1 && !resizeLocked && (
+          {selectableSpans.length > 1 && !resizeLocked && (
             <div className="dash-toggle-group" role="group" aria-label="Widget width">
-              {Array.from({ length: maxColumns }, (_, i) => i + 1).map((n) => (
+              {selectableSpans.map((n) => (
                 <button
                   key={n}
                   className={`dash-toggle-item ${colSpan === n ? "dash-toggle-item--active" : ""}`}

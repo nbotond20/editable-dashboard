@@ -340,6 +340,7 @@ export function DashboardProvider(props: DashboardProviderProps) {
       state,
       definitions,
       layout,
+      containerWidth: snapshot.containerWidth,
       actions,
       canUndo: snapshot.canUndo,
       canRedo: snapshot.canRedo,
@@ -356,7 +357,7 @@ export function DashboardProvider(props: DashboardProviderProps) {
       doubleClickToMaximize,
       registerTrashZone,
     }),
-    [state, definitions, layout, actions, snapshot.canUndo, snapshot.canRedo, getDragPosition, containerCallbackRef, measureRef, constrainedStartDrag, getA11yProps, handleKeyboardDrag, isWidgetLockActive, canAddWidget, doubleClickToMaximize, registerTrashZone],
+    [state, definitions, layout, snapshot.containerWidth, actions, snapshot.canUndo, snapshot.canRedo, getDragPosition, containerCallbackRef, measureRef, constrainedStartDrag, getA11yProps, handleKeyboardDrag, isWidgetLockActive, canAddWidget, doubleClickToMaximize, registerTrashZone],
   );
 
   const dragValue = useMemo(

@@ -7,7 +7,11 @@ export type {
   DashboardStateInput,
   WidgetLayout,
   ComputedLayout,
+  EmptySlot,
+  EmptySlotDragState,
   DragState,
+  InsertionInvalidReason,
+  InvalidDropTarget,
   DropTarget,
   DashboardAction,
   DashboardActions,
@@ -50,6 +54,9 @@ export { useInsertionLines } from "./react/use-insertion-lines.ts";
 export { useAnchoredInsertionSegments } from "./react/use-anchored-insertion-segments.ts";
 export type { AnchoredInsertionSegment } from "./react/use-anchored-insertion-segments.ts";
 export { useSourceGhost } from "./react/use-source-ghost.ts";
+export { useInvalidTarget } from "./react/use-invalid-target.ts";
+export { useEmptySlots } from "./react/use-empty-slots.ts";
+export { useEmptySlotDragState } from "./react/use-empty-slot-drag-state.ts";
 export { useDragFollow } from "./react/use-drag-follow.ts";
 export type { DragFollowResult, DragFollowOptions, SettleConfig } from "./react/use-drag-follow.ts";
 export type { TrashZoneResult } from "./react/use-trash-zone.ts";

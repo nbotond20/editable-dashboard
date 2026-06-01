@@ -306,7 +306,7 @@ Stable, memoized action dispatchers.
 
 | Method               | Signature                                                                          | Description                                                                                                         |
 | -------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `addWidget`          | `(widgetType: string, colSpan?: number, config?: Record<string, unknown>) => void` | Add a new widget. If `colSpan` is omitted, uses the definition's `defaultColSpan` (or 1).                           |
+| `addWidget`          | `(widgetType: string, colSpan?: number, config?: Record<string, unknown>, placement?: { targetIndex?: number; columnStart?: number }) => void` | Add a new widget. If `colSpan` is omitted, uses the definition's `defaultColSpan` (or 1). Pass `placement` to insert at a position (e.g. into a clicked empty slot) instead of appending. |
 | `removeWidget`       | `(id: string) => void`                                                             | Remove a widget by ID. Respects remove lock.                                                                        |
 | `resizeWidget`       | `(id: string, colSpan: number) => void`                                            | Change a widget's column span. Clamped to `[1, maxColumns]`. Respects resize lock.                                  |
 | `reorderWidgets`     | `(fromIndex: number, toIndex: number) => void`                                     | Move a widget from one position to another (indices into the visible, sorted list). Clears all `columnStart` hints. |
@@ -1732,6 +1732,110 @@ function SourceGhost() {
 ```
 
 `sourceGhost` is a `WidgetLayout` (`{ id, x, y, width, height, colSpan }`) and is `null` outside an active pointer drag, in `'classic'` mode, and during keyboard / external drags.
+
+### Placement preview
+
+In `'lines'` mode, `dragState.previewLayout` reflects the **committed result** of the hovered drop — the dragged widget appears at its destination slot with the size it will take (e.g. shrunk to fit a row). Read it to render a placeholder where the widget will land, and to resize the drag preview itself:
+
+```tsx
+const { dragState } = useDashboardDrag();
+const landing = dragState.activeId
+  ? dragState.previewLayout?.positions.get(dragState.activeId)
+  : undefined;
+// landing -> { x, y, width, height } of the slot the widget will occupy
+```
+
+### Cannot-fit feedback
+
+When the hovered location cannot accept the dragged widget, the infeasible insertion line nearest the pointer is flagged with `InsertionLine.invalidActive`. Render that line in red so the "cannot drop here" marker sits in the gap on the widget's side and never overlaps a widget:
+
+```tsx
+// inside your insertion-line renderer
+const color = line.invalidActive ? "#e5484d" : line.isActive ? "#5b8def" : "#cbd5e1";
+```
+
+For a footprint-style affordance instead, `dragState.invalidTarget` (also via `useInvalidTarget()`) exposes the rect the widget *would* need and the same typed reason. Note this rect can overlap existing widgets at row edges, so prefer the `invalidActive` line (and the empty-slot reason below) when you want feedback strictly on the side:
+
+```tsx
+import { useInvalidTarget } from "editable-dashboard";
+
+function CannotFit() {
+  const invalid = useInvalidTarget();
+  if (!invalid) return null;
+  const { rect, reason } = invalid; // reason: InsertionInvalidReason
+  return (
+    <div style={{ position: "absolute", left: rect.x, top: rect.y, width: rect.width, height: rect.height,
+      border: "2px dashed #e5484d", pointerEvents: "none" }}>
+      {reason === "only-full-width" ? "This widget only comes in full width" : "Cannot fit here"}
+    </div>
+  );
+}
+```
+
+`reason` is one of `position-locked` | `only-full-width` | `resize-locked` | `column-overflow`. The same value is on each infeasible line as `InsertionLine.disabledReason`. Drag feasibility honours `WidgetDefinition.minColSpan` / `maxColSpan`, so a widget whose `minColSpan` equals the current column count reports `only-full-width`.
+
+### Empty slots
+
+`useEmptySlots()` returns the free column regions in the current layout (trailing space in partially-filled rows, plus a full-width slot when the dashboard is empty) so you can render persistent "add widget" affordances. It is independent of drag state. Each slot's `x`/`y`/`width`/`height` is clamped to the actual free space — it never overlaps a neighbouring widget, including ones protruding from an adjacent column above or sitting full-width below in a masonry layout:
+
+```tsx
+import { useEmptySlots } from "editable-dashboard";
+
+function AddSlots({ onAdd }: { onAdd: (slot: EmptySlot) => void }) {
+  const slots = useEmptySlots();
+  return slots.map((s) => (
+    <button key={`${s.rowIndex}-${s.columnStart}`} onClick={() => onAdd(s)}
+      style={{ position: "absolute", left: s.x, top: s.y, width: s.width, height: s.height }}>
+      + Add a new widget
+    </button>
+  ));
+}
+```
+
+To drop a new widget into the slot that was clicked, pass the slot's `columnStart` and a `targetIndex` just after its `anchorId` to `addWidget`, sizing the widget to the slot's free columns (clamped to the definition's `maxColSpan`). Append to the bottom only when the widget's `minColSpan` exceeds the free space:
+
+```tsx
+function addIntoSlot(slot: EmptySlot, type: string) {
+  const def = definitions.find((d) => d.type === type)!;
+  const min = Math.max(1, def.minColSpan ?? 1);
+  const max = Math.min(def.maxColSpan ?? maxColumns, maxColumns);
+  if (min > slot.colSpan) return actions.addWidget(type); // doesn't fit -> bottom
+  const visible = state.widgets.filter((w) => w.visible).sort((a, b) => a.order - b.order);
+  const anchorIdx = slot.anchorId ? visible.findIndex((w) => w.id === slot.anchorId) : -1;
+  actions.addWidget(type, Math.min(slot.colSpan, max), undefined, {
+    targetIndex: anchorIdx >= 0 ? anchorIdx + 1 : 0,
+    columnStart: slot.columnStart,
+  });
+}
+```
+
+#### Live feedback on empty slots during a drag
+
+Keep the empty-slot affordances mounted while dragging and recolor the one the dragged widget is over. `useEmptySlotDragState()` returns the currently-targeted slot as `{ rowIndex, columnStart, state: "valid" | "invalid", reason? }` (or `null`) — `valid` when the dragged widget fits the slot's free space, `invalid` (with a typed `reason`) when it does not. Match it to a slot by `rowIndex` + `columnStart`:
+
+```tsx
+import { useEmptySlots, useEmptySlotDragState } from "editable-dashboard";
+
+function AddSlots() {
+  const slots = useEmptySlots();
+  const drag = useEmptySlotDragState();
+  return slots.map((s) => {
+    const ds = drag && drag.rowIndex === s.rowIndex && drag.columnStart === s.columnStart ? drag : null;
+    const color = ds?.state === "valid" ? "#5b8def" : ds?.state === "invalid" ? "#e5484d" : "#cbd5e1";
+    return (
+      <div key={`${s.rowIndex}-${s.columnStart}`}
+        style={{ position: "absolute", left: s.x, top: s.y, width: s.width, height: s.height,
+          border: `2px dashed ${color}`, pointerEvents: "none" }}>
+        {ds?.state === "valid" ? "Drop to add here" : ds?.state === "invalid" ? "Cannot fit here" : "Add a new widget"}
+      </div>
+    );
+  });
+}
+```
+
+When a slot is the drop target, suppress your standalone place/cannot-fit affordance for that frame (gate it on `useEmptySlotDragState()` being `null`) so feedback isn't shown twice.
+
+Dropping an existing widget onto a `valid` slot below the top row places it beside that row's last widget and keeps the cell above it empty — e.g. with `A B` / `C` (a trailing slot beside `C`), dragging `B` onto that slot yields `A ·` / `C B`. Masonry can't otherwise hold a widget in a lower row with empty space above it in the same column, so the engine pins the row to preserve the gap. The pin is transient: a later drag of any widget recompacts the row.
 
 ---
 

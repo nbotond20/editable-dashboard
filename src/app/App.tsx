@@ -8,6 +8,7 @@ import {
   type WidgetState,
   type DashboardState,
   type DragHandleProps,
+  type EmptySlot,
   useTrashZone,
 } from "../lib/dashboard/index.ts";
 import { DashboardGrid } from "./components/DashboardGrid.tsx";
@@ -23,13 +24,15 @@ const definitions: WidgetDefinition[] = [
   { type: "table", label: "Team Members", defaultColSpan: 2 },
   { type: "notes", label: "Quick Notes", defaultColSpan: 1 },
   { type: "calendar", label: "Calendar", defaultColSpan: 1 },
+  { type: "banner", label: "Promo Banner", defaultColSpan: 2, minColSpan: 2, maxColSpan: 2 },
 ];
 
 const initialWidgets: WidgetState[] = [
-  { id: crypto.randomUUID(), type: "stats", colSpan: 1, visible: true, order: 0 },
-  { id: crypto.randomUUID(), type: "chart", colSpan: 2, visible: true, order: 1 },
-  { id: crypto.randomUUID(), type: "notes", colSpan: 1, visible: true, order: 2 },
-  { id: crypto.randomUUID(), type: "calendar", colSpan: 1, visible: true, order: 3 },
+  { id: crypto.randomUUID(), type: "banner", colSpan: 2, visible: true, order: 0 },
+  { id: crypto.randomUUID(), type: "stats", colSpan: 1, visible: true, order: 1 },
+  { id: crypto.randomUUID(), type: "chart", colSpan: 2, visible: true, order: 2 },
+  { id: crypto.randomUUID(), type: "notes", colSpan: 1, visible: true, order: 3 },
+  { id: crypto.randomUUID(), type: "calendar", colSpan: 1, visible: true, order: 4 },
 ];
 
 const DRAG_CONFIG = {
@@ -56,6 +59,8 @@ interface DashboardContentProps {
 function DashboardContent({ maxColumns: controlledMaxColumns, onMaxColumnsChange, dropMode = "classic", onDropModeChange, lineProximity = 60, onLineProximityChange }: DashboardContentProps) {
   const { state, actions, definitions: defs, canUndo, canRedo } = useDashboardStable();
   const [catalogOpen, setCatalogOpen] = useState(false);
+  const [pendingSlot, setPendingSlot] = useState<EmptySlot | null>(null);
+  const [editing, setEditing] = useState(true);
   const [animated, setAnimated] = useState(
     () => !window.matchMedia("(prefers-reduced-motion: reduce)").matches
   );
@@ -70,12 +75,35 @@ function DashboardContent({ maxColumns: controlledMaxColumns, onMaxColumnsChange
 
   const handleAdd = useCallback(
     (type: string) => {
+      const slot = pendingSlot;
+      setPendingSlot(null);
+      if (slot) {
+        const def = defs.find((d) => d.type === type);
+        const minSpan = Math.max(1, def?.minColSpan ?? 1);
+        const maxSpan = Math.min(def?.maxColSpan ?? maxColumns, maxColumns);
+        if (minSpan <= slot.colSpan) {
+          const colSpan = Math.min(slot.colSpan, maxSpan);
+          const visible = state.widgets
+            .filter((w) => w.visible)
+            .sort((a, b) => a.order - b.order);
+          const anchorIdx =
+            slot.anchorId != null ? visible.findIndex((w) => w.id === slot.anchorId) : -1;
+          actions.addWidget(type, colSpan, undefined, {
+            targetIndex: anchorIdx >= 0 ? anchorIdx + 1 : 0,
+            columnStart: slot.columnStart,
+          });
+          return;
+        }
+      }
       actions.addWidget(type);
     },
-    [actions]
+    [actions, pendingSlot, defs, maxColumns, state.widgets]
   );
 
-  const closeCatalog = useCallback(() => setCatalogOpen(false), []);
+  const closeCatalog = useCallback(() => {
+    setCatalogOpen(false);
+    setPendingSlot(null);
+  }, []);
 
   const renderWidget = useCallback(
     (widget: WidgetState, slotProps: { dragHandleProps: DragHandleProps; isDragging: boolean; colSpan: number; resize: (colSpan: number) => void; remove: () => void; isLongPressing: boolean }) => (
@@ -175,8 +203,19 @@ function DashboardContent({ maxColumns: controlledMaxColumns, onMaxColumnsChange
             {animated ? "Animations: On" : "Animations: Off"}
           </button>
           <button
+            className={`dash-btn ${editing ? "dash-btn--primary" : "dash-btn--outline"}`}
+            data-testid="editing-toggle"
+            data-active={editing ? "true" : "false"}
+            onClick={() => setEditing((e) => !e)}
+          >
+            {editing ? "Editing: On" : "Editing: Off"}
+          </button>
+          <button
             className="dash-btn dash-btn--primary"
-            onClick={() => setCatalogOpen(true)}
+            onClick={() => {
+              setPendingSlot(null);
+              setCatalogOpen(true);
+            }}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
             Add Widget
@@ -185,7 +224,15 @@ function DashboardContent({ maxColumns: controlledMaxColumns, onMaxColumnsChange
       </header>
 
       <main style={{ padding: 24, maxWidth: 1200, margin: "0 auto" }}>
-        <DashboardGrid animated={animated} style={{ width: "100%" }}>
+        <DashboardGrid
+          animated={animated}
+          editing={editing}
+          onAddWidget={(slot) => {
+            setPendingSlot(slot);
+            setCatalogOpen(true);
+          }}
+          style={{ width: "100%" }}
+        >
           {renderWidget}
         </DashboardGrid>
 
@@ -241,7 +288,7 @@ function saveState(widgets: WidgetState[], maxColumns: number, gap: number) {
 
 function UncontrolledApp({ saved }: { saved: { widgets: WidgetState[]; maxColumns: number } | undefined }) {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const [dropMode, setDropMode] = useState<"classic" | "lines">("classic");
+  const [dropMode, setDropMode] = useState<"classic" | "lines">("lines");
   const [lineProximity, setLineProximity] = useState<ProximityOption>(60);
 
   const handleChange = useCallback((state: DashboardState) => {
@@ -278,7 +325,7 @@ function UncontrolledApp({ saved }: { saved: { widgets: WidgetState[]; maxColumn
 function ControlledApp({ saved }: { saved: { widgets: WidgetState[]; maxColumns: number } | undefined }) {
   const [widgets, setWidgets] = useState<WidgetState[]>(saved?.widgets ?? initialWidgets);
   const [maxColumns, setMaxColumns] = useState(saved?.maxColumns ?? 2);
-  const [dropMode, setDropMode] = useState<"classic" | "lines">("classic");
+  const [dropMode, setDropMode] = useState<"classic" | "lines">("lines");
   const [lineProximity, setLineProximity] = useState<ProximityOption>(60);
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);

@@ -36,6 +36,12 @@ export function WidgetSlot({ widget, animated = true, children }: WidgetSlotProp
   const anchored = useAnchoredInsertionSegments(widget.id);
   const { dragState } = useDashboardDrag();
   const isSwapHighlight = dragState.swapTargetId === widget.id;
+
+  const dragTargetSize = slot.isDragging
+    ? dragState.previewLayout?.positions.get(widget.id)
+    : undefined;
+  const widthTarget = dragTargetSize?.width ?? slot.position?.width ?? 0;
+  const morphing = slot.isDragging && dragTargetSize != null;
   const { ref: dragRef, isActive: dragActive } = useDragFollow(slot, {
     settle: animated
       ? { duration: SETTLE_DURATION, easing: SETTLE_EASING }
@@ -66,18 +72,18 @@ export function WidgetSlot({ widget, animated = true, children }: WidgetSlotProp
   useLayoutEffect(() => {
     if (!slot.position) return;
     const isInitial = prevWidthRef.current == null;
-    const widthChanged = slot.position.width !== prevWidthRef.current;
+    const widthChanged = widthTarget !== prevWidthRef.current;
     const colSpanChanged = slot.position.colSpan !== prevColSpanRef.current;
     const moved = slot.position.x !== prevXRef.current || slot.position.y !== prevYRef.current;
 
     if (isInitial || widthChanged || colSpanChanged) {
-      widthMV.set(slot.position.width);
-      if (isInitial || !colSpanChanged || moved) {
-        springWidth.jump(slot.position.width);
+      widthMV.set(widthTarget);
+      if (isInitial || (!colSpanChanged && !morphing) || moved) {
+        springWidth.jump(widthTarget);
       }
     }
 
-    prevWidthRef.current = slot.position.width;
+    prevWidthRef.current = widthTarget;
     prevColSpanRef.current = slot.position.colSpan;
     prevXRef.current = slot.position.x;
     prevYRef.current = slot.position.y;
@@ -104,7 +110,7 @@ export function WidgetSlot({ widget, animated = true, children }: WidgetSlotProp
         position: "absolute",
         left: position.x,
         top: position.y,
-        width: animated ? springWidth : position.width,
+        width: animated ? springWidth : widthTarget,
         zIndex: dragActive ? 50 : 1,
         ...(!animated && isDragging ? {
           opacity: 0.95,

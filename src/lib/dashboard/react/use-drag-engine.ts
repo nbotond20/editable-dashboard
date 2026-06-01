@@ -17,6 +17,8 @@ export function useDragEngine(
   config: Partial<DragEngineConfig>,
   isControlled: boolean,
 ): DragEngine {
+  const maxColumns = config.maxColumns ?? state.maxColumns;
+
   const [engine] = useState(() =>
     new DragEngine(state, {
       ...config,
@@ -28,7 +30,12 @@ export function useDragEngine(
         const widget = state.widgets.find((w) => w.id === id);
         return widget ? isLockActiveForWidget(widget, "resize", definitions) : false;
       },
-      getWidgetConstraints: buildGetConstraints(config.getWidgetConstraints),
+      getWidgetConstraints: buildGetConstraints(
+        (id) => state.widgets.find((w) => w.id === id),
+        definitions,
+        maxColumns,
+        config.getWidgetConstraints,
+      ),
     }),
   );
 
@@ -36,7 +43,12 @@ export function useDragEngine(
     ...config,
     isPositionLocked: lockCheck(engine, definitions, "position"),
     isResizeLocked: lockCheck(engine, definitions, "resize"),
-    getWidgetConstraints: buildGetConstraints(config.getWidgetConstraints),
+    getWidgetConstraints: buildGetConstraints(
+      (id) => engine.getWidgetById(id),
+      definitions,
+      maxColumns,
+      config.getWidgetConstraints,
+    ),
   });
 
   useLayoutEffect(() => {
@@ -49,10 +61,17 @@ export function useDragEngine(
 }
 
 function buildGetConstraints(
+  getWidget: (id: string) => { type: string } | undefined,
+  definitions: WidgetDefinition[],
+  maxColumns: number,
   custom?: (id: string) => { minSpan: number; maxSpan: number },
 ): (id: string) => { minSpan: number; maxSpan: number } {
   return (id: string) => {
     if (custom) return custom(id);
-    return { minSpan: 1, maxSpan: Infinity };
+    const widget = getWidget(id);
+    const def = widget ? definitions.find((d) => d.type === widget.type) : undefined;
+    const minSpan = Math.max(1, def?.minColSpan ?? 1);
+    const maxSpan = Math.min(def?.maxColSpan ?? maxColumns, maxColumns);
+    return { minSpan, maxSpan: Math.max(minSpan, maxSpan) };
   };
 }

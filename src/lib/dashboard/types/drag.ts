@@ -1,6 +1,40 @@
 import type { PointerEvent as ReactPointerEvent } from "react";
 import type { WidgetState } from "./widget.ts";
-import type { ComputedLayout, WidgetLayout } from "./layout.ts";
+import type { ComputedLayout, EmptySlotDragState, WidgetLayout } from "./layout.ts";
+
+/**
+ * Why an insertion line (or the slot a dragged widget is hovering) cannot accept the drop.
+ *
+ * - `position-locked` — the move would cross a position-locked widget.
+ * - `only-full-width` — the dragged widget's minimum span equals the column count, so it
+ *   cannot share a row and only fits as a full-width row.
+ * - `resize-locked` — a stationary widget in the target row is resize-locked and cannot shrink.
+ * - `column-overflow` — the widgets cannot be redistributed to fit within the column count.
+ */
+export type InsertionInvalidReason =
+  | "position-locked"
+  | "only-full-width"
+  | "resize-locked"
+  | "column-overflow";
+
+/**
+ * The footprint the dragged widget would occupy at the currently-hovered location,
+ * together with why the drop is not allowed there.
+ *
+ * Populated only during a `"lines"`-mode pointer drag when the pointer is over an
+ * infeasible insertion location. `rect` is in pixels relative to the grid container's
+ * top-left corner. `null` whenever the current location is a valid drop target.
+ */
+export interface InvalidDropTarget {
+  rect: { x: number; y: number; width: number; height: number };
+  reason: InsertionInvalidReason;
+  /** Orientation of the insertion location that is infeasible. */
+  orientation: "horizontal" | "vertical";
+  /** Widget the dragged item would land before, or `null` at a row/board edge. */
+  beforeId: string | null;
+  /** Widget the dragged item would land after, or `null` at a row/board edge. */
+  afterId: string | null;
+}
 
 /**
  * Current drag interaction state exposed via {@link DashboardContextValue.dragState}.
@@ -25,6 +59,20 @@ export interface DragState {
    * the slot the widget was picked up from. `null` in all other cases.
    */
   sourceGhost: WidgetLayout | null;
+  /**
+   * The footprint and reason for an infeasible drop at the hovered location.
+   *
+   * Populated only during a `"lines"`-mode pointer drag while the pointer is over a
+   * location the dragged widget cannot fit. Use it to render a "cannot fit" affordance.
+   * `null` whenever the current location is a valid drop target.
+   */
+  invalidTarget: InvalidDropTarget | null;
+  /**
+   * Live valid/invalid feedback for the empty "add a widget" slot the dragged
+   * widget is currently over, or `null` when it is not over one. Mirrors
+   * {@link useEmptySlotDragState}.
+   */
+  emptySlotDragState: EmptySlotDragState | null;
 }
 
 /** Resolved drop target information produced by the drag engine. */

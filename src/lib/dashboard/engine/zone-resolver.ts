@@ -51,7 +51,7 @@ export function resolveZone(
     return { type: "outside" };
   }
 
-  return classicResolveZone(pointer, rects, layout, gap, maxColumns, containerWidth, inset, colWidth, currentWidgetSide);
+  return classicResolveZone(rawPointer, rects, layout, gap, maxColumns, containerWidth, inset, colWidth, currentWidgetSide);
 }
 
 function classicResolveZone(
