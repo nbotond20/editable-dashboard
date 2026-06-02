@@ -5,6 +5,9 @@ import { SPRINGS } from "../animation-config.ts";
 import { WidgetSlot } from "./WidgetSlot.tsx";
 import { InsertionLineMarker, UnanchoredInsertionLine, LineEndCap } from "./InsertionLineElement.tsx";
 
+/** Hide the "Add a new widget" placeholder below this height so its content is never clipped. */
+const MIN_EMPTY_SLOT_HEIGHT = 110;
+
 const REASON_MESSAGES: Record<InsertionInvalidReason, { title: string; detail: string }> = {
   "only-full-width": { title: "Widget sizing not possible", detail: "This widget only comes in full width" },
   "resize-locked": { title: "Widget sizing not possible", detail: "A widget here is locked and can't make room" },
@@ -233,7 +236,7 @@ export function DashboardGrid({ className, style, ghostClassName, sourceGhostCla
 
   const isDragging = phase !== "idle";
   const emptyElements = editing
-    ? emptySlots.map((slot) => {
+    ? emptySlots.flatMap((slot) => {
         const ds =
           slotDrag && slotDrag.rowIndex === slot.rowIndex && slotDrag.columnStart === slot.columnStart
             ? slotDrag
@@ -243,52 +246,69 @@ export function DashboardGrid({ className, style, ghostClassName, sourceGhostCla
           ds?.state === "valid" && draggedHeight != null
             ? Math.max(slot.height, draggedHeight)
             : slot.height;
-        return (
-          <button
-            key={`empty-${slot.rowIndex}-${slot.columnStart}`}
-            type="button"
-            className={`dashboard-empty-slot${ds ? ` dashboard-empty-slot--${ds.state}` : ""}`}
-            data-testid="empty-slot"
-            data-row-index={slot.rowIndex}
-            data-column-start={slot.columnStart}
-            data-drag-state={ds?.state}
-            data-reason={reason}
-            disabled={isDragging}
-            onClick={isDragging ? undefined : () => onAddWidget?.(slot)}
-            style={{
-              position: "absolute",
-              left: slot.x,
-              top: slot.y,
-              width: slot.width,
-              height: slotHeight,
-              pointerEvents: isDragging ? "none" : undefined,
-            }}
-          >
-            {reason ? (
-              <>
-                <span className="dashboard-empty-slot__icon">
-                  <InvalidIcon />
-                </span>
-                <strong>{REASON_MESSAGES[reason].title}</strong>
-                <span>{REASON_MESSAGES[reason].detail}</span>
-              </>
-            ) : ds?.state === "valid" ? (
-              <>
-                <span className="dashboard-empty-slot__icon">
-                  <CheckIcon />
-                </span>
-                <span>Drop to add here</span>
-              </>
-            ) : (
-              <>
-                <span className="dashboard-empty-slot__icon">
-                  <PlusCircleIcon />
-                </span>
-                <span>Add a new widget</span>
-              </>
-            )}
-          </button>
+        if (!ds && slot.height < MIN_EMPTY_SLOT_HEIGHT) return [];
+        const content = reason ? (
+          <>
+            <span className="dashboard-empty-slot__icon">
+              <InvalidIcon />
+            </span>
+            <strong>{REASON_MESSAGES[reason].title}</strong>
+            <span>{REASON_MESSAGES[reason].detail}</span>
+          </>
+        ) : ds?.state === "valid" ? (
+          <>
+            <span className="dashboard-empty-slot__icon">
+              <CheckIcon />
+            </span>
+            <span>Drop to add here</span>
+          </>
+        ) : (
+          <>
+            <span className="dashboard-empty-slot__icon">
+              <PlusCircleIcon />
+            </span>
+            <span>Add a new widget</span>
+          </>
         );
+        const key = `empty-${slot.rowIndex}-${slot.columnStart}`;
+        const commonProps = {
+          type: "button" as const,
+          className: `dashboard-empty-slot${ds ? ` dashboard-empty-slot--${ds.state}` : ""}`,
+          "data-testid": "empty-slot",
+          "data-row-index": slot.rowIndex,
+          "data-column-start": slot.columnStart,
+          "data-drag-state": ds?.state,
+          "data-reason": reason,
+          disabled: isDragging,
+          onClick: isDragging ? undefined : () => onAddWidget?.(slot),
+        };
+        const slotStyle = {
+          position: "absolute" as const,
+          left: slot.x,
+          top: slot.y,
+          width: slot.width,
+          height: slotHeight,
+          pointerEvents: isDragging ? ("none" as const) : undefined,
+        };
+        return [
+          animated ? (
+            <motion.button
+              key={key}
+              {...commonProps}
+              style={slotStyle}
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.96 }}
+              transition={SPRINGS.layout}
+            >
+              {content}
+            </motion.button>
+          ) : (
+            <button key={key} {...commonProps} style={slotStyle}>
+              {content}
+            </button>
+          ),
+        ];
       })
     : null;
 
@@ -315,7 +335,7 @@ export function DashboardGrid({ className, style, ghostClassName, sourceGhostCla
     >
       {animated ? (
         <>
-          {emptyElements}
+          <AnimatePresence>{emptyElements}</AnimatePresence>
           <AnimatePresence>{sourceGhostElement}</AnimatePresence>
           <AnimatePresence>{placeGhostElement}</AnimatePresence>
           <AnimatePresence mode="popLayout">{widgetElements}</AnimatePresence>
