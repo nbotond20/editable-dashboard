@@ -36,6 +36,7 @@ export function WidgetSlot({ widget, animated = true, children }: WidgetSlotProp
   const anchored = useAnchoredInsertionSegments(widget.id);
   const { dragState } = useDashboardDrag();
   const isSwapHighlight = dragState.swapTargetId === widget.id;
+  const isSwapInvalid = dragState.invalidSwapTargetId === widget.id;
 
   const dragTargetSize = slot.isDragging
     ? dragState.previewLayout?.positions.get(widget.id)
@@ -106,6 +107,7 @@ export function WidgetSlot({ widget, animated = true, children }: WidgetSlotProp
       data-height={position.height}
       data-dragging={isDragging}
       data-swap-target={isSwapHighlight || undefined}
+      data-swap-invalid={isSwapInvalid || undefined}
       style={{
         position: "absolute",
         left: position.x,
@@ -159,6 +161,38 @@ export function WidgetSlot({ widget, animated = true, children }: WidgetSlotProp
               zIndex: 2,
             }}
           />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {isSwapInvalid && (
+          <motion.div
+            key="swap-invalid-overlay"
+            data-testid="swap-invalid-overlay"
+            initial={animated ? { opacity: 0 } : false}
+            animate={animated ? { opacity: 1 } : undefined}
+            exit={animated ? { opacity: 0 } : undefined}
+            transition={{ duration: 0.12, ease: "easeOut" }}
+            style={{
+              position: "absolute",
+              inset: 0,
+              borderRadius: 12,
+              border: "2px dashed var(--dash-color-danger)",
+              background: "rgba(229, 72, 77, 0.16)",
+              color: "var(--dash-color-danger)",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 6,
+              textAlign: "center",
+              fontWeight: 650,
+              fontSize: "0.9rem",
+              pointerEvents: "none",
+              zIndex: 3,
+            }}
+          >
+            <span>This widget doesn't fit here</span>
+          </motion.div>
         )}
       </AnimatePresence>
       <AnimatePresence>

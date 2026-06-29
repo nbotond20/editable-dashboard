@@ -56,6 +56,8 @@ import {
   DEFAULT_DROP_MODE,
   DEFAULT_LINE_SNAP_RADIUS,
   DEFAULT_LINE_CORNER_INSET,
+  DEFAULT_SHOW_INSERTION_LINES,
+  DEFAULT_AUTO_RESIZE,
 } from "../constants.ts";
 
 const UNDOABLE_ACTIONS = new Set<string>([
@@ -73,6 +75,8 @@ const UNDOABLE_ACTIONS = new Set<string>([
 ]);
 
 const MAX_UNDO_DEPTH = 50;
+
+const EMPTY_INSERTION_LINES: InsertionLine[] = [];
 
 function rectsOverlap(a: WidgetLayout, b: WidgetLayout): boolean {
   return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
@@ -94,6 +98,8 @@ function defaultConfig(): DragEngineConfig {
     dropMode: DEFAULT_DROP_MODE,
     lineSnapRadius: DEFAULT_LINE_SNAP_RADIUS,
     lineCornerInset: DEFAULT_LINE_CORNER_INSET,
+    showInsertionLines: DEFAULT_SHOW_INSERTION_LINES,
+    autoResize: DEFAULT_AUTO_RESIZE,
     isPositionLocked: () => false,
     isResizeLocked: () => false,
     canDrop: () => true,
@@ -145,6 +151,7 @@ export class DragEngine {
   private insertionLines: InsertionLine[] = [];
   private currentLineId: string | null = null;
   private invalidLineId: string | null = null;
+  private invalidSwapTargetId: string | null = null;
   private emptySlotDragState: EmptySlotDragState | null = null;
   private invalidMarkedCache: {
     source: InsertionLine[];
@@ -170,6 +177,7 @@ export class DragEngine {
     isPositionLocked: (id: string) => boolean;
     isResizeLocked: (id: string) => boolean;
     getWidgetConstraints: (id: string) => { minSpan: number; maxSpan: number };
+    autoResize: boolean;
     result: InsertionLine[];
   } | null = null;
   private exposedLinesCache: {
@@ -299,13 +307,15 @@ export class DragEngine {
 
     const invalidLine = this.findInvalidLine();
     this.invalidLineId = invalidLine?.id ?? null;
-    const exposedInsertionLines = this.alignActiveLineToPreview(
-      this.markInvalidLine(
-        this.filterLinesByProximity(this.insertionLines),
-        this.invalidLineId,
-      ),
-      dropPreviewPos,
-    );
+    const exposedInsertionLines = this.config.showInsertionLines === false
+      ? EMPTY_INSERTION_LINES
+      : this.alignActiveLineToPreview(
+          this.markInvalidLine(
+            this.filterLinesByProximity(this.insertionLines),
+            this.invalidLineId,
+          ),
+          dropPreviewPos,
+        );
     const invalidTarget =
       invalidLine != null && invalidLine.disabledReason != null
         ? this.buildInvalidTarget(invalidLine, invalidLine.disabledReason)
@@ -335,6 +345,7 @@ export class DragEngine {
       insertionLines: exposedInsertionLines,
       sourceGhost,
       invalidTarget,
+      invalidSwapTargetId: this.invalidSwapTargetId,
       emptySlotDragState: this.emptySlotDragState,
       containerWidth: this.containerWidth,
     };
@@ -1327,6 +1338,7 @@ export class DragEngine {
       layout,
       pointerY: phase.pointerPos.y,
       dropMode: this.config.dropMode,
+      autoResize: this.config.autoResize,
     });
 
     if (newIntent.type === "swap" || newIntent.type === "auto-resize") {
@@ -1726,6 +1738,7 @@ export class DragEngine {
       baseLayout: this.baseLayout,
       pointerY: this.phase.type === "dragging" ? zonePointerPos.y : undefined,
       dropMode: this.config.dropMode,
+      autoResize: this.config.autoResize,
     });
 
     // Cross-row auto-resize that shrinks the target when source+target
@@ -1795,6 +1808,14 @@ export class DragEngine {
       );
       newIntent = { ...newIntent, pointerY: zonePointerPos.y, _insertionIndex: idx };
     }
+
+    this.invalidSwapTargetId =
+      this.config.autoResize === false &&
+      this.currentZone.type === "widget" &&
+      newIntent.type === "none" &&
+      !this.config.isPositionLocked(this.currentZone.targetId)
+        ? this.currentZone.targetId
+        : null;
 
     if (!this.intentsEqual(newIntent, this.currentIntent)) {
       this.currentIntent = newIntent;
@@ -1975,6 +1996,7 @@ export class DragEngine {
     this.intentGraceStart = null;
     this.currentLineId = null;
     this.invalidLineId = null;
+    this.invalidSwapTargetId = null;
     this.emptySlotDragState = null;
     this.insertionLines = [];
     this.rawLinesCache = null;
@@ -2229,6 +2251,7 @@ export class DragEngine {
     const isPositionLocked = this.config.isPositionLocked;
     const isResizeLocked = this.config.isResizeLocked;
     const getWidgetConstraints = this.config.getWidgetConstraints;
+    const autoResize = this.config.autoResize;
 
     const rc = this.rawLinesCache;
     let rawLines: InsertionLine[];
@@ -2243,7 +2266,8 @@ export class DragEngine {
       rc.cornerInset === cornerInset &&
       rc.isPositionLocked === isPositionLocked &&
       rc.isResizeLocked === isResizeLocked &&
-      rc.getWidgetConstraints === getWidgetConstraints
+      rc.getWidgetConstraints === getWidgetConstraints &&
+      rc.autoResize === autoResize
     ) {
       rawLines = rc.result;
     } else {
@@ -2258,6 +2282,7 @@ export class DragEngine {
         isPositionLocked,
         isResizeLocked,
         getWidgetConstraints,
+        autoResize,
       });
       this.rawLinesCache = {
         layout,
@@ -2270,6 +2295,7 @@ export class DragEngine {
         isPositionLocked,
         isResizeLocked,
         getWidgetConstraints,
+        autoResize,
         result: rawLines,
       };
     }
@@ -2427,6 +2453,7 @@ export class DragEngine {
       a.sourceGhost === b.sourceGhost &&
       a.insertionLines === b.insertionLines &&
       a.containerWidth === b.containerWidth &&
+      a.invalidSwapTargetId === b.invalidSwapTargetId &&
       this.invalidTargetsEqual(a.invalidTarget, b.invalidTarget) &&
       this.emptySlotStatesEqual(a.emptySlotDragState, b.emptySlotDragState)
     );

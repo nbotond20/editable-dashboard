@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `DragConfig.showInsertionLines` (default `true`) — set to `false` to hide insertion lines visually in lines mode. `useInsertionLines()` returns `[]`; snapping, placement, and invalid-drop detection are unchanged (`DragState.invalidTarget` still exposed).
+- `DragConfig.autoResize` (default `true`) — set to `false` to stop dragging from resizing widgets in any mode. Lines-mode drops that would redistribute or grow a span become infeasible (red placeholder), and a swap is blocked when the two widgets cannot trade places at their current spans (e.g. dropping a full-width widget onto a half-width slot that shares its row); only the explicit resize controls change spans.
+- `DragState.invalidSwapTargetId` — the widget ID the dragged item is hovering to swap with but cannot fit (when `autoResize` is `false`). Render that widget as a "cannot swap here" target; `null` when the hovered swap is valid or absent.
 - `useEmptySlots()` hook — exposes free column regions (per-row trailing space and an empty dashboard) as `EmptySlot[]` for rendering "add widget" affordances.
 - `useInvalidTarget()` hook and `DragState.invalidTarget` (`InvalidDropTarget`) — the would-be footprint and typed reason when a lines-mode drop is infeasible. `InvalidDropTarget` also carries the originating insertion location (`orientation`, `beforeId`, `afterId`).
 - `useEmptySlotDragState()` hook, `EmptySlotDragState` type and `DragState.emptySlotDragState` — live `valid` / `invalid` (with reason) feedback for the empty slot the dragged widget currently covers, computed across the slot's whole area (not just within snap range of its edge line), plus `EmptySlot.anchorId`, so an "add widget" affordance can stay mounted and recolor in place during a drag.

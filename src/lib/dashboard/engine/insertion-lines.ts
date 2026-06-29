@@ -15,6 +15,7 @@ export interface ComputeInsertionLinesInput {
   isPositionLocked: (id: string) => boolean;
   isResizeLocked: (id: string) => boolean;
   getWidgetConstraints?: (id: string) => { minSpan: number; maxSpan: number };
+  autoResize?: boolean;
 }
 
 interface PositionedWidget {
@@ -31,6 +32,7 @@ export function computeInsertionLines(input: ComputeInsertionLinesInput): Insert
   const { layout, widgets, sourceId, dropMode, maxColumns, containerWidth, isPositionLocked, isResizeLocked } = input;
   const cornerInset = input.cornerInset ?? DEFAULT_LINE_CORNER_INSET;
   const getWidgetConstraints = input.getWidgetConstraints ?? (() => ({ minSpan: 1, maxSpan: maxColumns }));
+  const autoResize = input.autoResize;
 
   if (dropMode === "classic") return [];
   if (sourceId != null && isPositionLocked(sourceId)) return [];
@@ -49,6 +51,7 @@ export function computeInsertionLines(input: ComputeInsertionLinesInput): Insert
       const stationary = row.filter((w) => w.id !== sourceId);
       const totalSpan = stationary.reduce((sum, w) => sum + w.colSpan, 0);
       if (totalSpan + 1 <= maxColumns) return true;
+      if (autoResize === false) return false;
       return !stationary.some((w) => isResizeLocked(w.id));
     }
     const stationary = row.filter((w) => w.id !== sourceId);
@@ -61,16 +64,19 @@ export function computeInsertionLines(input: ComputeInsertionLinesInput): Insert
       getWidgetConstraints,
       isResizeLocked,
     });
-    return result != null;
+    if (result == null) return false;
+    if (autoResize === false) return result.resize.length === 0;
+    return true;
   };
 
   const hLineFeasibleValue = !sourceWidgetRef
     ? true
-    : newRowColSpan(sourceWidgetRef, { maxColumns, isResizeLocked, getWidgetConstraints }) != null;
+    : newRowColSpan(sourceWidgetRef, { maxColumns, isResizeLocked, getWidgetConstraints, autoResize }) != null;
   const hLineFeasible = (): boolean => hLineFeasibleValue;
 
   const classifyRowInfeasibility = (row: PositionedWidget[]): InsertionInvalidReason => {
     if (!sourceWidgetRef) return "column-overflow";
+    if (autoResize === false) return "column-overflow";
     const c = getWidgetConstraints(sourceWidgetRef.id);
     const sourceMin = isResizeLocked(sourceWidgetRef.id) ? sourceWidgetRef.colSpan : c.minSpan;
     if (sourceMin >= maxColumns) return "only-full-width";

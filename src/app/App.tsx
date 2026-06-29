@@ -54,9 +54,13 @@ interface DashboardContentProps {
   onDropModeChange?: (m: "classic" | "lines") => void;
   lineProximity?: ProximityOption;
   onLineProximityChange?: (p: ProximityOption) => void;
+  showLines?: boolean;
+  onShowLinesChange?: (v: boolean) => void;
+  autoResize?: boolean;
+  onAutoResizeChange?: (v: boolean) => void;
 }
 
-function DashboardContent({ maxColumns: controlledMaxColumns, onMaxColumnsChange, dropMode = "classic", onDropModeChange, lineProximity = 60, onLineProximityChange }: DashboardContentProps) {
+function DashboardContent({ maxColumns: controlledMaxColumns, onMaxColumnsChange, dropMode = "classic", onDropModeChange, lineProximity = 60, onLineProximityChange, showLines = true, onShowLinesChange, autoResize = true, onAutoResizeChange }: DashboardContentProps) {
   const { state, actions, definitions: defs, canUndo, canRedo } = useDashboardStable();
   const [catalogOpen, setCatalogOpen] = useState(false);
   const [pendingSlot, setPendingSlot] = useState<EmptySlot | null>(null);
@@ -196,6 +200,26 @@ function DashboardContent({ maxColumns: controlledMaxColumns, onMaxColumnsChange
               ))}
             </div>
           )}
+          {dropMode !== "classic" && (
+            <button
+              type="button"
+              className={`dash-btn ${showLines ? "dash-btn--primary" : "dash-btn--outline"}`}
+              data-testid="show-lines-toggle"
+              data-active={showLines ? "true" : "false"}
+              onClick={() => onShowLinesChange?.(!showLines)}
+            >
+              {showLines ? "Lines: Shown" : "Lines: Hidden"}
+            </button>
+          )}
+          <button
+            type="button"
+            className={`dash-btn ${autoResize ? "dash-btn--primary" : "dash-btn--outline"}`}
+            data-testid="auto-resize-toggle"
+            data-active={autoResize ? "true" : "false"}
+            onClick={() => onAutoResizeChange?.(!autoResize)}
+          >
+            {autoResize ? "Auto-resize: On" : "Auto-resize: Off"}
+          </button>
           <button
             className={`dash-btn ${animated ? "dash-btn--outline" : "dash-btn--primary"}`}
             onClick={() => setAnimated((a) => !a)}
@@ -290,6 +314,8 @@ function UncontrolledApp({ saved }: { saved: { widgets: WidgetState[]; maxColumn
   const saveTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const [dropMode, setDropMode] = useState<"classic" | "lines">("lines");
   const [lineProximity, setLineProximity] = useState<ProximityOption>(60);
+  const [showLines, setShowLines] = useState(true);
+  const [autoResize, setAutoResize] = useState(true);
 
   const handleChange = useCallback((state: DashboardState) => {
     clearTimeout(saveTimerRef.current);
@@ -308,6 +334,8 @@ function UncontrolledApp({ saved }: { saved: { widgets: WidgetState[]; maxColumn
         ...DRAG_CONFIG,
         dropMode,
         ...(lineProximity !== "off" && { lineProximityRadius: lineProximity }),
+        showInsertionLines: showLines,
+        autoResize,
       }}
       enableExternalDrag
       onChange={handleChange}
@@ -317,6 +345,10 @@ function UncontrolledApp({ saved }: { saved: { widgets: WidgetState[]; maxColumn
         onDropModeChange={setDropMode}
         lineProximity={lineProximity}
         onLineProximityChange={setLineProximity}
+        showLines={showLines}
+        onShowLinesChange={setShowLines}
+        autoResize={autoResize}
+        onAutoResizeChange={setAutoResize}
       />
     </DashboardProvider>
   );
@@ -327,6 +359,8 @@ function ControlledApp({ saved }: { saved: { widgets: WidgetState[]; maxColumns:
   const [maxColumns, setMaxColumns] = useState(saved?.maxColumns ?? 2);
   const [dropMode, setDropMode] = useState<"classic" | "lines">("lines");
   const [lineProximity, setLineProximity] = useState<ProximityOption>(60);
+  const [showLines, setShowLines] = useState(true);
+  const [autoResize, setAutoResize] = useState(true);
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => {
@@ -347,6 +381,8 @@ function ControlledApp({ saved }: { saved: { widgets: WidgetState[]; maxColumns:
         ...DRAG_CONFIG,
         dropMode,
         ...(lineProximity !== "off" && { lineProximityRadius: lineProximity }),
+        showInsertionLines: showLines,
+        autoResize,
       }}
       enableExternalDrag
     >
@@ -357,6 +393,10 @@ function ControlledApp({ saved }: { saved: { widgets: WidgetState[]; maxColumns:
         onDropModeChange={setDropMode}
         lineProximity={lineProximity}
         onLineProximityChange={setLineProximity}
+        showLines={showLines}
+        onShowLinesChange={setShowLines}
+        autoResize={autoResize}
+        onAutoResizeChange={setAutoResize}
       />
     </DashboardProvider>
   );

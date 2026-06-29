@@ -52,6 +52,13 @@ export interface DragState {
   /** Widget ID that will be swapped on drop (deferred-swap intent). Null otherwise. */
   swapTargetId: string | null;
   /**
+   * Widget ID the dragged item is hovering to swap with but cannot, because the
+   * two widgets would not fit in each other's rows at their current spans and
+   * `autoResize` is disabled. Render this widget as a "cannot swap here" target.
+   * `null` whenever the hovered swap is valid or there is none.
+   */
+  invalidSwapTargetId: string | null;
+  /**
    * Layout of the dragged widget at its original (pre-drag) position.
    *
    * Populated only during a pointer drag while `dropMode` is `"lines"`,

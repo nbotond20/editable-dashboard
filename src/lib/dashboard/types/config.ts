@@ -30,6 +30,21 @@ export interface DragConfig {
    * The active (currently-snapped) line is always exposed regardless of distance.
    */
   lineProximityRadius?: number;
+  /**
+   * Whether insertion lines are exposed via `insertionLines` for rendering.
+   * Defaults to `true`. When `false`, the engine emits no lines (so consumers
+   * draw nothing), but snapping, placement, and invalid-drop detection stay
+   * fully functional — the lines are hidden visually only.
+   */
+  showInsertionLines?: boolean;
+  /**
+   * Whether dragging may resize widgets. Defaults to `true`. When `false`,
+   * dragged and target widgets keep their column span in every mode: classic
+   * hover never auto-resizes (stays a swap), and lines-mode drops that would
+   * require redistributing or growing a widget become infeasible (red
+   * placeholder) instead. Only the explicit resize controls change a span.
+   */
+  autoResize?: boolean;
 }
 
 /**

@@ -670,6 +670,7 @@ Complete internal state of the dashboard, including layout configuration and tra
 | `previewLayout`   | `ComputedLayout \| null` | Full layout for the tentative drop position. `null` for `deferred-swap` (target highlights but layout does not reflow). |
 | `intentType`      | `string \| null`         | Current drag intent: `"reorder"`, `"swap"`, `"deferred-swap"`, `"auto-resize"`, `"column-pin"`, `"empty-row-maximize"`, `"new-row"`, `"in-row-insert"`, or `"none"`. |
 | `swapTargetId`    | `string \| null`         | ID of the widget that will be swapped on drop (set during `"deferred-swap"` or `"swap"` intent). Useful for rendering a hover highlight on the target. |
+| `invalidSwapTargetId` | `string \| null`     | ID of the widget being hovered to swap with that *cannot* be swapped (would need a resize while `autoResize` is `false`). Render it as a "cannot swap here" target. |
 
 ### `DropTarget`
 
@@ -751,6 +752,8 @@ Fine-tune drag activation, dwell timing, and scroll behavior.
 | `swapDwellMs`           | `number?` | `0`     | Dwell time (ms) before cross-row swap activates.         |
 | `resizeDwellMs`         | `number?` | `600`   | Dwell time (ms) before auto-resize activates.            |
 | `dropAnimationDuration` | `number?` | `250`   | Duration of the drop animation (ms).                     |
+| `showInsertionLines`    | `boolean?`| `true`  | When `false`, no insertion lines are exposed via `useInsertionLines()` — they are hidden visually only; snapping and placement stay identical. |
+| `autoResize`            | `boolean?`| `true`  | When `false`, dragging never resizes a widget in any mode (only the explicit resize controls do). Drops that would require resizing become infeasible (red placeholder). |
 
 ### `ResponsiveBreakpoints`
 
@@ -1654,6 +1657,24 @@ By default every feasible insertion line is exposed throughout a drag. Set `drag
 ```
 
 Use this to reduce visual noise on dense grids — only lines near the pointer render. Snap behavior is unaffected; `lineSnapRadius` continues to control activation.
+
+### Hiding the lines (opt-in)
+
+Set `dragConfig.showInsertionLines` to `false` to suppress the lines visually while keeping the drag fully functional. The engine still snaps, places, and detects infeasible drops — `useInsertionLines()` simply returns an empty array, so nothing is drawn. `DragState.invalidTarget` is still exposed if you want to render your own feedback.
+
+```tsx
+<DashboardProvider dragConfig={{ dropMode: "lines", showInsertionLines: false }}>…</DashboardProvider>
+```
+
+### Disabling drag-resize (opt-in)
+
+By default, dragging can resize widgets — classic-mode hover auto-resizes after `resizeDwellMs`, and lines-mode drops redistribute or grow spans to fit. Set `dragConfig.autoResize` to `false` to turn this off in every mode: dragged and target widgets always keep their column span, and a drop that would need a resize is reported as infeasible (red placeholder) instead. Only the explicit resize controls change a widget's span.
+
+Because widgets keep their spans, a **swap is blocked** when the two widgets cannot trade places at their current sizes — e.g. dropping a full-width widget onto a half-width slot that shares its row, where the full-width widget cannot fit. The hovered target is exposed as `DragState.invalidSwapTargetId`, so you can render that widget itself as a "cannot swap here" target (recolor its border/background) rather than overlaying the row.
+
+```tsx
+<DashboardProvider dragConfig={{ autoResize: false }}>…</DashboardProvider>
+```
 
 Use `useInsertionLines()` in your grid component to render the lines:
 

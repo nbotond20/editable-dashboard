@@ -208,6 +208,8 @@ export interface DragEngineConfig {
   lineSnapRadius: number;
   lineCornerInset: number;
   lineProximityRadius?: number;
+  showInsertionLines: boolean;
+  autoResize: boolean;
   isPositionLocked: (id: string) => boolean;
   isResizeLocked: (id: string) => boolean;
   canDrop: (sourceId: string, targetIndex: number) => boolean;
@@ -231,6 +233,7 @@ export interface DragEngineSnapshot {
   insertionLines: InsertionLine[];
   sourceGhost: WidgetLayout | null;
   invalidTarget: InvalidDropTarget | null;
+  invalidSwapTargetId: string | null;
   emptySlotDragState: EmptySlotDragState | null;
   containerWidth: number;
 }

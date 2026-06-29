@@ -27,6 +27,7 @@ export function buildDragState(snapshot: DragEngineSnapshot): DragState {
       swapTargetId,
       sourceGhost: snapshot.sourceGhost,
       invalidTarget: snapshot.invalidTarget,
+      invalidSwapTargetId: snapshot.invalidSwapTargetId,
       emptySlotDragState: snapshot.emptySlotDragState,
     };
   }
@@ -45,6 +46,7 @@ export function buildDragState(snapshot: DragEngineSnapshot): DragState {
       swapTargetId: null,
       sourceGhost: null,
       invalidTarget: null,
+      invalidSwapTargetId: null,
       emptySlotDragState: null,
     };
   }
@@ -63,6 +65,7 @@ export function buildDragState(snapshot: DragEngineSnapshot): DragState {
       swapTargetId,
       sourceGhost: null,
       invalidTarget: null,
+      invalidSwapTargetId: null,
       emptySlotDragState: null,
     };
   }
@@ -81,6 +84,7 @@ export function buildDragState(snapshot: DragEngineSnapshot): DragState {
       swapTargetId: null,
       sourceGhost: null,
       invalidTarget: null,
+      invalidSwapTargetId: null,
       emptySlotDragState: null,
     };
   }
@@ -98,6 +102,7 @@ export function buildDragState(snapshot: DragEngineSnapshot): DragState {
     swapTargetId: null,
     sourceGhost: null,
     invalidTarget: null,
+    invalidSwapTargetId: null,
     emptySlotDragState: null,
   };
 }
@@ -127,5 +132,7 @@ export function buildEngineConfig(
     ...(dragConfig?.lineSnapRadius != null && { lineSnapRadius: dragConfig.lineSnapRadius }),
     ...(dragConfig?.lineCornerInset != null && { lineCornerInset: dragConfig.lineCornerInset }),
     ...(dragConfig?.lineProximityRadius != null && { lineProximityRadius: dragConfig.lineProximityRadius }),
+    ...(dragConfig?.showInsertionLines != null && { showInsertionLines: dragConfig.showInsertionLines }),
+    ...(dragConfig?.autoResize != null && { autoResize: dragConfig.autoResize }),
   };
 }

@@ -15,6 +15,7 @@ export interface IntentResolverConfig {
   baseLayout?: ComputedLayout;
   pointerY?: number;
   dropMode?: "classic" | "lines";
+  autoResize?: boolean;
 }
 
 export function resolveIntent(
@@ -42,6 +43,12 @@ export function resolveIntent(
         if (config.isPositionLocked(zone.targetId)) {
           return { type: "none" };
         }
+        if (
+          config.autoResize === false &&
+          swapNeedsResizeToFit(widgets, sourceWidget.id, zone.targetId, config.maxColumns, config.baseLayout)
+        ) {
+          return { type: "none" };
+        }
         return { type: "deferred-swap", targetId: zone.targetId };
       }
 
@@ -51,6 +58,13 @@ export function resolveIntent(
 
       if (config.isPositionLocked(zone.targetId)) {
         return { type: "none" };
+      }
+
+      if (config.autoResize === false) {
+        if (swapNeedsResizeToFit(widgets, sourceWidget.id, zone.targetId, config.maxColumns, config.baseLayout)) {
+          return { type: "none" };
+        }
+        return { type: "swap", targetId: zone.targetId };
       }
 
       if (dwellMs < config.resizeDwellMs) {
@@ -142,6 +156,7 @@ export function resolveIntent(
 
     case "empty": {
       if (
+        config.autoResize !== false &&
         dwellMs >= config.emptyRowMaximizeDwellMs &&
         config.layout &&
         config.pointerY != null
@@ -200,6 +215,7 @@ export function resolveIntent(
       });
 
       if (!result) return { type: "none" };
+      if (config.autoResize === false && result.resize.length > 0) return { type: "none" };
 
       return {
         type: "in-row-insert",
@@ -250,6 +266,33 @@ export function computeDwellProgress(
       return 1;
     }
   }
+}
+
+/**
+ * Whether swapping two widgets would force one of them to resize to fit.
+ *
+ * A swap exchanges positions while each widget keeps its `colSpan`. It fits
+ * without resizing only when the source fits in the target's row (and vice
+ * versa) once both are removed. Returns `true` when a resize would be needed —
+ * used to block swaps while drag-resize is disabled.
+ */
+export function swapNeedsResizeToFit(
+  visibleSorted: WidgetState[],
+  sourceId: string,
+  targetId: string,
+  maxColumns: number,
+  layout?: ComputedLayout,
+): boolean {
+  const source = visibleSorted.find((w) => w.id === sourceId);
+  const target = visibleSorted.find((w) => w.id === targetId);
+  if (!source || !target) return false;
+
+  const targetRowNeighbors = computeTargetRowNeighborSpans(visibleSorted, sourceId, targetId, maxColumns, layout);
+  const sourceRowNeighbors = computeTargetRowNeighborSpans(visibleSorted, targetId, sourceId, maxColumns, layout);
+
+  const sourceFits = source.colSpan + targetRowNeighbors <= maxColumns;
+  const targetFits = target.colSpan + sourceRowNeighbors <= maxColumns;
+  return !(sourceFits && targetFits);
 }
 
 function computeTargetRowNeighborSpans(
@@ -354,9 +397,9 @@ export function crossesPositionLocked(
 
 export function newRowColSpan(
   source: WidgetState,
-  config: { maxColumns: number; isResizeLocked: (id: string) => boolean; getWidgetConstraints: (id: string) => { minSpan: number; maxSpan: number } },
+  config: { maxColumns: number; isResizeLocked: (id: string) => boolean; getWidgetConstraints: (id: string) => { minSpan: number; maxSpan: number }; autoResize?: boolean },
 ): number | null {
-  if (config.isResizeLocked(source.id)) {
+  if (config.autoResize === false || config.isResizeLocked(source.id)) {
     return source.colSpan <= config.maxColumns ? source.colSpan : null;
   }
   const c = config.getWidgetConstraints(source.id);

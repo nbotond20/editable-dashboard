@@ -48,3 +48,9 @@ export const LINE_SNAP_HYSTERESIS = 8;
 
 /** Pixel inset applied to insertion line endpoints so they don't run into widget rounded corners. */
 export const DEFAULT_LINE_CORNER_INSET = 8;
+
+/** Whether insertion lines are exposed for rendering. `false` hides them visually while keeping drag behavior intact. */
+export const DEFAULT_SHOW_INSERTION_LINES = true;
+
+/** Whether dragging may resize widgets. `false` restricts resizing to the explicit resize controls. */
+export const DEFAULT_AUTO_RESIZE = true;
