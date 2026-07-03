@@ -18,7 +18,17 @@ describe("computeEmptySlots", () => {
   it("returns one full-width slot for an empty dashboard", () => {
     const slots = computeEmptySlots({ positions: new Map(), totalHeight: 0 }, [], 2, 16, 528);
     expect(slots).toHaveLength(1);
-    expect(slots[0]).toMatchObject({ rowIndex: 0, columnStart: 0, colSpan: 2, anchorId: null, x: 0, y: 0, width: 528 });
+    expect(slots[0]).toMatchObject({
+      rowIndex: 0,
+      columnStart: 0,
+      colSpan: 2,
+      beforeId: null,
+      afterId: null,
+      anchorId: null,
+      x: 0,
+      y: 0,
+      width: 528,
+    });
   });
 
   it("places a trailing-free-column slot beside the row's anchor (simple case)", () => {
@@ -31,7 +41,54 @@ describe("computeEmptySlots", () => {
     const slots = computeEmptySlots(lay, ws, 2, 16, 528);
 
     expect(slots).toHaveLength(1);
-    expect(slots[0]).toMatchObject({ columnStart: 1, colSpan: 1, anchorId: "stats", x: 272, y: 216, height: 200 });
+    expect(slots[0]).toMatchObject({
+      columnStart: 1,
+      colSpan: 1,
+      beforeId: "stats",
+      afterId: null,
+      anchorId: "stats",
+      x: 272,
+      y: 216,
+      height: 200,
+    });
+  });
+
+  it("places a leading-free-column slot to the left of a right-aligned widget", () => {
+    // chart(2) fills row 0; planned(1) sits in col 1 on row 1, leaving col 0 free.
+    const lay = layout([
+      { id: "chart", x: 0, y: 0, width: 528, height: 200, colSpan: 2 },
+      { id: "planned", x: 272, y: 216, width: 256, height: 200, colSpan: 1 },
+    ]);
+    const ws = [widget("chart", 2, 0), widget("planned", 1, 1)];
+    const slots = computeEmptySlots(lay, ws, 2, 16, 528);
+
+    expect(slots).toHaveLength(1);
+    expect(slots[0]).toMatchObject({
+      columnStart: 0,
+      colSpan: 1,
+      beforeId: null,
+      afterId: "planned",
+      anchorId: "planned",
+      x: 0,
+      y: 216,
+      height: 200,
+    });
+  });
+
+  it("merges two stacked trailing gaps in the same column into one slot", () => {
+    // Two half widgets pinned to col 0 in separate rows both leave col 1 free.
+    // The free column is continuous, so it must read as a single placeholder.
+    const lay = layout([
+      { id: "a", x: 0, y: 0, width: 256, height: 200, colSpan: 1 },
+      { id: "b", x: 0, y: 216, width: 256, height: 200, colSpan: 1 },
+    ]);
+    const ws = [widget("a", 1, 0), widget("b", 1, 1)];
+    const slots = computeEmptySlots(lay, ws, 2, 16, 528);
+
+    expect(slots).toHaveLength(1);
+    expect(slots[0]).toMatchObject({ columnStart: 1, colSpan: 1, x: 272, y: 0 });
+    // spans the full height of both rows (0 .. b.bottom).
+    expect(slots[0].y + slots[0].height).toBe(416);
   });
 
   it("starts the slot below a taller adjacent-column widget so it never overlaps", () => {

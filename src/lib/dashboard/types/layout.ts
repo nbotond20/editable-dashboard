@@ -25,18 +25,27 @@ export interface ComputedLayout {
 /**
  * A region of free column space in the layout where a new widget could be added.
  *
- * Produced by `useEmptySlots()`. Covers trailing free columns in partially-filled
- * rows and an empty dashboard. All values are in pixels relative to the grid
- * container's top-left corner.
+ * Produced by `useEmptySlots()`. Covers every free-column run in each row —
+ * leading, interior and trailing — and an empty dashboard. Vertically contiguous
+ * runs in the same columns are merged into a single slot, so a free column that
+ * spans several stacked rows is reported once. All values are in pixels relative
+ * to the grid container's top-left corner.
  */
 export interface EmptySlot {
-  /** Row index this slot belongs to (0-based, top to bottom). */
+  /** Row index of the slot's top edge (0-based, top to bottom). */
   rowIndex: number;
   /** First free column index within the row. */
   columnStart: number;
   /** Number of free columns the slot spans. */
   colSpan: number;
-  /** Rightmost widget in the row, before the free space. `null` for the empty-board slot. */
+  /** Widget immediately to the left of the free space. `null` at the row's left edge. */
+  beforeId: string | null;
+  /** Widget immediately to the right of the free space. `null` at the row's right edge. */
+  afterId: string | null;
+  /**
+   * Primary neighbouring widget the slot hangs off (`beforeId ?? afterId`), used
+   * for reflow-follow. `null` only for the empty-board slot.
+   */
   anchorId: string | null;
   x: number;
   y: number;

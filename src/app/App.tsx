@@ -90,10 +90,18 @@ function DashboardContent({ maxColumns: controlledMaxColumns, onMaxColumnsChange
           const visible = state.widgets
             .filter((w) => w.visible)
             .sort((a, b) => a.order - b.order);
-          const anchorIdx =
-            slot.anchorId != null ? visible.findIndex((w) => w.id === slot.anchorId) : -1;
+          // Drop into the slot: before its right neighbour (leading/interior gap),
+          // else after its left neighbour (trailing gap), else at the start.
+          let targetIndex = 0;
+          if (slot.afterId != null) {
+            const i = visible.findIndex((w) => w.id === slot.afterId);
+            if (i >= 0) targetIndex = i;
+          } else if (slot.beforeId != null) {
+            const i = visible.findIndex((w) => w.id === slot.beforeId);
+            if (i >= 0) targetIndex = i + 1;
+          }
           actions.addWidget(type, colSpan, undefined, {
-            targetIndex: anchorIdx >= 0 ? anchorIdx + 1 : 0,
+            targetIndex,
             columnStart: slot.columnStart,
           });
           return;

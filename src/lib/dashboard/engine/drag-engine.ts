@@ -2191,13 +2191,19 @@ export class DragEngine {
   }
 
   private slotEdgeLine(slot: EmptySlot): InsertionLine | null {
-    for (const l of this.insertionLines) {
-      if (l.afterId !== null) continue;
-      if (slot.anchorId === null) {
-        if (l.orientation === "horizontal" && l.beforeId === null) return l;
-      } else if (l.orientation === "vertical" && l.beforeId === slot.anchorId) {
-        return l;
+    // Empty-board slot: the leading full-width horizontal line owns the drop.
+    if (slot.beforeId === null && slot.afterId === null) {
+      for (const l of this.insertionLines) {
+        if (l.orientation === "horizontal" && l.beforeId === null && l.afterId === null) return l;
       }
+      return null;
+    }
+    // Otherwise the slot sits between beforeId (left) and afterId (right); match
+    // the vertical line at that boundary. Covers leading, interior and trailing
+    // gaps alike.
+    for (const l of this.insertionLines) {
+      if (l.orientation !== "vertical") continue;
+      if (l.beforeId === slot.beforeId && l.afterId === slot.afterId) return l;
     }
     return null;
   }
