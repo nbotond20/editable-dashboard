@@ -78,10 +78,8 @@ export function computeEmptySlots(
     }
 
     let rowTop = row[0].y;
-    let rowHeight = row[0].height;
     for (const p of row) {
       if (p.y < rowTop) rowTop = p.y;
-      if (p.height > rowHeight) rowHeight = p.height;
     }
 
     // Walk the columns and emit a slot for each maximal run of free columns.
@@ -106,9 +104,12 @@ export function computeEmptySlots(
       const beforeId = leftWidget ? leftWidget.id : null;
       const afterId = rightWidget ? rightWidget.id : null;
 
-      // Push the slot below any taller widget from an earlier row protruding into
-      // these free columns.
-      let top = rowTop;
+      // The free space in these columns runs from the bottom of the nearest widget
+      // directly above (0 if none) down to the top of the nearest widget below (the
+      // content bottom if none). Anchoring `top` to the widget above rather than the
+      // row band lets the slot flow up to fill the gap a shorter neighbour in an
+      // adjacent column leaves open.
+      let top = 0;
       for (const p of positioned) {
         if (p.y >= rowTop) continue;
         const pStart = colOf(p.x);
@@ -129,7 +130,7 @@ export function computeEmptySlots(
         if (limit < bottomLimit) bottomLimit = limit;
       }
 
-      const height = Math.min(rowHeight, bottomLimit - top);
+      const height = bottomLimit - top;
       if (height <= 0) continue;
 
       raw.push({

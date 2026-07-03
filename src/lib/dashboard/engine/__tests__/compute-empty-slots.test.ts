@@ -75,6 +75,23 @@ describe("computeEmptySlots", () => {
     });
   });
 
+  it("flows the slot up to fill the gap a short adjacent-column widget leaves open", () => {
+    // tall(col0) + short(col1) on row 0; low(col0) on row 1. col 1 is free from short's
+    // bottom all the way down — the slot must start just below short, not at low's row.
+    const lay = layout([
+      { id: "tall", x: 0, y: 0, width: 256, height: 600, colSpan: 1 },
+      { id: "short", x: 272, y: 0, width: 256, height: 200, colSpan: 1 },
+      { id: "low", x: 0, y: 616, width: 256, height: 300, colSpan: 1 },
+    ]);
+    const ws = [widget("tall", 1, 0), widget("short", 1, 1), widget("low", 1, 2)];
+    const slots = computeEmptySlots(lay, ws, 2, 16, 528);
+
+    const slot = slots.find((s) => s.columnStart === 1);
+    expect(slot).toBeDefined();
+    expect(slot!.y).toBe(216); // short.bottom (200) + gap (16)
+    expect(slot!.y + slot!.height).toBe(lay.totalHeight); // flows to the content bottom
+  });
+
   it("merges two stacked trailing gaps in the same column into one slot", () => {
     // Two half widgets pinned to col 0 in separate rows both leave col 1 free.
     // The free column is continuous, so it must read as a single placeholder.
