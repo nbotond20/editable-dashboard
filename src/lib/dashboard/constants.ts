@@ -17,10 +17,16 @@ export const TOUCH_DRAG_ACTIVATION_DELAY = 200;
 export const TOUCH_MOVE_TOLERANCE = 10;
 
 /** Distance in pixels from viewport edge that triggers auto-scroll during drag. */
-export const AUTO_SCROLL_EDGE_SIZE = 60;
+export const AUTO_SCROLL_EDGE_SIZE = 96;
 
-/** Maximum auto-scroll speed in pixels per animation frame. */
-export const AUTO_SCROLL_MAX_SPEED = 15;
+/** Maximum auto-scroll speed in pixels per second, reached at the very edge of the viewport. */
+export const AUTO_SCROLL_MAX_SPEED = 1600;
+
+/** Minimum auto-scroll speed in pixels per second, applied as soon as the pointer enters the edge zone. */
+export const AUTO_SCROLL_MIN_SPEED = 260;
+
+/** Time in ms that drag operations stay suppressed after auto-scroll last moved the view. */
+export const SCROLL_INTERACTION_LOCK_MS = 1000;
 
 /** Dwell time in milliseconds before a cross-row swap activates. */
 export const SWAP_DWELL_MS = 0;

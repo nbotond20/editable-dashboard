@@ -121,6 +121,7 @@ export class DragEngine {
   private pendingZone: DropZone | null = null;
   private pendingZoneFrames = 0;
   private lastZonePointerPos: Point | null = null;
+  private scrollLocked = false;
   private sideCollapsed = false;
   private intentGraceStart: number | null = null;
 
@@ -445,6 +446,22 @@ export class DragEngine {
     this.recomputeLayouts();
   }
 
+  /**
+   * Freezes zone/intent resolution while the view is auto-scrolling so no
+   * reorder/swap/resize/column-shift happens under a moving pointer. On unlock,
+   * pending-zone tracking is reset so dwell restarts cleanly.
+   */
+  setScrollLocked = (locked: boolean): void => {
+    if (this.scrollLocked === locked) return;
+    this.scrollLocked = locked;
+    if (!locked) {
+      this.zoneEnteredAt = this.lastTimestamp;
+      this.lastZonePointerPos = null;
+      this.pendingZone = null;
+      this.pendingZoneFrames = 0;
+    }
+  };
+
   destroy(): void {
     if (this.phase.type !== "idle") {
       this.handleCancel();
@@ -738,9 +755,17 @@ export class DragEngine {
     if (this.phase.type === "pending") {
       this.handlePendingTick(event);
     } else if (this.phase.type === "dragging") {
-      this.updateZoneAndIntent(event.timestamp);
+      if (this.scrollLocked) {
+        this.zoneEnteredAt = event.timestamp;
+      } else {
+        this.updateZoneAndIntent(event.timestamp);
+      }
     } else if (this.phase.type === "external-dragging") {
-      this.updateExternalZoneAndIntent(event.timestamp);
+      if (this.scrollLocked) {
+        this.zoneEnteredAt = event.timestamp;
+      } else {
+        this.updateExternalZoneAndIntent(event.timestamp);
+      }
     } else if (this.phase.type === "dropping") {
       if (
         event.timestamp - this.phase.startTime >=
@@ -1992,6 +2017,7 @@ export class DragEngine {
     this.pendingZoneFrames = 0;
     this.lastZonePointerPos = null;
     this.lastProcessedPointerPos = null;
+    this.scrollLocked = false;
     this.sideCollapsed = false;
     this.intentGraceStart = null;
     this.currentLineId = null;

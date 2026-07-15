@@ -246,6 +246,11 @@ export function DashboardProvider(props: DashboardProviderProps) {
   usePhaseCallbacks({ phase: snapshot.phase, onDragStart, onDragEnd });
 
   const getClientPointerForScroll = useCallback(() => clientPosRef.current, [clientPosRef]);
+  const getScrollContainer = useCallback(() => containerRef.current, [containerRef]);
+  const handleScrollingChange = useCallback(
+    (isScrolling: boolean) => engine.setScrollLocked(isScrolling),
+    [engine],
+  );
   const autoScrollEdgeSize = dragConfig?.autoScrollEdgeSize ?? AUTO_SCROLL_EDGE_SIZE;
   const autoScrollMaxSpeed = dragConfig?.autoScrollMaxSpeed ?? AUTO_SCROLL_MAX_SPEED;
   useAutoScroll(
@@ -253,6 +258,8 @@ export function DashboardProvider(props: DashboardProviderProps) {
     getClientPointerForScroll,
     autoScrollEdgeSize,
     autoScrollMaxSpeed,
+    handleScrollingChange,
+    getScrollContainer,
   );
 
   const dispatch = useDispatch(engine, fireMutationCallbacks);
