@@ -134,17 +134,21 @@ function clamp01(value: number): number {
 function applyScroll(pos: Point, axis: Axis, delta: number, container: HTMLElement | null): number {
   const scrollers = collectScrollers(pos, axis, delta, container);
 
+const options: ScrollToOptions = {
+    behavior: "instant" as ScrollBehavior,
+    [axis === "x" ? "left" : "top"]: delta,
+  };
+
   for (const scroller of scrollers) {
     if (scroller === window) {
       const before = axis === "x" ? window.scrollX : window.scrollY;
-      window.scrollBy(axis === "x" ? delta : 0, axis === "y" ? delta : 0);
+      window.scrollBy(options);
       const after = axis === "x" ? window.scrollX : window.scrollY;
       if (after !== before) return after - before;
     } else {
       const el = scroller as HTMLElement;
       const before = axis === "x" ? el.scrollLeft : el.scrollTop;
-      if (axis === "x") el.scrollLeft += delta;
-      else el.scrollTop += delta;
+      el.scrollBy(options);
       const after = axis === "x" ? el.scrollLeft : el.scrollTop;
       if (after !== before) return after - before;
     }
