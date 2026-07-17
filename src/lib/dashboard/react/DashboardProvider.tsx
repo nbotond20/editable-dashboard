@@ -66,6 +66,7 @@ export function DashboardProvider(props: DashboardProviderProps) {
     onWidgetReorder,
     onWidgetConfigChange,
     onChange,
+    heights: controlledHeights,
     children,
   } = props;
 
@@ -200,7 +201,7 @@ export function DashboardProvider(props: DashboardProviderProps) {
     };
   }, [engine]);
 
-  const { measureRef, containerRef, containerCallbackRef } = useMeasurementBridge(engine);
+  const { measureRef, containerRef, containerCallbackRef } = useMeasurementBridge(engine, controlledHeights);
 
   const trashElementRef = useRef<HTMLElement | null>(null);
   const registerTrashZone = useCallback((el: HTMLElement | null) => {

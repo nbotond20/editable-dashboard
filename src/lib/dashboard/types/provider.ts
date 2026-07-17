@@ -19,6 +19,14 @@ export type DashboardProviderProps = {
   doubleClickToMaximize?: boolean;
   canDrop?: (sourceId: string, targetIndex: number, state: DashboardState) => boolean;
   dragConfig?: DragConfig;
+  /**
+   * Consumer-controlled widget heights (by widget id), in natural (un-stretched)
+   * pixels. When provided, the engine lays out with these heights and internal
+   * ResizeObserver height measurement is disabled. Pair with
+   * `dragConfig.equalRowHeights` and render each widget at its computed
+   * `position.height`. Omit to let the library measure heights from the DOM.
+   */
+  heights?: ReadonlyMap<string, number>;
   responsiveBreakpoints?: ResponsiveBreakpoints;
   enableExternalDrag?: boolean;
   onError?: (error: DashboardError) => void;

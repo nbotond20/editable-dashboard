@@ -1,5 +1,10 @@
 import type { ComputedLayout, EmptySlot, WidgetLayout, WidgetState } from "../types.ts";
-import { DEFAULT_WIDGET_HEIGHT } from "../constants.ts";
+import { DEFAULT_WIDGET_HEIGHT, EXTERNAL_PHANTOM_ID } from "../constants.ts";
+
+/** A phantom occupies real layout space during drag (drop preview / external add). */
+function isPhantomId(id: string): boolean {
+  return id.startsWith("__phantom_") || id === EXTERNAL_PHANTOM_ID;
+}
 
 /**
  * Compute the regions of free column space where a new widget could be added.
@@ -35,6 +40,12 @@ export function computeEmptySlots(
     if (!w.visible) continue;
     const p = layout.positions.get(w.id);
     if (p) positioned.push(p);
+  }
+  // Phantoms (internal drop preview / external add) occupy real space in the
+  // preview layout but aren't in `widgets`; count them so a slot never overlaps
+  // the drop placeholder.
+  for (const [id, p] of layout.positions) {
+    if (isPhantomId(id)) positioned.push(p);
   }
 
   if (positioned.length === 0) {

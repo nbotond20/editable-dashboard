@@ -63,6 +63,51 @@ export function computeLayout(
     }
   }
 
+  if (options?.equalRowHeights) {
+    const phantomId = options?.phantom?.id;
+    const heightOf = (w: WidgetState): number =>
+      phantomId != null && w.id === phantomId
+        ? options!.phantom!.height
+        : (heights.get(w.id) ?? DEFAULT_WIDGET_HEIGHT);
+
+    let rowTop = 0;
+    let i = 0;
+    while (i < visible.length) {
+      const row: { widget: WidgetState; span: number }[] = [];
+      let usedCols = 0;
+      let rowHeight = 0;
+      while (i < visible.length) {
+        const w = visible[i];
+        const span = Math.max(1, Math.min(w.colSpan, maxColumns));
+        if (usedCols > 0 && usedCols + span > maxColumns) break;
+        row.push({ widget: w, span });
+        rowHeight = Math.max(rowHeight, heightOf(w));
+        usedCols += span;
+        i++;
+        if (usedCols >= maxColumns) break;
+      }
+
+      let col = 0;
+      for (const { widget, span } of row) {
+        const x = col * (colWidth + gap);
+        const widgetWidth = span * colWidth + (span - 1) * gap;
+        positions.set(widget.id, {
+          id: widget.id,
+          x,
+          y: rowTop,
+          width: widgetWidth,
+          height: rowHeight,
+          colSpan: span,
+        });
+        col += span;
+      }
+      rowTop += rowHeight + gap;
+    }
+
+    const totalHeight = Math.max(0, rowTop - gap);
+    return { positions, totalHeight };
+  }
+
   let currentRowStart: number | undefined;
   const stableColumns = options?.stableColumns ?? false;
   let cursor = 0;

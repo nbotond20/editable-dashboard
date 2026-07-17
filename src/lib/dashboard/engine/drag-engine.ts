@@ -59,6 +59,7 @@ import {
   DEFAULT_SHOW_INSERTION_LINES,
   DEFAULT_AUTO_RESIZE,
   DEFAULT_SNAP_OUTSIDE_TO_EDGES,
+  DEFAULT_EQUAL_ROW_HEIGHTS,
 } from "../constants.ts";
 
 const UNDOABLE_ACTIONS = new Set<string>([
@@ -113,6 +114,7 @@ function defaultConfig(): DragEngineConfig {
     showInsertionLines: DEFAULT_SHOW_INSERTION_LINES,
     autoResize: DEFAULT_AUTO_RESIZE,
     snapOutsideToEdges: DEFAULT_SNAP_OUTSIDE_TO_EDGES,
+    equalRowHeights: DEFAULT_EQUAL_ROW_HEIGHTS,
     isPositionLocked: () => false,
     isResizeLocked: () => false,
     canDrop: () => true,
@@ -762,19 +764,37 @@ export class DragEngine {
     this.cancelDrag(false);
   }
 
+  /**
+   * True when edge snapping is enabled and the pointer sits outside the
+   * container bounds. In that region the only outcome is a stable edge-line
+   * placement, so zone resolution stays live even while auto-scroll holds the
+   * interaction lock — otherwise edge detection would freeze for up to
+   * `SCROLL_INTERACTION_LOCK_MS` after the last scroll.
+   */
+  private isEdgeSnapOutsideBounds(): boolean {
+    if (!this.config.snapOutsideToEdges) return false;
+    const pointer =
+      this.phase.type === "dragging" || this.phase.type === "external-dragging"
+        ? this.phase.pointerPos
+        : null;
+    if (!pointer) return false;
+    const totalHeight = (this.dragLayout ?? this.baseLayout).totalHeight;
+    return pointer.x < 0 || pointer.x > this.containerWidth || pointer.y < 0 || pointer.y > totalHeight;
+  }
+
   private handleTick(event: Extract<DragEvent, { type: "TICK" }>): void {
     this.lastTimestamp = event.timestamp;
 
     if (this.phase.type === "pending") {
       this.handlePendingTick(event);
     } else if (this.phase.type === "dragging") {
-      if (this.scrollLocked) {
+      if (this.scrollLocked && !this.isEdgeSnapOutsideBounds()) {
         this.zoneEnteredAt = event.timestamp;
       } else {
         this.updateZoneAndIntent(event.timestamp);
       }
     } else if (this.phase.type === "external-dragging") {
-      if (this.scrollLocked) {
+      if (this.scrollLocked && !this.isEdgeSnapOutsideBounds()) {
         this.zoneEnteredAt = event.timestamp;
       } else {
         this.updateExternalZoneAndIntent(event.timestamp);
@@ -1448,6 +1468,7 @@ export class DragEngine {
           this.containerWidth,
           cfg.maxColumns,
           cfg.gap,
+          { equalRowHeights: cfg.equalRowHeights },
         );
       }
 
@@ -1476,6 +1497,7 @@ export class DragEngine {
           this.containerWidth,
           cfg.maxColumns,
           cfg.gap,
+          { equalRowHeights: cfg.equalRowHeights },
         );
       }
 
@@ -1502,6 +1524,7 @@ export class DragEngine {
           this.containerWidth,
           cfg.maxColumns,
           cfg.gap,
+          { equalRowHeights: cfg.equalRowHeights },
         );
       }
 
@@ -2153,6 +2176,10 @@ export class DragEngine {
     if (this.phase.type !== "dragging") return null;
     if (this.config.dropMode === "classic") return null;
     if (this.currentIntent != null && this.currentIntent.type !== "none") return null;
+    // Never surface a line "can't place here" while hovering a widget — that
+    // case is represented by `invalidSwapTargetId` on the widget itself. Showing
+    // both at once produces overlapping invalid states.
+    if (this.currentZone?.type === "widget") return null;
     const pointer = this.phase.pointerPos;
     if (!pointer) return null;
 
@@ -2447,6 +2474,7 @@ export class DragEngine {
       autoFillMode: this.config.autoFillMode,
       maxColumns: state.maxColumns,
       gap: state.gap,
+      equalRowHeights: this.config.equalRowHeights,
     };
   }
 

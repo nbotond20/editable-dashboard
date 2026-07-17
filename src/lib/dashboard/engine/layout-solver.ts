@@ -347,6 +347,7 @@ export interface LayoutSolverConfig {
   autoFillMode: "immediate" | "on-drop" | "none";
   maxColumns: number;
   gap: number;
+  equalRowHeights?: boolean;
 }
 
 /**
@@ -387,7 +388,7 @@ export function solveBaseLayout(
     containerWidth,
     config.maxColumns,
     config.gap,
-    { stableColumns: true }
+    { stableColumns: true, equalRowHeights: config.equalRowHeights }
   );
 }
 
@@ -408,7 +409,7 @@ export function solveDragLayout(
         containerWidth,
         config.maxColumns,
         config.gap,
-        { excludeIds: new Set([sourceId]) }
+        { excludeIds: new Set([sourceId]), equalRowHeights: config.equalRowHeights }
       );
 
     case "on-drop":
@@ -424,6 +425,7 @@ export function solveDragLayout(
         config.gap,
         {
           excludeIds: new Set([sourceId]),
+          equalRowHeights: config.equalRowHeights,
           phantom: {
             id: `__phantom_${sourceId}`,
             colSpan: sourceWidget.colSpan,
@@ -490,6 +492,7 @@ export function solvePreviewLayout(
         containerWidth,
         config.maxColumns,
         config.gap,
+        { equalRowHeights: config.equalRowHeights },
       );
     }
 
@@ -534,6 +537,7 @@ export function solvePreviewLayout(
         containerWidth,
         config.maxColumns,
         config.gap,
+        { equalRowHeights: config.equalRowHeights },
       );
     }
 
@@ -561,6 +565,7 @@ export function solvePreviewLayout(
         const checkLayout = computeLayout(
           withoutSource.map((w, i) => ({ ...w, order: i })),
           heights as Map<string, number>, containerWidth, config.maxColumns, config.gap,
+          { equalRowHeights: config.equalRowHeights },
         );
         const tgtPos = checkLayout.positions.get(intent.targetId);
         if (tgtPos) {
@@ -614,6 +619,7 @@ export function solvePreviewLayout(
           containerWidth,
           config.maxColumns,
           config.gap,
+          { equalRowHeights: config.equalRowHeights },
         );
       }
 
@@ -631,6 +637,7 @@ export function solvePreviewLayout(
             containerWidth,
             config.maxColumns,
             config.gap,
+            { equalRowHeights: config.equalRowHeights },
           );
         }
       }
@@ -641,6 +648,7 @@ export function solvePreviewLayout(
         containerWidth,
         config.maxColumns,
         config.gap,
+        { equalRowHeights: config.equalRowHeights },
       );
     }
 
@@ -670,6 +678,7 @@ export function solvePreviewLayout(
         containerWidth,
         config.maxColumns,
         config.gap,
+        { equalRowHeights: config.equalRowHeights },
       );
     }
 
@@ -697,6 +706,7 @@ export function solvePreviewLayout(
         containerWidth,
         config.maxColumns,
         config.gap,
+        { equalRowHeights: config.equalRowHeights },
       );
     }
   }

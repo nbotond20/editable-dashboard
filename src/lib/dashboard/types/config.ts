@@ -55,6 +55,14 @@ export interface DragConfig {
    * cancels the drop.
    */
   snapOutsideToEdges?: boolean;
+  /**
+   * When `true`, lay widgets out in strict equal-height rows instead of
+   * masonry: row membership follows `order` + `colSpan`, and every widget in a
+   * row takes the height of the tallest member. Defaults to `false` (masonry).
+   * Consumers should supply natural (un-stretched) heights via the provider's
+   * `heights` prop and render each widget at its computed `position.height`.
+   */
+  equalRowHeights?: boolean;
 }
 
 /**

@@ -211,6 +211,7 @@ export interface DragEngineConfig {
   showInsertionLines: boolean;
   autoResize: boolean;
   snapOutsideToEdges: boolean;
+  equalRowHeights: boolean;
   isPositionLocked: (id: string) => boolean;
   isResizeLocked: (id: string) => boolean;
   canDrop: (sourceId: string, targetIndex: number) => boolean;
@@ -250,6 +251,13 @@ export interface LayoutOptions {
   };
   excludeIds?: ReadonlySet<string>;
   stableColumns?: boolean;
+  /**
+   * When true, lay out in strict rows (by `order` + `colSpan`) instead of
+   * masonry, and give every widget in a row the height of the tallest member
+   * so rows are visually equal-height. `columnStart`/`rowStart` hints are
+   * ignored in this mode — row membership and column are driven purely by order.
+   */
+  equalRowHeights?: boolean;
 }
 
 export { getVisibleSorted, distance, zonesEqual } from "./utils.ts";

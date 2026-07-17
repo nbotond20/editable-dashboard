@@ -159,4 +159,26 @@ describe("computeEmptySlots", () => {
 
     expect(slots.find((s) => s.anchorId === "notes")).toBeUndefined();
   });
+
+  it("treats an external-add phantom as occupied so no slot overlaps the drop placeholder", () => {
+    const lay = layout([
+      { id: "stats", x: 0, y: 0, width: 256, height: 200, colSpan: 1 },
+      { id: "__external_phantom__", x: 272, y: 0, width: 256, height: 200, colSpan: 1 },
+    ]);
+    const ws = [widget("stats", 1, 0)]; // phantom is not a real widget
+    const slots = computeEmptySlots(lay, ws, 2, 16, 528);
+
+    expect(slots).toHaveLength(0);
+  });
+
+  it("treats an internal drag phantom as occupied", () => {
+    const lay = layout([
+      { id: "stats", x: 0, y: 0, width: 256, height: 200, colSpan: 1 },
+      { id: "__phantom_chart", x: 272, y: 0, width: 256, height: 200, colSpan: 1 },
+    ]);
+    const ws = [widget("stats", 1, 0)];
+    const slots = computeEmptySlots(lay, ws, 2, 16, 528);
+
+    expect(slots).toHaveLength(0);
+  });
 });

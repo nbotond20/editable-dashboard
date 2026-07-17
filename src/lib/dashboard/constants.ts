@@ -66,3 +66,9 @@ export const DEFAULT_AUTO_RESIZE = true;
  * instead of resolving to `outside`. `false` preserves pre-existing behavior.
  */
 export const DEFAULT_SNAP_OUTSIDE_TO_EDGES = false;
+
+/**
+ * Whether the layout uses strict equal-height rows instead of masonry.
+ * `false` preserves the pre-existing masonry bin-packing.
+ */
+export const DEFAULT_EQUAL_ROW_HEIGHTS = false;

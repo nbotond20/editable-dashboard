@@ -135,5 +135,6 @@ export function buildEngineConfig(
     ...(dragConfig?.showInsertionLines != null && { showInsertionLines: dragConfig.showInsertionLines }),
     ...(dragConfig?.autoResize != null && { autoResize: dragConfig.autoResize }),
     ...(dragConfig?.snapOutsideToEdges != null && { snapOutsideToEdges: dragConfig.snapOutsideToEdges }),
+    ...(dragConfig?.equalRowHeights != null && { equalRowHeights: dragConfig.equalRowHeights }),
   };
 }
