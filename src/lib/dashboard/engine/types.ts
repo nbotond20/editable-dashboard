@@ -210,6 +210,7 @@ export interface DragEngineConfig {
   lineProximityRadius?: number;
   showInsertionLines: boolean;
   autoResize: boolean;
+  snapOutsideToEdges: boolean;
   isPositionLocked: (id: string) => boolean;
   isResizeLocked: (id: string) => boolean;
   canDrop: (sourceId: string, targetIndex: number) => boolean;

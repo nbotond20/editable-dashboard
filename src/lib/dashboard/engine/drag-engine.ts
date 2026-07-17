@@ -58,6 +58,7 @@ import {
   DEFAULT_LINE_CORNER_INSET,
   DEFAULT_SHOW_INSERTION_LINES,
   DEFAULT_AUTO_RESIZE,
+  DEFAULT_SNAP_OUTSIDE_TO_EDGES,
 } from "../constants.ts";
 
 const UNDOABLE_ACTIONS = new Set<string>([
@@ -82,6 +83,17 @@ function rectsOverlap(a: WidgetLayout, b: WidgetLayout): boolean {
   return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
 }
 
+/**
+ * Clamps a pointer into the container bounds so a position dragged past any
+ * edge resolves to the nearest edge instead of `outside`. Turns the empty
+ * area around the container into an invisible edge-detection zone.
+ */
+function clampPointerToBounds(p: Point, width: number, height: number): Point {
+  const cx = Math.min(Math.max(p.x, 0), width);
+  const cy = Math.min(Math.max(p.y, 0), height);
+  return cx === p.x && cy === p.y ? p : { x: cx, y: cy };
+}
+
 function defaultConfig(): DragEngineConfig {
   return {
     activationThreshold: DRAG_ACTIVATION_THRESHOLD,
@@ -100,6 +112,7 @@ function defaultConfig(): DragEngineConfig {
     lineCornerInset: DEFAULT_LINE_CORNER_INSET,
     showInsertionLines: DEFAULT_SHOW_INSERTION_LINES,
     autoResize: DEFAULT_AUTO_RESIZE,
+    snapOutsideToEdges: DEFAULT_SNAP_OUTSIDE_TO_EDGES,
     isPositionLocked: () => false,
     isResizeLocked: () => false,
     canDrop: () => true,
@@ -1265,8 +1278,12 @@ export class DragEngine {
 
       this.recomputeInsertionLines();
 
+      const resolvePointer = this.config.snapOutsideToEdges
+        ? clampPointerToBounds(pointerPos, this.containerWidth, layout.totalHeight)
+        : pointerPos;
+
       const computedZone = resolveZone(
-        pointerPos,
+        resolvePointer,
         layout,
         state.widgets,
         state.gap,
@@ -1566,8 +1583,15 @@ export class DragEngine {
 
       this.recomputeInsertionLines();
 
+      const resolveZonePointer = this.config.snapOutsideToEdges
+        ? clampPointerToBounds(zonePointerPos, this.containerWidth, layout.totalHeight)
+        : zonePointerPos;
+      const resolveRawPointer = this.config.snapOutsideToEdges
+        ? clampPointerToBounds(rawPointerPos, this.containerWidth, layout.totalHeight)
+        : rawPointerPos;
+
       let computedZone = resolveZone(
-        zonePointerPos,
+        resolveZonePointer,
         layout,
         state.widgets,
         state.gap,
@@ -1579,7 +1603,7 @@ export class DragEngine {
         this.insertionLines,
         this.config.lineSnapRadius,
         this.currentLineId,
-        rawPointerPos,
+        resolveRawPointer,
       );
 
       if (computedZone.type === "outside" || computedZone.type === "gap") {

@@ -60,3 +60,9 @@ export const DEFAULT_SHOW_INSERTION_LINES = true;
 
 /** Whether dragging may resize widgets. `false` restricts resizing to the explicit resize controls. */
 export const DEFAULT_AUTO_RESIZE = true;
+
+/**
+ * Whether a pointer dragged outside the container snaps to the nearest edge
+ * instead of resolving to `outside`. `false` preserves pre-existing behavior.
+ */
+export const DEFAULT_SNAP_OUTSIDE_TO_EDGES = false;

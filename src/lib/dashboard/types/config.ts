@@ -45,6 +45,16 @@ export interface DragConfig {
    * placeholder) instead. Only the explicit resize controls change a span.
    */
   autoResize?: boolean;
+  /**
+   * Whether a pointer dragged outside the container still resolves to the
+   * nearest edge (top / bottom / outer sides) instead of `outside`. Defaults
+   * to `false`. When `true`, the entire empty area around the container acts
+   * as an invisible detection zone that snaps to the closest edge, making it
+   * easy to place widgets at the very top, bottom, or outer columns. Snapping
+   * to a far-away edge means dragging into surrounding empty space no longer
+   * cancels the drop.
+   */
+  snapOutsideToEdges?: boolean;
 }
 
 /**

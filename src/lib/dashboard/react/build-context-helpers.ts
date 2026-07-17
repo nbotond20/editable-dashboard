@@ -134,5 +134,6 @@ export function buildEngineConfig(
     ...(dragConfig?.lineProximityRadius != null && { lineProximityRadius: dragConfig.lineProximityRadius }),
     ...(dragConfig?.showInsertionLines != null && { showInsertionLines: dragConfig.showInsertionLines }),
     ...(dragConfig?.autoResize != null && { autoResize: dragConfig.autoResize }),
+    ...(dragConfig?.snapOutsideToEdges != null && { snapOutsideToEdges: dragConfig.snapOutsideToEdges }),
   };
 }
