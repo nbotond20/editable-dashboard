@@ -779,7 +779,14 @@ export class DragEngine {
         : null;
     if (!pointer) return false;
     const totalHeight = (this.dragLayout ?? this.baseLayout).totalHeight;
-    return pointer.x < 0 || pointer.x > this.containerWidth || pointer.y < 0 || pointer.y > totalHeight;
+
+    const m = this.config.lineSnapRadius;
+    return (
+      pointer.x < m ||
+      pointer.x > this.containerWidth - m ||
+      pointer.y < m ||
+      pointer.y > totalHeight - m
+    );
   }
 
   private handleTick(event: Extract<DragEvent, { type: "TICK" }>): void {
@@ -1683,6 +1690,25 @@ export class DragEngine {
         }
       }
 
+      // Cursor at or below the content bottom → always resolve to the trailing
+      // new-row line so a drop lands at the last spot, regardless of horizontal
+      // position, distance below the grid, or auto-scroll. Committed immediately
+      // (no pending debounce) for reliability.
+      const belowGrid =
+        this.config.snapOutsideToEdges && rawPointerPos.y >= layout.totalHeight;
+      if (belowGrid) {
+        const bottomLine = this.findTrailingNewRowLine();
+        if (bottomLine) {
+          computedZone = {
+            type: "insertion-line-h",
+            lineId: bottomLine.id,
+            insertionIndex: bottomLine.insertionIndex,
+            beforeId: bottomLine.beforeId,
+            afterId: bottomLine.afterId,
+          };
+        }
+      }
+
       const prevLineId = this.currentLineId;
       if (!zonesEqual(computedZone, this.currentZone)) {
         if (zonesEqual(computedZone, this.pendingZone)) {
@@ -1704,7 +1730,8 @@ export class DragEngine {
           this.pendingZoneFrames = 1;
           if (
             this.currentZone === null ||
-            computedZone.type === "outside"
+            computedZone.type === "outside" ||
+            belowGrid
           ) {
             this.currentZone = computedZone;
             this.currentLineId =
@@ -2165,6 +2192,21 @@ export class DragEngine {
       result,
     };
     return result;
+  }
+
+  /**
+   * The enabled trailing "new row" horizontal insertion line (the one below the
+   * last row, `afterId === null`), or null when none is placeable — e.g. the
+   * source is already alone and full-width at the bottom. Used to guarantee a
+   * bottom placement whenever the cursor is dragged below the grid.
+   */
+  private findTrailingNewRowLine(): InsertionLine | null {
+    let best: InsertionLine | null = null;
+    for (const l of this.insertionLines) {
+      if (l.orientation !== "horizontal" || l.afterId !== null || l.disabled) continue;
+      if (best === null || (l.rowIndex ?? 0) > (best.rowIndex ?? 0)) best = l;
+    }
+    return best;
   }
 
   /**

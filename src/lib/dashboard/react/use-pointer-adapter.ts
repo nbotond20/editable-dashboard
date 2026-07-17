@@ -155,7 +155,29 @@ export function usePointerAdapter(
       isDraggingRef.current = true;
       const tick = () => {
         if (!isDraggingRef.current) return;
-        engine.send({ type: "TICK", timestamp: performance.now() });
+        const now = performance.now();
+
+        // Re-project the last known viewport pointer into container space every
+        // frame while dragging. Auto-scroll moves the view without emitting a
+        // pointermove, so without this the engine keeps a stale container-space
+        // pointer and never registers that the cursor is now past an edge.
+        if (engine.getSnapshot().phase.type === "dragging") {
+          const c = containerRef.current;
+          const cp = clientPosRef.current;
+          if (c && cp) {
+            const r = c.getBoundingClientRect();
+            engine.send({
+              type: "POINTER_MOVE",
+              position: {
+                x: cp.x - r.left + c.scrollLeft,
+                y: cp.y - r.top + c.scrollTop,
+              },
+              timestamp: now,
+            });
+          }
+        }
+
+        engine.send({ type: "TICK", timestamp: now });
 
         const phase = engine.getSnapshot().phase;
         if (
